@@ -6,14 +6,19 @@ import spinal.core._
 
 class IntAlu extends Plugin {
   object Opcodes {
-    val ADD  = M"0000000----------000-----0110011"
-    val SUB  = M"0100000----------000-----0110011"
-    val SLT  = M"0000000----------010-----0110011"
-    val SLTU = M"0000000----------011-----0110011"
-    val XOR  = M"0000000----------100-----0110011"
-    val OR   = M"0000000----------110-----0110011"
-    val AND  = M"0000000----------111-----0110011"
-    val ADDI = M"-----------------000-----0010011"
+    val ADD   = M"0000000----------000-----0110011"
+    val SUB   = M"0100000----------000-----0110011"
+    val SLT   = M"0000000----------010-----0110011"
+    val SLTU  = M"0000000----------011-----0110011"
+    val XOR   = M"0000000----------100-----0110011"
+    val OR    = M"0000000----------110-----0110011"
+    val AND   = M"0000000----------111-----0110011"
+    val ADDI  = M"-----------------000-----0010011"
+    val SLTI  = M"-----------------010-----0010011"
+    val SLTIU = M"-----------------011-----0010011"
+    val XORI  = M"-----------------100-----0010011"
+    val ORI   = M"-----------------110-----0010011"
+    val ANDI  = M"-----------------111-----0010011"
   }
 
   object AluOp extends SpinalEnum {
@@ -33,46 +38,39 @@ class IntAlu extends Plugin {
         Data.ALU_SRC2_IMM -> False
       ))
 
-      config.addDecoding(Opcodes.ADD, Map(
-        Data.ALU_OP -> AluOp.ADD,
-        pipeline.data.WRITE_RD -> True
-      ))
+      val regRegOpcodes = Map(
+        Opcodes.ADD  -> AluOp.ADD,
+        Opcodes.SUB  -> AluOp.SUB,
+        Opcodes.SLT  -> AluOp.SLT,
+        Opcodes.SLTU -> AluOp.SLTU,
+        Opcodes.XOR  -> AluOp.XOR,
+        Opcodes.OR   -> AluOp.OR,
+        Opcodes.AND  -> AluOp.AND
+      )
 
-      config.addDecoding(Opcodes.SUB, Map(
-        Data.ALU_OP -> AluOp.SUB,
-        pipeline.data.WRITE_RD -> True
-      ))
+      for ((opcode, op) <- regRegOpcodes) {
+        config.addDecoding(opcode, Map(
+          Data.ALU_OP -> op,
+          pipeline.data.WRITE_RD -> True
+        ))
+      }
 
-      config.addDecoding(Opcodes.SLT, Map(
-        Data.ALU_OP -> AluOp.SLT,
-        pipeline.data.WRITE_RD -> True
-      ))
+      val regImmOpcodes = Map(
+        Opcodes.ADDI  -> AluOp.ADD,
+        Opcodes.SLTI  -> AluOp.SLT,
+        Opcodes.SLTIU -> AluOp.SLTU,
+        Opcodes.XORI  -> AluOp.XOR,
+        Opcodes.ORI   -> AluOp.OR,
+        Opcodes.ANDI  -> AluOp.AND
+      )
 
-      config.addDecoding(Opcodes.SLTU, Map(
-        Data.ALU_OP -> AluOp.SLTU,
-        pipeline.data.WRITE_RD -> True
-      ))
-
-      config.addDecoding(Opcodes.XOR, Map(
-        Data.ALU_OP -> AluOp.XOR,
-        pipeline.data.WRITE_RD -> True
-      ))
-
-      config.addDecoding(Opcodes.OR, Map(
-        Data.ALU_OP -> AluOp.OR,
-        pipeline.data.WRITE_RD -> True
-      ))
-
-      config.addDecoding(Opcodes.AND, Map(
-        Data.ALU_OP -> AluOp.AND,
-        pipeline.data.WRITE_RD -> True
-      ))
-
-      config.addDecoding(Opcodes.ADDI, Map(
-        Data.ALU_OP -> AluOp.ADD,
-        Data.ALU_SRC2_IMM -> True,
-        pipeline.data.WRITE_RD -> True
-      ))
+      for ((opcode, op) <- regImmOpcodes) {
+        config.addDecoding(opcode, Map(
+          Data.ALU_OP -> op,
+          Data.ALU_SRC2_IMM -> True,
+          pipeline.data.WRITE_RD -> True
+        ))
+      }
     }
   }
 
