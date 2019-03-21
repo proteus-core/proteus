@@ -1,0 +1,11 @@
+.idea/
+/*.v
+/*.bin
+/project/
+/simWorkspace/
+/target/
+/tmp/
+/tools/
+/verbose.log
+*~
+*.swp
