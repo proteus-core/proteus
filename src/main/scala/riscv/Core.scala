@@ -12,7 +12,8 @@ class Core(imemHexPath: String) extends Component {
     new Fetcher(imemHexPath),
     new Decoder,
     new RegisterFile,
-    new IntAlu
+    new IntAlu,
+    new Lsu
   )
   val config = new Config(BaseIsa.RV32I, plugins)
   val pipeline = new Pipeline(config)
