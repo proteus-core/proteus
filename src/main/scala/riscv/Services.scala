@@ -8,7 +8,10 @@ trait DecoderService {
   type Action = Map[PipelineData[_ <: Data], Data]
 
   trait DecoderConfig {
-    def addDecoding(key: MaskedLiteral, action: Action): Unit
+    def addDecoding(opcode: MaskedLiteral,
+                    itype: InstructionType,
+                    action: Action): Unit
+    def addDecoding(opcode: MaskedLiteral, action: Action): Unit
     def addDefault(action: Action): Unit
     def addDefault(data: PipelineData[_ <: Data], value: Data): Unit
   }

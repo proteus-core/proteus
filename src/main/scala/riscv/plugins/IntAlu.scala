@@ -49,7 +49,7 @@ class IntAlu extends Plugin {
       )
 
       for ((opcode, op) <- regRegOpcodes) {
-        config.addDecoding(opcode, Map(
+        config.addDecoding(opcode, InstructionType.R, Map(
           Data.ALU_OP -> op,
           pipeline.data.WRITE_RD -> True
         ))
@@ -65,7 +65,7 @@ class IntAlu extends Plugin {
       )
 
       for ((opcode, op) <- regImmOpcodes) {
-        config.addDecoding(opcode, Map(
+        config.addDecoding(opcode, InstructionType.I, Map(
           Data.ALU_OP -> op,
           Data.ALU_SRC2_IMM -> True,
           pipeline.data.WRITE_RD -> True
