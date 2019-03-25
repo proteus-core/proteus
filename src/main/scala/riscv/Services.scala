@@ -23,3 +23,22 @@ trait DecoderService {
     stage(pipeline).rework(f(config))
   }
 }
+
+trait IntAluService {
+  object AluOp extends SpinalEnum {
+    val ADD, SUB, SLT, SLTU, XOR, OR, AND, SRC2 = newElement()
+  }
+
+  object Src1Select extends SpinalEnum {
+    val RS1, PC = newElement()
+  }
+
+  object Src2Select extends SpinalEnum {
+    val RS2, IMM = newElement()
+  }
+
+  def addOperation(pipeline: Pipeline, opcode: MaskedLiteral,
+                   op: SpinalEnumElement[AluOp.type],
+                   src1: SpinalEnumElement[Src1Select.type],
+                   src2: SpinalEnumElement[Src2Select.type]): Unit
+}

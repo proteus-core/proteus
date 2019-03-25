@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class IntAlu extends Plugin {
+class IntAlu extends Plugin with IntAluService {
   object Opcodes {
     val ADD   = M"0000000----------000-----0110011"
     val SUB   = M"0100000----------000-----0110011"
@@ -21,13 +21,25 @@ class IntAlu extends Plugin {
     val ANDI  = M"-----------------111-----0010011"
   }
 
-  object AluOp extends SpinalEnum {
-    val ADD, SUB, SLT, SLTU, XOR, OR, AND = newElement()
-  }
-
   object Data {
     object ALU_OP extends PipelineData(AluOp())
-    object ALU_SRC2_IMM extends PipelineData(Bool())
+    object ALU_SRC1 extends PipelineData(Src1Select())
+    object ALU_SRC2 extends PipelineData(Src2Select())
+    object ALU_COMMIT_RESULT extends PipelineData(Bool())
+  }
+
+  override def addOperation(pipeline: Pipeline,
+                            opcode: MaskedLiteral,
+                            op: SpinalEnumElement[AluOp.type],
+                            src1: SpinalEnumElement[Src1Select.type],
+                            src2: SpinalEnumElement[Src2Select.type]): Unit = {
+    pipeline.getService[DecoderService].configure(pipeline) {config =>
+      config.addDecoding(opcode, Map(
+        Data.ALU_OP -> op,
+        Data.ALU_SRC1 -> src1,
+        Data.ALU_SRC2 -> src2
+      ))
+    }
   }
 
   override def setup(pipeline: Pipeline, config: Config): Unit = {
@@ -35,7 +47,8 @@ class IntAlu extends Plugin {
 
     decoder.configure(pipeline) {config =>
       config.addDefault(Map(
-        Data.ALU_SRC2_IMM -> False
+        Data.ALU_SRC1 -> Src1Select.RS1,
+        Data.ALU_COMMIT_RESULT -> False
       ))
 
       val regRegOpcodes = Map(
@@ -51,6 +64,8 @@ class IntAlu extends Plugin {
       for ((opcode, op) <- regRegOpcodes) {
         config.addDecoding(opcode, InstructionType.R, Map(
           Data.ALU_OP -> op,
+          Data.ALU_SRC2 -> Src2Select.RS2,
+          Data.ALU_COMMIT_RESULT -> True,
           pipeline.data.WRITE_RD -> True
         ))
       }
@@ -67,7 +82,8 @@ class IntAlu extends Plugin {
       for ((opcode, op) <- regImmOpcodes) {
         config.addDecoding(opcode, InstructionType.I, Map(
           Data.ALU_OP -> op,
-          Data.ALU_SRC2_IMM -> True,
+          Data.ALU_SRC2 -> Src2Select.IMM,
+          Data.ALU_COMMIT_RESULT -> True,
           pipeline.data.WRITE_RD -> True
         ))
       }
@@ -79,8 +95,26 @@ class IntAlu extends Plugin {
       import pipeline.execute._
 
       val op = value(Data.ALU_OP)
-      val src1 = value(pipeline.data.RS1_DATA)
-      val src2 = value(Data.ALU_SRC2_IMM) ? value(pipeline.data.IMM) | value(pipeline.data.RS2_DATA)
+      val src1, src2 = UInt(config.xlen bits)
+
+      switch (value(Data.ALU_SRC1)) {
+        is (Src1Select.RS1) {
+          src1 := value(pipeline.data.RS1_DATA)
+        }
+        is (Src1Select.PC) {
+          src1 := value(pipeline.data.PC)
+        }
+      }
+
+      switch (value(Data.ALU_SRC2)) {
+        is (Src2Select.RS2) {
+          src2 := value(pipeline.data.RS2_DATA)
+        }
+        is (Src2Select.IMM) {
+          src2 := value(pipeline.data.IMM)
+        }
+      }
+
       val result = UInt(config.xlen bits)
 
       switch (op) {
@@ -105,9 +139,16 @@ class IntAlu extends Plugin {
         is (AluOp.AND) {
           result := src1 & src2
         }
+        is (AluOp.SRC2) {
+          result := src2
+        }
       }
 
       output(pipeline.data.RD_DATA) := result
+
+      when (value(Data.ALU_COMMIT_RESULT)) {
+        output(pipeline.data.RD_VALID) := True
+      }
     }
   }
 }

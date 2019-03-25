@@ -59,6 +59,7 @@ class Decoder extends Plugin with DecoderService {
     configure(pipeline) {config =>
       config.addDefault(Map(
         pipeline.data.UNKNOWN_INSTRUCTION -> False,
+        pipeline.data.RD_VALID -> False,
         pipeline.data.IMM -> U(0)
       ))
     }

@@ -19,5 +19,6 @@ class StandardPipelineData(config: Config) {
   object RD extends PipelineData(UInt(5 bits))
   object RD_DATA extends PipelineData(UInt(xlen bits))
   object WRITE_RD extends PipelineData(Bool())
+  object RD_VALID extends PipelineData(Bool())
   object IMM extends PipelineData(UInt(32 bits))
 }
