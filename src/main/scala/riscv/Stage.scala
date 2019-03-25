@@ -30,7 +30,8 @@ class Stage(val stageName: String) extends Component {
 
   def output[T <: Data](reg: PipelineData[T]): T = {
     val regAsData = reg.asInstanceOf[PipelineData[Data]]
-    outputs.getOrElseUpdate(regAsData, rework {
+
+    outputs.getOrElseUpdate(regAsData, reworkOutsideConditionScope {
       val output = out(reg.dataType())
       output.setName(s"out_${reg.name}")
 
@@ -71,5 +72,20 @@ class Stage(val stageName: String) extends Component {
         assert(false, s"No value for ${data.name} in stage ${stageName}")
       }
     }
+  }
+
+  /**
+    * Execute rtl outside any condition scopes. Used to unconditionally create
+    * the default output connection even when output() is called inside a
+    * conditional statement.
+    */
+  private def reworkOutsideConditionScope[T](rtl: => T) = {
+    val body = Component.current.dslBody
+    body.push()
+    val swapContext = body.swap()
+    val ret = rework(rtl)
+    body.pop()
+    swapContext.appendBack()
+    ret
   }
 }
