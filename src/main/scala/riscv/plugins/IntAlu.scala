@@ -108,6 +108,7 @@ class IntAlu extends Plugin with IntAluService {
       switch (value(Data.ALU_SRC1)) {
         is (Src1Select.RS1) {
           src1 := value(pipeline.data.RS1_DATA)
+          arbitration.rs1Needed := True
         }
         is (Src1Select.PC) {
           src1 := value(pipeline.data.PC)
@@ -117,6 +118,7 @@ class IntAlu extends Plugin with IntAluService {
       switch (value(Data.ALU_SRC2)) {
         is (Src2Select.RS2) {
           src2 := value(pipeline.data.RS2_DATA)
+          arbitration.rs2Needed := True
         }
         is (Src2Select.IMM) {
           src2 := value(pipeline.data.IMM)

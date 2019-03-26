@@ -88,16 +88,23 @@ class Decoder extends Plugin with DecoderService {
             assert(instructionTypes.contains(key),
               s"Opcode $key has decodings but no instruction type set")
 
-            val imm = instructionTypes(key) match {
-              case InstructionType.I => immDecoder.i
-              case InstructionType.S => immDecoder.s
-              case InstructionType.B => immDecoder.b
-              case InstructionType.U => immDecoder.u
-              case InstructionType.J => immDecoder.j
-              case InstructionType.R => U(0)
+            val (imm, rs1Used, rs2Used) = instructionTypes(key) match {
+              case InstructionType.I => (immDecoder.i, True, False)
+              case InstructionType.S => (immDecoder.s, True, True)
+              case InstructionType.B => (immDecoder.b, True, True)
+              case InstructionType.U => (immDecoder.u, False, False)
+              case InstructionType.J => (immDecoder.j, False, False)
+              case InstructionType.R => (U(0), True, True)
             }
 
             output(pipeline.data.IMM) := imm
+
+            when (!rs1Used) {
+              output(pipeline.data.RS1) := U(0)
+            }
+            when (!rs2Used) {
+              output(pipeline.data.RS2) := U(0)
+            }
           }
         }
         default {

@@ -6,7 +6,13 @@ import scala.collection.mutable
 
 class Arbitration extends Bundle {
   val isValid = in Bool()
+  val isStalled = in Bool()
   val isReady = out Bool()
+  val isDone = out Bool()
+  val rs1Needed, rs2Needed = out Bool()
+
+  rs1Needed := False
+  rs2Needed := False
 }
 
 class Stage(val stageName: String) extends Component {
@@ -27,6 +33,9 @@ class Stage(val stageName: String) extends Component {
       input
     }).asInstanceOf[T]
   }
+
+  def hasInput[T <: Data](reg: PipelineData[T]) =
+    inputs.contains(reg.asInstanceOf[PipelineData[Data]])
 
   def output[T <: Data](reg: PipelineData[T]): T = {
     val regAsData = reg.asInstanceOf[PipelineData[Data]]

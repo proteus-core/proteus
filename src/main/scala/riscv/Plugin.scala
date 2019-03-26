@@ -5,7 +5,8 @@ import spinal.core._
 trait Plugin {
   def getName = getClass.getSimpleName.replace("$","")
   def setup(pipeline: Pipeline, config: Config): Unit = ()
-  def build(pipeline: Pipeline, config: Config): Unit
+  def build(pipeline: Pipeline, config: Config): Unit = ()
+  def finish(pipeline: Pipeline, config: Config): Unit = ()
 
   implicit class Plug(component: Component) {
     def plug[T](logic: => T): T = component.rework {

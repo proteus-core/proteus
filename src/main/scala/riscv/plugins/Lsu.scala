@@ -143,6 +143,7 @@ class Lsu extends Plugin {
 
         when (value(Data.LSU_IS_STORE)) {
           val wValue = value(pipeline.data.RS2_DATA)
+          arbitration.rs2Needed := True
           val data = UInt(config.xlen bits)
           data := wValue
           val mask = Bits(4 bits)

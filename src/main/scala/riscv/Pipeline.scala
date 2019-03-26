@@ -123,6 +123,8 @@ class Pipeline(config: Config) extends Component {
     stage.connectLastValues()
   }
 
+  config.plugins.foreach(_.finish(this, config))
+
   def getService[T](implicit tag: ClassTag[T]): T = {
     val services = config.plugins.filter(_ match {
       case _: T => true

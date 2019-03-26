@@ -6,9 +6,8 @@ import spinal.core.sim._
 class Core(imemHexPath: String) extends Component {
   import riscv.plugins._
 
-  val pipelinePlugin = if (false) new SimplePipelining else new NoPipelining
-  val plugins = Seq(
-    pipelinePlugin,
+  val pipelinePlugins = if (true) Seq(new SimplePipelining, new DataHazardResolver) else Seq(new NoPipelining)
+  val plugins = pipelinePlugins ++ Seq(
     new Fetcher(imemHexPath),
     new Decoder,
     new RegisterFile,
