@@ -1,12 +1,14 @@
 package riscv
 
-sealed trait InstructionType
+sealed abstract class InstructionType(val rs1Used: Boolean,
+                                      val rs2Used: Boolean,
+                                      val rdUsed: Boolean)
 
 object InstructionType {
-  case object R extends InstructionType
-  case object I extends InstructionType
-  case object S extends InstructionType
-  case object B extends InstructionType
-  case object U extends InstructionType
-  case object J extends InstructionType
+  case object R extends InstructionType(true,  true,  true)
+  case object I extends InstructionType(true,  false, true)
+  case object S extends InstructionType(true,  true,  false)
+  case object B extends InstructionType(true,  true,  false)
+  case object U extends InstructionType(false, false, true)
+  case object J extends InstructionType(false, false, true)
 }
