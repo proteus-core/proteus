@@ -32,13 +32,7 @@ class Core(imemHexPath: String) extends Component {
   ibus.rdata := imem(ibus.address.resized)
 
   var i: BigInt = 0
-  val dmem = Mem(UInt(config.xlen bits), 1024).init(Seq.fill(1024) {
-    def wrap(i: BigInt) = i % 256
-    val content = wrap(i) + (wrap(i + 1) << 8) + (wrap(i + 2) << 16) + (wrap(i + 3) << 24)
-    val value = U(content).setWidth(config.xlen)
-    i += 4
-    value
-  })
+  val dmem = Mem(UInt(config.xlen bits), 1024)
 
   val dbus = pipeline.getService[DBusService].getDBus
   dbus.rdata := dmem(dbus.address.resized)
