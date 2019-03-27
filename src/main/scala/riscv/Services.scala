@@ -4,6 +4,14 @@ import riscv._
 
 import spinal.core._
 
+trait IBusService {
+  def getIBus: MemBus
+}
+
+trait DBusService {
+  def getDBus: MemBus
+}
+
 trait DecoderService {
   type Action = Map[PipelineData[_ <: Data], Data]
 

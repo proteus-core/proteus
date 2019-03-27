@@ -1,10 +1,10 @@
 package riscv.plugins
 
 import riscv._
-
 import spinal.core._
+import spinal.lib._
 
-class Lsu extends Plugin {
+class Lsu extends Plugin with DBusService {
   object Opcodes {
     val LB  = M"-----------------000-----0000011"
     val LH  = M"-----------------001-----0000011"
@@ -25,6 +25,13 @@ class Lsu extends Plugin {
     object LSU_IS_STORE extends PipelineData(Bool())
     object LSU_ACCESS_WIDTH extends PipelineData(LsuAccessWidth())
     object LSU_IS_UNSIGNED extends PipelineData(Bool())
+  }
+
+  private var dbus: MemBus = null
+
+  override def getDBus: MemBus = {
+    assert(dbus != null, "Call build() first")
+    dbus
   }
 
   override def setup(pipeline: Pipeline, config: Config): Unit = {
@@ -79,21 +86,19 @@ class Lsu extends Plugin {
   }
 
   override def build(pipeline: Pipeline, config: Config): Unit = {
-    pipeline.memory plug new Area {
+    val lsuArea = pipeline.memory plug new Area {
       import pipeline.memory._
 
-      var i: BigInt = 0
-      val dmem = Mem(UInt(config.xlen bits), 1024).init(Seq.fill(1024) {
-        def wrap(i: BigInt) = i % 256
-        val content = wrap(i) + (wrap(i + 1) << 8) + (wrap(i + 2) << 16) + (wrap(i + 3) << 24)
-        val value = U(content).setWidth(config.xlen)
-        i += 4
-        value
-      })
+      val dbus = slave(new MemBus(config.xlen))
 
       val address = UInt(config.xlen bits)
       address := input(pipeline.data.RD_DATA)
       val memAddress = address >> 2
+
+      dbus.address := memAddress.resized
+      dbus.write := False
+      dbus.wdata := 0
+      dbus.wmask := 0
 
       val misaligned = False
 
@@ -111,7 +116,7 @@ class Lsu extends Plugin {
 
       when (!misaligned) {
         when (value(Data.LSU_IS_LOAD)) {
-          val wValue = dmem(memAddress.resized)
+          val wValue = dbus.rdata
           result := wValue
 
           switch (value(Data.LSU_ACCESS_WIDTH)) {
@@ -185,9 +190,19 @@ class Lsu extends Plugin {
             }
           }
 
-          dmem.write(memAddress.resized, data, mask = mask)
+          dbus.write := True
+          dbus.wdata := data
+          dbus.wmask := mask
         }
       }
     }
+
+    val pipelineArea = pipeline plug new Area {
+      val dbus = slave(new MemBus(config.xlen))
+      dbus <> lsuArea.dbus
+      Lsu.this.dbus = dbus
+    }
+
+    pipelineArea.setName("")
   }
 }

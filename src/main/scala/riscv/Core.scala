@@ -1,14 +1,17 @@
 package riscv
 
+import java.io.File
+
 import spinal.core._
 import spinal.core.sim._
+import spinal.lib.misc.HexTools
 
 class Core(imemHexPath: String) extends Component {
   import riscv.plugins._
 
   val pipelinePlugins = if (true) Seq(new SimplePipelining, new DataHazardResolver) else Seq(new NoPipelining)
   val plugins = pipelinePlugins ++ Seq(
-    new Fetcher(imemHexPath),
+    new Fetcher,
     new Decoder,
     new RegisterFile,
     new IntAlu,
@@ -16,6 +19,30 @@ class Core(imemHexPath: String) extends Component {
   )
   val config = new Config(BaseIsa.RV32I, plugins)
   val pipeline = new Pipeline(config)
+
+  val imem = if (!imemHexPath.isEmpty) {
+    val imem = Mem(UInt(config.xlen bits), new File(imemHexPath).length() / 4)
+    HexTools.initRam(imem, imemHexPath, 0)
+    imem
+  } else {
+    Mem(UInt(config.xlen bits), 1024)
+  }
+
+  val ibus = pipeline.getService[IBusService].getIBus
+  ibus.rdata := imem(ibus.address.resized)
+
+  var i: BigInt = 0
+  val dmem = Mem(UInt(config.xlen bits), 1024).init(Seq.fill(1024) {
+    def wrap(i: BigInt) = i % 256
+    val content = wrap(i) + (wrap(i + 1) << 8) + (wrap(i + 2) << 16) + (wrap(i + 3) << 24)
+    val value = U(content).setWidth(config.xlen)
+    i += 4
+    value
+  })
+
+  val dbus = pipeline.getService[DBusService].getDBus
+  dbus.rdata := dmem(dbus.address.resized)
+  dmem.write(dbus.address.resized, dbus.wdata, dbus.write, dbus.wmask)
 }
 
 object Core {
