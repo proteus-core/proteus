@@ -50,3 +50,10 @@ trait IntAluService {
                    src1: SpinalEnumElement[Src1Select.type],
                    src2: SpinalEnumElement[Src2Select.type]): Unit
 }
+
+trait FormalService {
+  def lsuDefault(stage: Stage)
+  def lsuOnLoad(stage: Stage, addr: UInt, rmask: Bits, rdata: UInt)
+  def lsuOnStore(stage: Stage, addr: UInt, wmask: Bits, wdata: UInt)
+  def lsuOnMisaligned(stage: Stage): Unit
+}

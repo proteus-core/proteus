@@ -134,4 +134,11 @@ class Pipeline(config: Config) extends Component {
     assert(services.length == 1)
     services.head.asInstanceOf[T]
   }
+
+  def hasService[T](implicit tag: ClassTag[T]): Boolean = {
+    config.plugins.exists(_ match {
+      case _: T => true
+      case _    => false
+    })
+  }
 }

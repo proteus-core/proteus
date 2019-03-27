@@ -27,6 +27,15 @@ class Lsu extends Plugin with DBusService {
     object LSU_IS_UNSIGNED extends PipelineData(Bool())
   }
 
+  class DummyFormalService extends FormalService {
+    override def lsuDefault(stage: Stage): Unit = ()
+    override def lsuOnLoad(stage: Stage, addr: UInt,
+                           rmask: Bits, rdata: UInt): Unit = ()
+    override def lsuOnStore(stage: Stage, addr: UInt,
+                            wmask: Bits, wdata: UInt): Unit = ()
+    override def lsuOnMisaligned(stage: Stage): Unit = ()
+  }
+
   private var dbus: MemBus = null
 
   override def getDBus: MemBus = {
@@ -86,8 +95,10 @@ class Lsu extends Plugin with DBusService {
   }
 
   override def build(pipeline: Pipeline, config: Config): Unit = {
-    val lsuArea = pipeline.memory plug new Area {
-      import pipeline.memory._
+    val lsuStage = pipeline.memory
+
+    val lsuArea = lsuStage plug new Area {
+      import lsuStage._
 
       val dbus = slave(new MemBus(config.xlen))
 
@@ -100,23 +111,46 @@ class Lsu extends Plugin with DBusService {
       dbus.wdata := 0
       dbus.wmask := 0
 
-      val misaligned = False
+      val isLoad = value(Data.LSU_IS_LOAD)
+      val isStore = value(Data.LSU_IS_STORE)
+      val isActive = isLoad || isStore
+
+      val misaligned = Bool()
+      val baseMask = Bits(config.xlen / 8 bits)
 
       switch (value(Data.LSU_ACCESS_WIDTH)) {
+        is (LsuAccessWidth.B) {
+          misaligned := False
+          baseMask := B"0001"
+        }
         is (LsuAccessWidth.H) {
           misaligned := (address & 1) =/= 0
+          baseMask := B"0011"
         }
         is (LsuAccessWidth.W) {
           misaligned := (address & 3) =/= 0
+          baseMask := B"1111"
         }
       }
 
-      val result = UInt(config.xlen bits)
-      result := 0
+      val mask = baseMask |<< address(1 downto 0)
+
+      val formal = if (pipeline.hasService[FormalService]) {
+        pipeline.getService[FormalService]
+      } else {
+        new DummyFormalService
+      }
+
+      formal.lsuDefault(lsuStage)
+
+      when (isActive && misaligned) {
+        formal.lsuOnMisaligned(lsuStage)
+      }
 
       when (!misaligned) {
-        when (value(Data.LSU_IS_LOAD)) {
+        when (isLoad) {
           val wValue = dbus.rdata
+          val result = UInt(config.xlen bits)
           result := wValue
 
           switch (value(Data.LSU_ACCESS_WIDTH)) {
@@ -144,15 +178,15 @@ class Lsu extends Plugin with DBusService {
 
           output(pipeline.data.RD_DATA) := result
           output(pipeline.data.RD_VALID) := True
+
+          formal.lsuOnLoad(lsuStage, memAddress << 2, mask, wValue)
         }
 
-        when (value(Data.LSU_IS_STORE)) {
+        when (isStore) {
           val wValue = value(pipeline.data.RS2_DATA)
           arbitration.rs2Needed := True
           val data = UInt(config.xlen bits)
           data := wValue
-          val mask = Bits(4 bits)
-          mask := B"1111"
 
           switch (value(Data.LSU_ACCESS_WIDTH)) {
             is (LsuAccessWidth.H) {
@@ -160,10 +194,8 @@ class Lsu extends Plugin with DBusService {
 
               when (address(1)) {
                 data := hValue << 16
-                mask := B"1100"
               } otherwise {
                 data := hValue.resized
-                mask := B"0011"
               }
             }
             is (LsuAccessWidth.B) {
@@ -172,19 +204,15 @@ class Lsu extends Plugin with DBusService {
               switch (address(1 downto 0).asBits) {
                 is (B"00") {
                   data := bValue.resized
-                  mask := B"0001"
                 }
                 is (B"01") {
                   data := (bValue << 8).resized
-                  mask := B"0010"
                 }
                 is (B"10") {
                   data := (bValue << 16).resized
-                  mask := B"0100"
                 }
                 is (B"11") {
                   data := (bValue << 24).resized
-                  mask := B"1000"
                 }
               }
             }
@@ -193,6 +221,8 @@ class Lsu extends Plugin with DBusService {
           dbus.write := True
           dbus.wdata := data
           dbus.wmask := mask
+
+          formal.lsuOnStore(lsuStage, memAddress << 2, mask, data)
         }
       }
     }

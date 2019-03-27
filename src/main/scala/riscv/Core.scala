@@ -1,13 +1,15 @@
 package riscv
 
+import riscv.plugins._
+
 import java.io.File
 
 import spinal.core._
 import spinal.core.sim._
 import spinal.lib.misc.HexTools
 
-class Core(imemHexPath: String) extends Component {
-  import riscv.plugins._
+class Core(imemHexPath: String,
+           extraPlugins: Seq[Plugin] = Seq()) extends Component {
 
   val pipelinePlugins = if (true) Seq(new SimplePipelining, new DataHazardResolver) else Seq(new NoPipelining)
   val plugins = pipelinePlugins ++ Seq(
@@ -16,7 +18,7 @@ class Core(imemHexPath: String) extends Component {
     new RegisterFile,
     new IntAlu,
     new Lsu
-  )
+  ) ++ extraPlugins
   val config = new Config(BaseIsa.RV32I, plugins)
   val pipeline = new Pipeline(config)
 
@@ -54,5 +56,11 @@ object CoreSim {
         dut.clockDomain.waitSampling()
       }
     }
+  }
+}
+
+object CoreFormal {
+  def main(args: Array[String]) {
+    SpinalVerilog(new Core("", Seq(new RiscvFormal)))
   }
 }
