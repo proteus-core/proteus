@@ -20,6 +20,7 @@ class IntAlu extends Plugin with IntAluService {
     val ORI   = M"-----------------110-----0010011"
     val ANDI  = M"-----------------111-----0010011"
     val LUI   = M"-------------------------0110111"
+    val AUIPC = M"-------------------------0010111"
   }
 
   object Data {
@@ -91,6 +92,14 @@ class IntAlu extends Plugin with IntAluService {
 
       config.addDecoding(Opcodes.LUI, InstructionType.U, Map(
         Data.ALU_OP -> AluOp.SRC2,
+        Data.ALU_SRC2 -> Src2Select.IMM,
+        Data.ALU_COMMIT_RESULT -> True,
+        pipeline.data.WRITE_RD -> True
+      ))
+
+      config.addDecoding(Opcodes.AUIPC, InstructionType.U, Map(
+        Data.ALU_OP -> AluOp.ADD,
+        Data.ALU_SRC1 -> Src1Select.PC,
         Data.ALU_SRC2 -> Src2Select.IMM,
         Data.ALU_COMMIT_RESULT -> True,
         pipeline.data.WRITE_RD -> True
