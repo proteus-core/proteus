@@ -1,0 +1,4 @@
+[submodule "formal/riscv-formal"]
+	path = formal/riscv-formal
+	url = https://github.com/SymbioticEDA/riscv-formal.git
+	ignore = untracked
