@@ -19,12 +19,12 @@ case class ImmediateDecoder(ir: Bits) {
   def j = signExtend(ir(31) ## ir(19 downto 12) ## ir(20) ## ir(30 downto 25) ## ir(24 downto 21) ## False)
 }
 
-class Decoder extends Plugin with DecoderService {
+class Decoder(implicit config: Config) extends Plugin with DecoderService {
   private val instructionTypes = mutable.Map[MaskedLiteral, InstructionType]()
   private val decodings = mutable.Map[MaskedLiteral, Action]()
   private val defaults = mutable.Map[PipelineData[_ <: Data], Data]()
 
-  override protected val config = new DecoderConfig {
+  override protected val decoderConfig = new DecoderConfig {
     override def addDecoding(opcode: MaskedLiteral,
                              itype: InstructionType,
                              action: Action): Unit = {
@@ -55,7 +55,7 @@ class Decoder extends Plugin with DecoderService {
     }
   }
 
-  override def setup(pipeline: Pipeline, config: Config): Unit = {
+  override def setup(pipeline: Pipeline): Unit = {
     configure(pipeline) {config =>
       config.addDefault(Map(
         pipeline.data.UNKNOWN_INSTRUCTION -> False,
@@ -67,7 +67,7 @@ class Decoder extends Plugin with DecoderService {
 
   override protected def stage(pipeline: Pipeline): Stage = pipeline.decode
 
-  override def build(pipeline: Pipeline, config: Config): Unit = {
+  override def build(pipeline: Pipeline): Unit = {
     pipeline.decode plug new Area {
       import pipeline.decode._
 

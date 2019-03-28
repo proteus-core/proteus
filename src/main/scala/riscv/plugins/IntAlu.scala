@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class IntAlu extends Plugin with IntAluService {
+class IntAlu(implicit config: Config) extends Plugin with IntAluService {
   object Opcodes {
     val ADD   = M"0000000----------000-----0110011"
     val SUB   = M"0100000----------000-----0110011"
@@ -44,7 +44,7 @@ class IntAlu extends Plugin with IntAluService {
     }
   }
 
-  override def setup(pipeline: Pipeline, config: Config): Unit = {
+  override def setup(pipeline: Pipeline): Unit = {
     val decoder = pipeline.getService[DecoderService]
 
     decoder.configure(pipeline) {config =>
@@ -107,7 +107,7 @@ class IntAlu extends Plugin with IntAluService {
     }
   }
 
-  override def build(pipeline: Pipeline, config: Config): Unit = {
+  override def build(pipeline: Pipeline): Unit = {
     pipeline.execute plug new Area {
       import pipeline.execute._
 

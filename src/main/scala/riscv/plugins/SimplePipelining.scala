@@ -4,8 +4,8 @@ import riscv._
 
 import spinal.core._
 
-class SimplePipelining extends Plugin {
-  override def build(pipeline: Pipeline, config: Config): Unit = {
+class SimplePipelining(implicit config: Config) extends Plugin {
+  override def build(pipeline: Pipeline): Unit = {
     pipeline plug new Area {
       import pipeline._
 

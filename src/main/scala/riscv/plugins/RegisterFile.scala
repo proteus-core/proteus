@@ -4,14 +4,14 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class RegisterFile extends Plugin {
+class RegisterFile(implicit config: Config) extends Plugin {
   private val registerNames = Seq(
     "zero", "ra", "sp", "gp", "tp", "t0", "t1", "t2", "s0_fp", "s1", "a0", "a1",
     "a2", "a3", "a4", "a5", "a6", "a7", "s2", "s3", "s4", "s5", "s6", "s7",
     "s8", "s9", "s10", "s11", "t3", "t4", "t5", "t6"
   )
 
-  override def setup(pipeline: Pipeline, config: Config): Unit = {
+  override def setup(pipeline: Pipeline): Unit = {
     val decoder = pipeline.getService[DecoderService]
 
     decoder.configure(pipeline) {config =>
@@ -19,7 +19,7 @@ class RegisterFile extends Plugin {
     }
   }
 
-  override def build(pipeline: Pipeline, config: Config): Unit = {
+  override def build(pipeline: Pipeline): Unit = {
     case class ReadIo() extends Bundle with IMasterSlave {
       val rs1 = UInt(5 bits)
       val rs2 = UInt(5 bits)

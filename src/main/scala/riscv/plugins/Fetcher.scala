@@ -7,7 +7,7 @@ import spinal.lib._
 
 import java.io.File
 
-class Fetcher extends Plugin with IBusService {
+class Fetcher(implicit config: Config) extends Plugin with IBusService {
   private var ibus: MemBus = null
 
   override def getIBus: MemBus = {
@@ -15,7 +15,7 @@ class Fetcher extends Plugin with IBusService {
     ibus
   }
 
-  override def build(pipeline: Pipeline, config: Config): Unit = {
+  override def build(pipeline: Pipeline): Unit = {
     val fetchArea = pipeline.fetch plug new Area {
       import pipeline.fetch._
 

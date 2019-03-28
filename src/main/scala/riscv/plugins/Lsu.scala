@@ -4,7 +4,7 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class Lsu extends Plugin with DBusService {
+class Lsu(implicit config: Config) extends Plugin with DBusService {
   object Opcodes {
     val LB  = M"-----------------000-----0000011"
     val LH  = M"-----------------001-----0000011"
@@ -43,7 +43,7 @@ class Lsu extends Plugin with DBusService {
     dbus
   }
 
-  override def setup(pipeline: Pipeline, config: Config): Unit = {
+  override def setup(pipeline: Pipeline): Unit = {
     val intAlu = pipeline.getService[IntAluService]
 
     val allOpcodes = Seq(Opcodes.LB, Opcodes.LH, Opcodes.LW, Opcodes.LBU,
@@ -94,7 +94,7 @@ class Lsu extends Plugin with DBusService {
     }
   }
 
-  override def build(pipeline: Pipeline, config: Config): Unit = {
+  override def build(pipeline: Pipeline): Unit = {
     val lsuStage = pipeline.memory
 
     val lsuArea = lsuStage plug new Area {

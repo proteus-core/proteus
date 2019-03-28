@@ -4,7 +4,7 @@ import riscv._
 import spinal.core._
 import spinal.lib.Counter
 
-class RiscvFormal extends Plugin with FormalService {
+class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
   class Data(config: Config) {
     private val xlen = config.xlen
 
@@ -16,7 +16,7 @@ class RiscvFormal extends Plugin with FormalService {
     object FORMAL_MISALIGNED extends PipelineData(Bool())
   }
 
-  private var data: Data = null
+  private val data = new Data(config)
 
   override def lsuDefault(stage: Stage): Unit = {
     stage.output(data.FORMAL_MEM_ADDR) := 0
@@ -45,11 +45,7 @@ class RiscvFormal extends Plugin with FormalService {
     stage.output(data.FORMAL_MISALIGNED) := True
   }
 
-  override def setup(pipeline: Pipeline, config: Config): Unit = {
-    data = new Data(config)
-  }
-
-  override def build(pipeline: Pipeline, config: Config): Unit = {
+  override def build(pipeline: Pipeline): Unit = {
     class Rvfi extends Bundle {
       // Instruction Metadata
       val valid = Bool()

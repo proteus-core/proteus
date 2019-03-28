@@ -22,7 +22,7 @@ class PipelineRegs(stage: Stage) extends Component {
   }
 }
 
-class Pipeline(config: Config) extends Component {
+class Pipeline(config: Config, plugins: Seq[Plugin]) extends Component {
   val fetch = new Stage("IF")
   val decode = new Stage("ID")
   val execute = new Stage("EX")
@@ -37,12 +37,12 @@ class Pipeline(config: Config) extends Component {
 
   val data = new StandardPipelineData(config)
 
-  for (plugin <- config.plugins) {
-    plugin.setup(this, config)
+  for (plugin <- plugins) {
+    plugin.setup(this)
   }
 
-  for (plugin <- config.plugins) {
-    plugin.build(this, config)
+  for (plugin <- plugins) {
+    plugin.build(this)
   }
 
   // Debugging signals to ensure that PC and IR are passed through the whole
@@ -123,10 +123,10 @@ class Pipeline(config: Config) extends Component {
     stage.connectLastValues()
   }
 
-  config.plugins.foreach(_.finish(this, config))
+  plugins.foreach(_.finish(this))
 
   def getService[T](implicit tag: ClassTag[T]): T = {
-    val services = config.plugins.filter(_ match {
+    val services = plugins.filter(_ match {
       case _: T => true
       case _    => false
     })
@@ -136,7 +136,7 @@ class Pipeline(config: Config) extends Component {
   }
 
   def hasService[T](implicit tag: ClassTag[T]): Boolean = {
-    config.plugins.exists(_ match {
+    plugins.exists(_ match {
       case _: T => true
       case _    => false
     })

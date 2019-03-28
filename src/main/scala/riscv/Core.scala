@@ -8,19 +8,21 @@ import spinal.core._
 import spinal.core.sim._
 import spinal.lib.misc.HexTools
 
-class Core(imemHexPath: String,
-           extraPlugins: Seq[Plugin] = Seq()) extends Component {
+class Core(imemHexPath: String, formal: Boolean = false) extends Component {
 
+  implicit val config = new Config(BaseIsa.RV32I)
   val pipelinePlugins = if (true) Seq(new SimplePipelining, new DataHazardResolver) else Seq(new NoPipelining)
-  val plugins = pipelinePlugins ++ Seq(
+  val extraPlugins = if (formal) Seq(new RiscvFormal) else Seq()
+
+  var plugins = pipelinePlugins ++ Seq(
     new Fetcher,
     new Decoder,
     new RegisterFile,
     new IntAlu,
     new Lsu
   ) ++ extraPlugins
-  val config = new Config(BaseIsa.RV32I, plugins)
-  val pipeline = new Pipeline(config)
+
+  val pipeline = new Pipeline(config, plugins)
 
   val imem = if (!imemHexPath.isEmpty) {
     val imem = Mem(UInt(config.xlen bits), new File(imemHexPath).length() / 4)
@@ -61,6 +63,6 @@ object CoreSim {
 
 object CoreFormal {
   def main(args: Array[String]) {
-    SpinalVerilog(new Core("", Seq(new RiscvFormal)))
+    SpinalVerilog(new Core("", true))
   }
 }

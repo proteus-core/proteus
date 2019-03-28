@@ -24,11 +24,11 @@ trait DecoderService {
     def addDefault(data: PipelineData[_ <: Data], value: Data): Unit
   }
 
-  protected val config: DecoderConfig
+  protected val decoderConfig: DecoderConfig
   protected def stage(pipeline: Pipeline): Stage
 
   def configure(pipeline: Pipeline)(f: DecoderConfig => Unit): Unit = {
-    stage(pipeline).rework(f(config))
+    stage(pipeline).rework(f(decoderConfig))
   }
 }
 

@@ -20,7 +20,7 @@ object BaseIsa {
   }
 }
 
-class Config(val baseIsa: BaseIsa, val plugins: Seq[Plugin]) {
+class Config(val baseIsa: BaseIsa) {
   def xlen = baseIsa.xlen
   def numRegs = baseIsa.xlen
 }

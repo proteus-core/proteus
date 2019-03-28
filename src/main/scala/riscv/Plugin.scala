@@ -2,11 +2,11 @@ package riscv
 
 import spinal.core._
 
-trait Plugin {
+abstract class Plugin(implicit val config: Config) {
   def getName = getClass.getSimpleName.replace("$","")
-  def setup(pipeline: Pipeline, config: Config): Unit = ()
-  def build(pipeline: Pipeline, config: Config): Unit = ()
-  def finish(pipeline: Pipeline, config: Config): Unit = ()
+  def setup(pipeline: Pipeline): Unit = ()
+  def build(pipeline: Pipeline): Unit = ()
+  def finish(pipeline: Pipeline): Unit = ()
 
   implicit class Plug(component: Component) {
     def plug[T](logic: => T): T = component.rework {

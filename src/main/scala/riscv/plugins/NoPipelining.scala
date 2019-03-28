@@ -5,9 +5,9 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class NoPipelining extends SimplePipelining {
-  override def build(pipeline: Pipeline, config: Config): Unit = {
-    super.build(pipeline, config)
+class NoPipelining(implicit config: Config) extends SimplePipelining {
+  override def build(pipeline: Pipeline): Unit = {
+    super.build(pipeline)
     
     pipeline plug new Area {
       import pipeline._

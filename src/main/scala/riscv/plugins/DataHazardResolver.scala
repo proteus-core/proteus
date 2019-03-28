@@ -4,8 +4,8 @@ import riscv._
 
 import spinal.core._
 
-class DataHazardResolver extends Plugin {
-  override def build(pipeline: Pipeline, config: Config): Unit = {
+class DataHazardResolver(implicit config: Config) extends Plugin {
+  override def build(pipeline: Pipeline): Unit = {
     pipeline plug new Area {
       import pipeline._
 
@@ -20,7 +20,7 @@ class DataHazardResolver extends Plugin {
     }
   }
 
-  override def finish(pipeline: Pipeline, config: Config): Unit = {
+  override def finish(pipeline: Pipeline): Unit = {
     pipeline plug new Area {
       import pipeline._
 
