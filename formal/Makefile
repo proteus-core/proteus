@@ -18,3 +18,6 @@ formal: setup
 	$(MAKE) -C $(CORE_DIR)/checks
 	@echo "Failed tests:"
 	find $(CORE_DIR)/checks -name trace.vcd
+
+formal-insn-%: setup
+	$(MAKE) -C $(CORE_DIR)/checks insn_$(subst formal-insn-,,$@)_ch0
