@@ -28,6 +28,7 @@ class IntAlu(implicit config: Config) extends Plugin with IntAluService {
     object ALU_SRC1 extends PipelineData(Src1Select())
     object ALU_SRC2 extends PipelineData(Src2Select())
     object ALU_COMMIT_RESULT extends PipelineData(Bool())
+    object ALU_RESULT extends PipelineData(UInt(config.xlen bits))
   }
 
   override def addOperation(pipeline: Pipeline,
@@ -44,7 +45,10 @@ class IntAlu(implicit config: Config) extends Plugin with IntAluService {
     }
   }
 
+  override def resultData: PipelineData[UInt] = Data.ALU_RESULT
+
   override def setup(pipeline: Pipeline): Unit = {
+
     val decoder = pipeline.getService[DecoderService]
 
     decoder.configure(pipeline) {config =>
@@ -163,10 +167,11 @@ class IntAlu(implicit config: Config) extends Plugin with IntAluService {
         }
       }
 
-      output(pipeline.data.RD_DATA) := result
-
       when (value(Data.ALU_COMMIT_RESULT)) {
+        output(pipeline.data.RD_DATA) := result
         output(pipeline.data.RD_VALID) := True
+      } otherwise {
+        output(Data.ALU_RESULT) := result
       }
     }
   }

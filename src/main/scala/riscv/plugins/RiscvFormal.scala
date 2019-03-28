@@ -77,7 +77,8 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
       rvfi.order := Counter(64 bits, rvfi.valid)
       rvfi.insn := stage.output(pipeline.data.IR)
       rvfi.trap := stage.output(pipeline.data.UNKNOWN_INSTRUCTION) ||
-                   stage.output(data.FORMAL_MISALIGNED)
+                   stage.output(data.FORMAL_MISALIGNED) ||
+                   stage.output(pipeline.data.PC_MISALIGNED)
       rvfi.halt := False
       rvfi.mode := 3
       rvfi.rs1_addr := stage.output(pipeline.data.RS1)
@@ -90,7 +91,7 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
       rvfi.rd_wdata := (rvfi.rd_addr === 0) ?
                        U(0) | stage.output(pipeline.data.RD_DATA)
       rvfi.pc_rdata := stage.output(pipeline.data.PC)
-      rvfi.pc_wdata := rvfi.pc_rdata + 4
+      rvfi.pc_wdata := stage.output(pipeline.data.NEXT_PC)
       rvfi.mem_addr := stage.output(data.FORMAL_MEM_ADDR)
       rvfi.mem_rmask := stage.output(data.FORMAL_MEM_RMASK)
       rvfi.mem_wmask := stage.output(data.FORMAL_MEM_WMASK)

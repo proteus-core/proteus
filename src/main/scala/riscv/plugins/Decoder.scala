@@ -60,7 +60,8 @@ class Decoder(implicit config: Config) extends Plugin with DecoderService {
       config.addDefault(Map(
         pipeline.data.UNKNOWN_INSTRUCTION -> False,
         pipeline.data.RD_VALID -> False,
-        pipeline.data.IMM -> U(0)
+        pipeline.data.IMM -> U(0),
+        pipeline.data.PC_MISALIGNED -> False
       ))
     }
   }

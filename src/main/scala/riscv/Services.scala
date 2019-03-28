@@ -49,6 +49,12 @@ trait IntAluService {
                    op: SpinalEnumElement[AluOp.type],
                    src1: SpinalEnumElement[Src1Select.type],
                    src2: SpinalEnumElement[Src2Select.type]): Unit
+
+  def resultData: PipelineData[UInt]
+}
+
+trait JumpService {
+  def jump(pipeline: Pipeline, stage: Stage, target: UInt): Unit
 }
 
 trait FormalService {

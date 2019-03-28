@@ -19,7 +19,9 @@ class Core(imemHexPath: String, formal: Boolean = false) extends Component {
     new Decoder,
     new RegisterFile,
     new IntAlu,
-    new Lsu
+    new Lsu,
+    new BranchUnit,
+    new JumpResolver
   ) ++ extraPlugins
 
   val pipeline = new Pipeline(config, plugins)

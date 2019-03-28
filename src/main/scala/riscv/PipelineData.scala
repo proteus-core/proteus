@@ -10,6 +10,8 @@ class StandardPipelineData(config: Config) {
   private val xlen = config.xlen
 
   object PC extends PipelineData(UInt(xlen bits))
+  object NEXT_PC extends PipelineData(UInt(xlen bits))
+  object PC_MISALIGNED extends PipelineData(Bool())
   object IR extends PipelineData(UInt(32 bits))
   object UNKNOWN_INSTRUCTION extends PipelineData(Bool())
   object RS1 extends PipelineData(UInt(5 bits))

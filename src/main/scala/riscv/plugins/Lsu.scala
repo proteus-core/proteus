@@ -103,7 +103,7 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
       val dbus = slave(new MemBus(config.xlen))
 
       val address = UInt(config.xlen bits)
-      address := input(pipeline.data.RD_DATA)
+      address := input(pipeline.getService[IntAluService].resultData)
       val memAddress = address >> 2
 
       dbus.address := memAddress.resized

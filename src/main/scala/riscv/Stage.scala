@@ -10,9 +10,11 @@ class Arbitration extends Bundle {
   val isReady = out Bool()
   val isDone = out Bool()
   val rs1Needed, rs2Needed = out Bool()
+  val jumpRequested = out Bool()
 
   rs1Needed := False
   rs2Needed := False
+  jumpRequested := False
 }
 
 class Stage(val stageName: String) extends Component {

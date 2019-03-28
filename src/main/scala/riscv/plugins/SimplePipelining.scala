@@ -38,6 +38,10 @@ class SimplePipelining(implicit config: Config) extends Plugin {
       for ((stage, regs) <- pipelineRegs) {
         regs.shift := stage.arbitration.isDone
       }
+
+      pipeline.fetch.input(pipeline.data.NEXT_PC) :=
+        pipeline.decode.input(pipeline.data.NEXT_PC)
+      pipeline.fetch.input(pipeline.data.NEXT_PC).allowOverride
     }
   }
 }

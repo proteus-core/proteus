@@ -21,16 +21,14 @@ class Fetcher(implicit config: Config) extends Plugin with IBusService {
 
       val ibus = slave(new MemBus(config.xlen))
 
-      val pc = Reg(UInt(config.xlen bits)).init(0)
-
-      when (arbitration.isValid) {
-        pc := pc + 4
-      }
+      val pc = input(pipeline.data.NEXT_PC)
+      val nextPc = pc + 4
 
       ibus.address := (pc >> 2).resized
       ibus.write := False
       ibus.wdata := 0
       output(pipeline.data.PC) := pc
+      output(pipeline.data.NEXT_PC) := nextPc
       output(pipeline.data.IR) := ibus.rdata
     }
 
