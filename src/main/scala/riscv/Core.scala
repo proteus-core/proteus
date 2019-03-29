@@ -19,6 +19,7 @@ class Core(imemHexPath: String, formal: Boolean = false) extends Component {
     new Decoder,
     new RegisterFile,
     new IntAlu,
+    new Shifter,
     new Lsu,
     new BranchUnit,
     new JumpResolver
