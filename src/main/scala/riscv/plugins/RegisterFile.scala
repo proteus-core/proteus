@@ -43,6 +43,8 @@ class RegisterFile(implicit config: Config) extends Plugin {
     }
 
     val regFile = pipeline plug new Component {
+      setDefinitionName("RegisterFile")
+
       val readIo = master(ReadIo())
       val writeIo = master(WriteIo())
       val regs = Mem(UInt(config.xlen bits), config.numRegs)
