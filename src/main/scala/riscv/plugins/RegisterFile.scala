@@ -45,16 +45,29 @@ class RegisterFile(implicit config: Config) extends Plugin {
     val regFile = pipeline plug new Component {
       val readIo = master(ReadIo())
       val writeIo = master(WriteIo())
-      val regs = Vec(UInt(config.xlen bits), config.numRegs)
+      val regs = Mem(UInt(config.xlen bits), config.numRegs)
 
-      regs(0) := 0
-      regs.tail.foreach(_.setAsReg().init(0))
-      regs.zipWithIndex.foreach {
-        case(r, i) => r.setName(s"x${i}_${registerNames(i)}")
+      // Add a wire for each register with a readable name. This is to easily
+      // view register values in a wave dump.
+      for (i <- 0 until config.numRegs) {
+        val regWire = UInt(config.xlen bits)
+        val regName = registerNames(i)
+        regWire.setName(s"x${i}_${regName}")
+        regWire := regs.readAsync(U(i).resized, writeFirst)
       }
 
-      readIo.rs1Data := regs(readIo.rs1)
-      readIo.rs2Data := regs(readIo.rs2)
+      // We explicitly check if x0 is read and return 0 in that case. Another
+      // option would be to initialize regs(0) to zero at boot. However, this
+      // slows-down riscv-formal runs significantly for some reason...
+      def readReg(addr: UInt) = {
+        addr.mux(
+          0 -> U(0, config.xlen bits),
+          default -> regs.readAsync(addr, writeFirst)
+        )
+      }
+
+      readIo.rs1Data := readReg(readIo.rs1)
+      readIo.rs2Data := readReg(readIo.rs2)
 
       when (writeIo.write && writeIo.rd =/= 0) {
         regs(writeIo.rd) := writeIo.data
