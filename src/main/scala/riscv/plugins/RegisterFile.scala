@@ -53,10 +53,6 @@ class RegisterFile(implicit config: Config) extends Plugin {
         case(r, i) => r.setName(s"x${i}_${registerNames(i)}")
       }
 
-//      for ((reg, index) <- regs.tail.zipWithIndex) {
-//        reg.init(index + 1)
-//      }
-
       readIo.rs1Data := regs(readIo.rs1)
       readIo.rs2Data := regs(readIo.rs2)
 
