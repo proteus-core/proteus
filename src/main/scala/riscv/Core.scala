@@ -22,7 +22,8 @@ class Core(imemHexPath: String, formal: Boolean = false) extends Component {
     new Shifter,
     new Lsu,
     new BranchUnit,
-    new JumpResolver
+    new JumpResolver,
+    new CsrFile
   ) ++ extraPlugins
 
   val pipeline = new Pipeline(config, plugins)
