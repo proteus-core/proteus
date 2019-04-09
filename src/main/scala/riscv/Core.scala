@@ -24,7 +24,8 @@ class Core(imemHexPath: String, formal: Boolean = false) extends Component {
     new BranchUnit,
     new JumpResolver,
     new CsrFile,
-    new Timers
+    new Timers,
+    new MachineMode
   ) ++ extraPlugins
 
   val pipeline = new Pipeline(config, plugins)
