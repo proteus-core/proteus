@@ -36,10 +36,16 @@ private class Misa(implicit config: Config) extends Csr {
   override def write(value: UInt): Unit = ()
 }
 
+private class Mvendorid(implicit config: Config) extends Csr {
+  // 0 can be used for non-commercial implementations
+  override def read(): UInt = U(0, config.xlen bits)
+}
+
 class MachineMode(implicit config: Config) extends Plugin {
   override def setup(pipeline: Pipeline): Unit = {
     val csr = pipeline.getService[CsrService]
 
+    csr.registerCsr(pipeline, 0xF11, new Mvendorid)
     csr.registerCsr(pipeline, 0x301, new Misa)
   }
 }
