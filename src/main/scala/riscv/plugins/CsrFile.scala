@@ -56,7 +56,7 @@ class CsrFile(implicit config: Config) extends Plugin with CsrService {
   }
 
   private var component: CsrComponent = null
-  private val registers = mutable.Map[Int, Register]()
+  private val registers = mutable.Map[Int, Csr]()
 
   private def component(pipeline: Pipeline): CsrComponent = {
     if (component == null) {
@@ -68,7 +68,7 @@ class CsrFile(implicit config: Config) extends Plugin with CsrService {
 
   private def isReadOnly(csrId: Int) = (csrId & 0xC00) == 0xC00
 
-  override def registerCsr[T <: Register](pipeline: Pipeline, id: Int, reg: => T): T = {
+  override def registerCsr[T <: Csr](pipeline: Pipeline, id: Int, reg: => T): T = {
     assert(id >= 0 && id < 4096, "Illegal CSR id")
     assert(!registers.contains(id), s"Multiple CSRs with id $id")
 

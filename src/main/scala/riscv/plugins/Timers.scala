@@ -8,7 +8,7 @@ class Timers(implicit config: Config) extends Plugin {
   override def setup(pipeline: Pipeline): Unit = {
     val csr = pipeline.getService[CsrService]
 
-    val cycleCsr = csr.registerCsr(pipeline, 0xC00, new csr.Register {
+    val cycleCsr = csr.registerCsr(pipeline, 0xC00, new Csr {
       val cycle = Reg(UInt(64 bits)).init(0)
       cycle := cycle + 1
 
@@ -24,7 +24,7 @@ class Timers(implicit config: Config) extends Plugin {
     // For now, just alias time[h] to cycle[h]
     csr.registerCsr(pipeline, 0xC01, cycleCsr)
 
-    val instretCsr = csr.registerCsr(pipeline, 0xC02, new csr.Register {
+    val instretCsr = csr.registerCsr(pipeline, 0xC02, new Csr {
       val incInstret = in Bool()
       val instret = Reg(UInt(64 bits)).init(0)
 
@@ -46,13 +46,13 @@ class Timers(implicit config: Config) extends Plugin {
     }
 
     if (config.xlen == 32) {
-      val cyclehCsr = csr.registerCsr(pipeline, 0xC80, new csr.Register {
+      val cyclehCsr = csr.registerCsr(pipeline, 0xC80, new Csr {
         override def read(): UInt = cycleCsr.cycle(63 downto 32)
       })
 
       csr.registerCsr(pipeline, 0xC81, cyclehCsr)
 
-      csr.registerCsr(pipeline, 0xC82, new csr.Register {
+      csr.registerCsr(pipeline, 0xC82, new Csr {
         override def read(): UInt = instretCsr.instret(63 downto 32)
       })
     }

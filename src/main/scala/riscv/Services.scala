@@ -57,13 +57,13 @@ trait JumpService {
   def jump(pipeline: Pipeline, stage: Stage, target: UInt): Unit
 }
 
-trait CsrService {
-  trait Register extends Area {
-    def read(): UInt
-    def write(value: UInt): Unit = assert(false, "Cannot write RO CSR")
-  }
+trait Csr extends Area {
+  def read(): UInt
+  def write(value: UInt): Unit = assert(false, "Cannot write RO CSR")
+}
 
-  def registerCsr[T <: Register](pipeline: Pipeline, id: Int, reg: => T): T
+trait CsrService {
+    def registerCsr[T <: Csr](pipeline: Pipeline, id: Int, reg: => T): T
 }
 
 trait FormalService {

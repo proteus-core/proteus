@@ -8,7 +8,7 @@ class MachineMode(implicit config: Config) extends Plugin {
   override def setup(pipeline: Pipeline): Unit = {
     val csr = pipeline.getService[CsrService]
 
-    csr.registerCsr(pipeline, 0x301, new csr.Register {
+    csr.registerCsr(pipeline, 0x301, new Csr {
       private val mxlVal = config.xlen match {
         case 32 => 1
         case 64 => 2
