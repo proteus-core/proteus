@@ -52,6 +52,10 @@ private class Mimpid(implicit config: Config) extends Csr {
   override def read(): UInt = U(0, config.xlen bits)
 }
 
+private class Mhartid(implicit config: Config) extends Csr {
+  override def read(): UInt = U(0, config.xlen bits)
+}
+
 class MachineMode(implicit config: Config) extends Plugin {
   override def setup(pipeline: Pipeline): Unit = {
     val csr = pipeline.getService[CsrService]
@@ -59,6 +63,7 @@ class MachineMode(implicit config: Config) extends Plugin {
     csr.registerCsr(pipeline, 0xF11, new Mvendorid)
     csr.registerCsr(pipeline, 0xF12, new Marchid)
     csr.registerCsr(pipeline, 0xF13, new Mimpid)
+    csr.registerCsr(pipeline, 0xF14, new Mhartid)
     csr.registerCsr(pipeline, 0x301, new Misa)
   }
 }
