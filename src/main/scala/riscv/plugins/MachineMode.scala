@@ -81,6 +81,13 @@ private class Mstatus(implicit config: Config) extends Csr {
   }
 }
 
+private class Mscratch(implicit config: Config) extends Csr {
+  val scratch = Reg(UInt(config.xlen bits))
+
+  override def read(): UInt = scratch
+  override def write(value: UInt): Unit = scratch := value
+}
+
 private class Mvendorid(implicit config: Config) extends Csr {
   // 0 can be used for non-commercial implementations
   override def read(): UInt = U(0, config.xlen bits)
@@ -112,5 +119,7 @@ class MachineMode(implicit config: Config) extends Plugin {
 
     csr.registerCsr(pipeline, 0x300, new Mstatus)
     csr.registerCsr(pipeline, 0x301, new Misa)
+
+    csr.registerCsr(pipeline, 0x340, new Mscratch)
   }
 }
