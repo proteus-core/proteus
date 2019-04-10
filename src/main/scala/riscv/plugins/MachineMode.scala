@@ -36,6 +36,51 @@ private class Misa(implicit config: Config) extends Csr {
   override def write(value: UInt): Unit = ()
 }
 
+private class Mstatus(implicit config: Config) extends Csr {
+  assert(config.xlen == 32, "mstatus only supported for 32-bit")
+
+  val uie = False
+  val sie = False
+  val mie = Reg(Bool()).init(False)
+  val upie = False
+  val spie = False
+  val mpie = Reg(Bool()).init(False)
+  val spp = False
+  val mpp = B"00"
+  val fs = B"00"
+  val xs = B"00"
+  val mprv = False
+  val sum = False
+  val mxr = False
+  val tvm = False
+  val tw = False
+  val tsr = False
+  val sd = False
+
+  val mstatus = sd ## B(0, 8 bits) ## tsr ## tw ## tvm ## mxr ## sum ## mprv ##
+                xs ## fs ## mpp ## B"00" ## spp ## mpie ## False ## spie ##
+                upie ## mie ## False ## sie ## uie
+
+  val writableRanges = Map[Range, BaseType](
+    (3 downto 3) -> mie
+  )
+
+  for ((range, reg) <- writableRanges) {
+    // The assignment in write() doesn't check the bit width (since we need to
+    // convert types and there seems to be no way to do that without also
+    // converting bit widths) so we do that manually here.
+    assert(range.length == reg.getBitsWidth)
+  }
+
+  override def read(): UInt = mstatus.asUInt
+
+  override def write(value: UInt): Unit = {
+    for ((range, reg) <- writableRanges) {
+      reg := value(range).as(reg)
+    }
+  }
+}
+
 private class Mvendorid(implicit config: Config) extends Csr {
   // 0 can be used for non-commercial implementations
   override def read(): UInt = U(0, config.xlen bits)
@@ -64,6 +109,8 @@ class MachineMode(implicit config: Config) extends Plugin {
     csr.registerCsr(pipeline, 0xF12, new Marchid)
     csr.registerCsr(pipeline, 0xF13, new Mimpid)
     csr.registerCsr(pipeline, 0xF14, new Mhartid)
+
+    csr.registerCsr(pipeline, 0x300, new Mstatus)
     csr.registerCsr(pipeline, 0x301, new Misa)
   }
 }
