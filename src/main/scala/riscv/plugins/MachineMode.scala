@@ -81,6 +81,15 @@ private class Mstatus(implicit config: Config) extends Csr {
   }
 }
 
+private class Mtvec(implicit config: Config) extends Csr {
+  val mtvec = Reg(UInt(config.xlen bits))
+  val base = mtvec(config.xlen - 1 downto 2) << 2
+  val mode = mtvec(1 downto 0)
+
+  override def read(): UInt = mtvec
+  override def write(value: UInt): Unit = mtvec := value
+}
+
 private class Mscratch(implicit config: Config) extends Csr {
   val scratch = Reg(UInt(config.xlen bits))
 
@@ -119,6 +128,7 @@ class MachineMode(implicit config: Config) extends Plugin {
 
     csr.registerCsr(pipeline, 0x300, new Mstatus)
     csr.registerCsr(pipeline, 0x301, new Misa)
+    csr.registerCsr(pipeline, 0x305, new Mtvec)
 
     csr.registerCsr(pipeline, 0x340, new Mscratch)
   }
