@@ -116,6 +116,13 @@ private class Mcause(implicit config: Config) extends Csr {
   }
 }
 
+private class Mtval(implicit config: Config) extends Csr {
+  val tval = Reg(UInt(config.xlen bits))
+
+  override def read(): UInt = tval
+  override def write(value: UInt): Unit = tval := value
+}
+
 private class Mvendorid(implicit config: Config) extends Csr {
   // 0 can be used for non-commercial implementations
   override def read(): UInt = U(0, config.xlen bits)
@@ -152,5 +159,6 @@ class MachineMode(implicit config: Config) extends Plugin {
     csr.registerCsr(pipeline, 0x340, new Mscratch)
     csr.registerCsr(pipeline, 0x341, new Mepc)
     csr.registerCsr(pipeline, 0x342, new Mcause)
+    csr.registerCsr(pipeline, 0x343, new Mtval)
   }
 }
