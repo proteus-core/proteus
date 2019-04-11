@@ -104,6 +104,18 @@ private class Mepc(implicit config: Config) extends Csr {
   override def write(value: UInt): Unit = epc := value >> 2
 }
 
+private class Mcause(implicit config: Config) extends Csr {
+  val interrupt = Reg(Bool())
+  val cause = Reg(UInt(4 bits))
+  val mcause = interrupt ## DataTools.zeroExtend(cause, config.xlen - 1)
+
+  override def read(): UInt = mcause.asUInt
+  override def write(value: UInt): Unit = {
+    interrupt := value.msb
+    cause := value(3 downto 0)
+  }
+}
+
 private class Mvendorid(implicit config: Config) extends Csr {
   // 0 can be used for non-commercial implementations
   override def read(): UInt = U(0, config.xlen bits)
@@ -139,5 +151,6 @@ class MachineMode(implicit config: Config) extends Plugin {
 
     csr.registerCsr(pipeline, 0x340, new Mscratch)
     csr.registerCsr(pipeline, 0x341, new Mepc)
+    csr.registerCsr(pipeline, 0x342, new Mcause)
   }
 }
