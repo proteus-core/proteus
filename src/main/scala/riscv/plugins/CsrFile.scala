@@ -6,7 +6,7 @@ import spinal.lib._
 
 import scala.collection.mutable
 
-private class CsrIo(implicit config: Config) extends Bundle with IMasterSlave {
+private class CsrFileIo(implicit config: Config) extends Bundle with IMasterSlave {
   val rid, wid = UInt(12 bits)
   val rdata, wdata = UInt(config.xlen bits)
   val read, write = Bool()
@@ -33,7 +33,7 @@ private class CsrIo(implicit config: Config) extends Bundle with IMasterSlave {
 private class CsrComponent(implicit config: Config) extends Component {
   setDefinitionName("CsrFile")
 
-  val io = master(new CsrIo)
+  val io = master(new CsrFileIo)
 }
 
 class CsrFile(implicit config: Config) extends Plugin with CsrService {
@@ -75,6 +75,24 @@ class CsrFile(implicit config: Config) extends Plugin with CsrService {
     val pluggedReg = component(pipeline).plug(reg)
     registers(id) = pluggedReg
     pluggedReg
+  }
+
+  override def getCsr(pipeline: Pipeline, id: Int): CsrIo = {
+    assert(registers.contains(id))
+
+    val area = component(pipeline) plug new Area {
+      val csrIo = master(new CsrIo())
+      csrIo.setName(s"io_$id")
+      val reg = registers(id)
+
+      csrIo.rdata := reg.read()
+
+      when (csrIo.write) {
+        reg.write(csrIo.wdata)
+      }
+    }
+
+    area.csrIo
   }
 
   override def setup(pipeline: Pipeline): Unit = {
@@ -150,7 +168,7 @@ class CsrFile(implicit config: Config) extends Plugin with CsrService {
     val csrArea = csrStage plug new Area {
       import csrStage._
 
-      val csrIo = slave(new CsrIo)
+      val csrIo = slave(new CsrFileIo)
       csrIo.rid := 0
       csrIo.wid := 0
       csrIo.read := False
@@ -206,7 +224,8 @@ class CsrFile(implicit config: Config) extends Plugin with CsrService {
         }
 
         when (csrIo.error) {
-          output(pipeline.data.UNKNOWN_INSTRUCTION) := True
+          val trapHandler = pipeline.getService[TrapService]
+          trapHandler.trap(pipeline, csrStage, TrapCause.IllegalInstruction)
         }
       }
     }

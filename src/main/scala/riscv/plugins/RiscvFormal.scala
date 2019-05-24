@@ -70,13 +70,14 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
     }
 
     val stage = pipeline.stages.last
+    val trapService = pipeline.getService[TrapService]
 
     val rvfiArea = pipeline plug new Area {
       val rvfi = out(new Rvfi).keep()
       rvfi.valid := stage.arbitration.isDone
       rvfi.order := Counter(64 bits, rvfi.valid)
       rvfi.insn := stage.output(pipeline.data.IR)
-      rvfi.trap := stage.output(pipeline.data.UNKNOWN_INSTRUCTION) ||
+      rvfi.trap := trapService.hasTrapped(pipeline, stage) ||
                    stage.output(data.FORMAL_MISALIGNED) ||
                    stage.output(pipeline.data.PC_MISALIGNED)
       rvfi.halt := False

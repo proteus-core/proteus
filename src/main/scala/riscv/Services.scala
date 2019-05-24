@@ -1,8 +1,8 @@
 package riscv
 
 import riscv._
-
 import spinal.core._
+import spinal.lib.IMasterSlave
 
 trait IBusService {
   def getIBus: MemBus
@@ -57,13 +57,45 @@ trait JumpService {
   def jump(pipeline: Pipeline, stage: Stage, target: UInt): Unit
 }
 
+trait TrapService {
+  def trap(pipeline: Pipeline, stage: Stage, cause: TrapCause): Unit
+  def hasTrapped(pipeline: Pipeline, stage: Stage): Bool
+}
+
 trait Csr extends Area {
   def read(): UInt
   def write(value: UInt): Unit = assert(false, "Cannot write RO CSR")
 }
 
+class CsrIo(implicit config: Config) extends Bundle with IMasterSlave {
+  val rdata, wdata = UInt(config.xlen bits)
+  val write = Bool()
+
+  def read(): UInt = rdata
+
+  def write(value: UInt): Unit = {
+    write := True
+    wdata := value
+  }
+
+  override def asMaster(): Unit = {
+    in(wdata, write)
+    out(rdata)
+  }
+
+  override def asSlave(): Unit = {
+    super.asSlave()
+
+    write := False
+    write.allowOverride
+    wdata.assignDontCare()
+    wdata.allowOverride
+  }
+}
+
 trait CsrService {
-    def registerCsr[T <: Csr](pipeline: Pipeline, id: Int, reg: => T): T
+  def registerCsr[T <: Csr](pipeline: Pipeline, id: Int, reg: => T): T
+  def getCsr(pipeline: Pipeline, id: Int): CsrIo
 }
 
 trait FormalService {

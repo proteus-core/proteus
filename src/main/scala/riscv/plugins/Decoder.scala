@@ -58,7 +58,6 @@ class Decoder(implicit config: Config) extends Plugin with DecoderService {
   override def setup(pipeline: Pipeline): Unit = {
     configure(pipeline) {config =>
       config.addDefault(Map(
-        pipeline.data.UNKNOWN_INSTRUCTION -> False,
         pipeline.data.RD_VALID -> False,
         pipeline.data.IMM -> U(0),
         pipeline.data.PC_MISALIGNED -> False
@@ -114,7 +113,9 @@ class Decoder(implicit config: Config) extends Plugin with DecoderService {
           }
         }
         default {
-          output(pipeline.data.UNKNOWN_INSTRUCTION) := True
+          val trapHandler = pipeline.getService[TrapService]
+          trapHandler.trap(pipeline, pipeline.decode,
+                           TrapCause.IllegalInstruction)
         }
       }
     }

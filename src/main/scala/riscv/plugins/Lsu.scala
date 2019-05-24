@@ -147,7 +147,7 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
         formal.lsuOnMisaligned(lsuStage)
       }
 
-      when (!misaligned) {
+      when (arbitration.isValid && !misaligned) {
         when (isLoad) {
           val wValue = dbus.rdata
           val result = UInt(config.xlen bits)
