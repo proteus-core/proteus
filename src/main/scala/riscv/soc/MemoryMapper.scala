@@ -14,6 +14,13 @@ sealed trait MemorySegment {
 
 case class MemBusSegment(start: Int, length: Int, bus: MemBus) extends MemorySegment
 
+case class MemSegment(start: Int, length: Int)(implicit config: Config) extends MemorySegment {
+  private val mem = Mem(UInt(config.xlen bits), length / (config.xlen / 8))
+  val bus = new MemBus(config.xlen)
+  bus.rdata := mem(bus.address.resized)
+  mem.write(bus.address.resized, bus.wdata, bus.write, bus.wmask)
+}
+
 case class MmioSegment(start: Int, device: MmioDevice) extends MemorySegment {
   val length = device.size
   val bus = device.bus

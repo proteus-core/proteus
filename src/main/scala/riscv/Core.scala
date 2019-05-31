@@ -3,7 +3,6 @@ package riscv
 import riscv.plugins._
 import riscv.soc._
 import riscv.soc.devices._
-
 import java.io.File
 
 import spinal.core._
@@ -34,36 +33,19 @@ class Core(imemHexPath: String, formal: Boolean = false) extends Component {
 
   val pipeline = new Pipeline(config, plugins)
 
-  val imem = if (!imemHexPath.isEmpty) {
-    val imem = Mem(UInt(config.xlen bits), new File(imemHexPath).length() / 4)
-    HexTools.initRam(imem, imemHexPath, 0)
-    imem
-  } else {
-    Mem(UInt(config.xlen bits), 1024)
-  }
-
-  val ibus = pipeline.getService[IBusService].getIBus
-  ibus.rdata := imem(ibus.address.resized)
-
-  val dmem = Mem(UInt(config.xlen bits), 1024)
-  val dmemBus = new MemBus(config.xlen)
-  val dmemAddr = dmemBus.address
-  dmemBus.rdata := dmem(dmemAddr.resized)
-  dmem.write(dmemAddr.resized, dmemBus.wdata, dmemBus.write, dmemBus.wmask)
-  val dmemSegment = MemBusSegment(1024, dmem.width * dmem.wordCount, dmemBus)
-
-  val mtimers = new MachineTimers
-  val mtimersSegment = MmioSegment(0, mtimers)
-
   val charDev = new CharDev
   val charOut = master(Flow(UInt(8 bits)))
   charOut << charDev.io
-  val charDevSegment = MmioSegment(16, charDev)
 
-  val memMapper = new MemoryMapper(Seq(mtimersSegment, charDevSegment, dmemSegment))
-
-  val dbus = pipeline.getService[DBusService].getDBus
-  dbus <> memMapper.bus
+  val soc = new Soc(
+    pipeline,
+    Seq(
+      MmioSegment(0, new MachineTimers()),
+      MmioSegment(16, charDev),
+      MemSegment(1024, 1024)
+    ),
+    imemHexPath
+  )
 }
 
 object Core {
