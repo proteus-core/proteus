@@ -107,6 +107,7 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
       val memAddress = address >> 2
 
       dbus.address := memAddress.resized
+      dbus.read := False
       dbus.write := False
       dbus.wdata := 0
       dbus.wmask := 0
@@ -149,6 +150,7 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
 
       when (arbitration.isValid && !misaligned) {
         when (isLoad) {
+          dbus.read := True
           val wValue = dbus.rdata
           val result = UInt(config.xlen bits)
           result := wValue
