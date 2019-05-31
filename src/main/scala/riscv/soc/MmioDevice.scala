@@ -1,9 +1,11 @@
-package riscv
+package riscv.soc
 
-import scala.collection.mutable
+import riscv._
 
 import spinal.core._
 import spinal.lib._
+
+import scala.collection.mutable
 
 trait MmioRegister {
   val width: BitCount
@@ -72,31 +74,4 @@ abstract class MmioDevice(implicit config: Config) extends Component {
       offset + register.width.value / 8
     }).max
   }
-}
-
-class MachineTimers(implicit config: Config) extends MmioDevice {
-  private val mtime = Reg(UInt(64 bits)).init(0)
-  mtime := mtime + 1
-
-  private val mtimecmp = Reg(UInt(64 bits)).init(0)
-
-  addRegister(0, mtime)
-  addRegister(8, mtimecmp)
-  build()
-}
-
-class CharDev(implicit config: Config) extends MmioDevice {
-  val io = master(Flow(UInt(8 bits)))
-  io.valid := False
-  io.payload.assignDontCare()
-
-  addRegister(0, new MmioRegister {
-    override val width: BitCount = 32 bits
-
-    override def write(value: UInt): Unit = {
-      io.push(value(7 downto 0))
-    }
-  })
-
-  build()
 }

@@ -1,6 +1,9 @@
 package riscv
 
 import riscv.plugins._
+import riscv.soc._
+import riscv.soc.devices._
+
 import java.io.File
 
 import spinal.core._

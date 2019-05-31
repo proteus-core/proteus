@@ -1,4 +1,6 @@
-package riscv
+package riscv.soc
+
+import riscv._
 
 import spinal.core._
 import spinal.lib._
