@@ -59,11 +59,20 @@ object CoreSim {
     SimConfig.withWave.compile(new Core(args(0))).doSim {dut =>
       dut.clockDomain.forkStimulus(10)
 
-      for (i <- 0 to 100) {
+      var done = false
+
+      while (!done) {
         dut.clockDomain.waitSampling()
 
         if (dut.charOut.valid.toBoolean) {
-          print(dut.charOut.payload.toInt.toChar)
+          val char = dut.charOut.payload.toInt.toChar
+
+          if (char == 4) {
+            println("Simulation halted by software")
+            done = true
+          } else {
+            print(char)
+          }
         }
       }
     }
