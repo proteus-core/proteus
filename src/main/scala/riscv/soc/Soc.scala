@@ -5,24 +5,25 @@ import riscv._
 import spinal.core._
 import spinal.lib.misc.HexTools
 
-import java.io.File
-
 class Soc(pipeline: Pipeline,
           memMap: Seq[MemorySegment],
           imemHexPath: String = "")(implicit config: Config) {
-  val imem = if (!imemHexPath.isEmpty) {
-    println(s"Mem size: ${new File(imemHexPath).length() / 4}")
-    val imem = Mem(UInt(config.xlen bits), new File(imemHexPath).length() / 4)
-    HexTools.initRam(imem, imemHexPath, 0)
-    imem
-  } else {
-    Mem(UInt(config.xlen bits), 1024)
-  }
+  if (!imemHexPath.isEmpty) {
+    val mems = memMap.filter(segment => {
+      segment match {
+        case _: MemSegment => true
+        case _ => false
+      }
+    })
 
-  val ibus = pipeline.getService[IBusService].getIBus
-  ibus.rdata := imem(ibus.address.resized)
+    assert(mems.size == 1)
+    val mem = mems(0).asInstanceOf[MemSegment].mem
+    HexTools.initRam(mem, imemHexPath, mems(0).start)
+  }
 
   val memMapper = new MemoryMapper(memMap)
   val dbus = pipeline.getService[DBusService].getDBus
-  dbus <> memMapper.bus
+  dbus <> memMapper.dbus
+  val ibus = pipeline.getService[IBusService].getIBus
+  ibus <> memMapper.ibus
 }
