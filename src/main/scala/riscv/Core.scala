@@ -3,35 +3,43 @@ package riscv
 import riscv.plugins._
 import riscv.soc._
 import riscv.soc.devices._
-import java.io.File
 
 import spinal.core._
 import spinal.core.sim._
 import spinal.lib._
-import spinal.lib.misc.HexTools
+
+object createPipeline {
+  def apply(disablePipelining: Boolean = false,
+            extraPlugins: Seq[Plugin] = Seq())
+           (implicit config: Config): Pipeline = {
+    val pipelinePlugins = if (disablePipelining) {
+      Seq(new NoPipelining)
+    } else {
+      Seq(new SimplePipelining, new DataHazardResolver)
+    }
+
+    val plugins = pipelinePlugins ++ Seq(
+      new Fetcher,
+      new Decoder,
+      new RegisterFile,
+      new IntAlu,
+      new Shifter,
+      new Lsu,
+      new BranchUnit,
+      new JumpResolver,
+      new CsrFile,
+      new Timers,
+      new MachineMode,
+      new TrapHandler
+    ) ++ extraPlugins
+
+    new Pipeline(config, plugins)
+  }
+}
 
 class Core(imemHexPath: String, formal: Boolean = false) extends Component {
-
   implicit val config = new Config(BaseIsa.RV32I)
-  val pipelinePlugins = if (true) Seq(new SimplePipelining, new DataHazardResolver) else Seq(new NoPipelining)
-  val extraPlugins = if (formal) Seq(new RiscvFormal) else Seq()
-
-  var plugins = pipelinePlugins ++ Seq(
-    new Fetcher,
-    new Decoder,
-    new RegisterFile,
-    new IntAlu,
-    new Shifter,
-    new Lsu,
-    new BranchUnit,
-    new JumpResolver,
-    new CsrFile,
-    new Timers,
-    new MachineMode,
-    new TrapHandler
-  ) ++ extraPlugins
-
-  val pipeline = new Pipeline(config, plugins)
+  val pipeline = createPipeline()
 
   val charDev = new CharDev
   val charOut = master(Flow(UInt(8 bits)))
@@ -40,9 +48,9 @@ class Core(imemHexPath: String, formal: Boolean = false) extends Component {
   val soc = new Soc(
     pipeline,
     Seq(
-      MmioSegment(0, new MachineTimers()),
-      MmioSegment(16, charDev),
-      MemSegment(1024, 1024)
+      MemSegment(0, 2048),
+      MmioSegment(2048, new MachineTimers()),
+      MmioSegment(2064, charDev)
     ),
     imemHexPath
   )
@@ -79,8 +87,13 @@ object CoreSim {
   }
 }
 
+class CoreFormal extends Component {
+  implicit val config = new Config(BaseIsa.RV32I)
+  val pipeline = createPipeline(extraPlugins = Seq(new RiscvFormal))
+}
+
 object CoreFormal {
   def main(args: Array[String]) {
-    SpinalVerilog(new Core("", true))
+    SpinalVerilog(new CoreFormal)
   }
 }
