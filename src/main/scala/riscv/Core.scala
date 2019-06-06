@@ -87,6 +87,8 @@ object CoreSim {
 }
 
 class CoreFormal extends Component {
+  setDefinitionName("Core")
+
   implicit val config = new Config(BaseIsa.RV32I)
   val pipeline = createPipeline(extraPlugins = Seq(new RiscvFormal))
 }
@@ -94,5 +96,70 @@ class CoreFormal extends Component {
 object CoreFormal {
   def main(args: Array[String]) {
     SpinalVerilog(new CoreFormal)
+  }
+}
+
+class CoreTest(memHexPath: String) extends Component {
+  setDefinitionName("Core")
+
+  implicit val config = new Config(BaseIsa.RV32I)
+  val pipeline = createPipeline()
+
+  val testDev = new MmioDevice {
+    val io = master(Flow(UInt(config.xlen bits)))
+    io.valid := False
+    io.payload.assignDontCare()
+
+    addRegister(0, new MmioRegister {
+      override val width: BitCount = 32 bits
+
+      override def write(value: UInt): Unit = {
+        io.push(value)
+      }
+    })
+
+    build()
+  }
+
+  val testOut = master(Flow(UInt(config.xlen bits)))
+  testOut << testDev.io
+
+  val soc = new Soc(
+    pipeline,
+    Seq(
+      MemSegment(0, 8192).init(memHexPath),
+      MmioSegment(8192, testDev)
+    )
+  )
+}
+
+object CoreTestSim {
+  def main(args: Array[String]) {
+    var mainResult = 0
+
+    SimConfig.withWave.compile(new CoreTest(args(0))).doSim {dut =>
+      dut.clockDomain.forkStimulus(10)
+
+      var done = false
+
+      while (!done) {
+        dut.clockDomain.waitSampling()
+
+        if (dut.testOut.valid.toBoolean) {
+          val result = dut.testOut.payload.toBigInt
+
+          if (result == 0) {
+            println("All tests passed")
+          } else {
+            println(s"Test $result failed")
+            mainResult = 1
+          }
+
+          done = true
+        }
+      }
+    }
+
+    sys.exit(mainResult)
   }
 }
