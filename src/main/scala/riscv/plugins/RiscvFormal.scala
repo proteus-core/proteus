@@ -73,31 +73,58 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
     val trapService = pipeline.getService[TrapService]
 
     val rvfiArea = pipeline plug new Area {
-      val rvfi = out(new Rvfi).keep()
-      rvfi.valid := stage.arbitration.isDone
-      rvfi.order := Counter(64 bits, rvfi.valid)
-      rvfi.insn := stage.output(pipeline.data.IR)
-      rvfi.trap := trapService.hasTrapped(pipeline, stage) ||
+      // RVFI data for the instruction that is currently being retired. This
+      // data is *not* used as the output because it is impossible to know the
+      // next PC (pc_wdata) reliably. (More specifically, before we used the
+      // NEXT_PC pipeline register but this hid a bug where an instruction
+      // further down the pipeline disappeared while all previous instructions
+      // *did* have a correct NEXT_PC.) Therefore, we buffer one instruction in
+      // prevRvfi and use that data as output combined with the PC of
+      // currentRvfi as the next PC. This ensures that pc_wdata *really*
+      // reflects the PC of the next instruction.
+      val currentRvfi = new Rvfi
+      currentRvfi.valid := stage.arbitration.isDone
+      currentRvfi.order := Counter(64 bits, currentRvfi.valid)
+      currentRvfi.insn := stage.output(pipeline.data.IR)
+      currentRvfi.trap := trapService.hasTrapped(pipeline, stage) ||
                    stage.output(data.FORMAL_MISALIGNED) ||
                    stage.output(pipeline.data.PC_MISALIGNED)
-      rvfi.halt := False
-      rvfi.mode := 3
-      rvfi.rs1_addr := stage.output(pipeline.data.RS1)
-      rvfi.rs2_addr := stage.output(pipeline.data.RS2)
-      rvfi.rs1_rdata := (rvfi.rs1_addr === 0) ?
+      currentRvfi.halt := False
+      currentRvfi.mode := 3
+      currentRvfi.rs1_addr := stage.output(pipeline.data.RS1)
+      currentRvfi.rs2_addr := stage.output(pipeline.data.RS2)
+      currentRvfi.rs1_rdata := (currentRvfi.rs1_addr === 0) ?
                         U(0) | stage.output(pipeline.data.RS1_DATA)
-      rvfi.rs2_rdata := (rvfi.rs2_addr === 0) ?
+      currentRvfi.rs2_rdata := (currentRvfi.rs2_addr === 0) ?
                         U(0) | stage.output(pipeline.data.RS2_DATA)
-      rvfi.rd_addr := stage.output(pipeline.data.RD)
-      rvfi.rd_wdata := (rvfi.rd_addr === 0) ?
+      currentRvfi.rd_addr := stage.output(pipeline.data.RD)
+      currentRvfi.rd_wdata := (currentRvfi.rd_addr === 0) ?
                        U(0) | stage.output(pipeline.data.RD_DATA)
-      rvfi.pc_rdata := stage.output(pipeline.data.PC)
-      rvfi.pc_wdata := stage.output(pipeline.data.NEXT_PC)
-      rvfi.mem_addr := stage.output(data.FORMAL_MEM_ADDR)
-      rvfi.mem_rmask := stage.output(data.FORMAL_MEM_RMASK)
-      rvfi.mem_wmask := stage.output(data.FORMAL_MEM_WMASK)
-      rvfi.mem_rdata := stage.output(data.FORMAL_MEM_RDATA)
-      rvfi.mem_wdata := stage.output(data.FORMAL_MEM_WDATA)
+      currentRvfi.pc_rdata := stage.output(pipeline.data.PC)
+      currentRvfi.mem_addr := stage.output(data.FORMAL_MEM_ADDR)
+      currentRvfi.mem_rmask := stage.output(data.FORMAL_MEM_RMASK)
+      currentRvfi.mem_wmask := stage.output(data.FORMAL_MEM_WMASK)
+      currentRvfi.mem_rdata := stage.output(data.FORMAL_MEM_RDATA)
+      currentRvfi.mem_wdata := stage.output(data.FORMAL_MEM_WDATA)
+
+      val prevRvfi = Reg(new Rvfi).init({
+        val init = new Rvfi
+        init.assignDontCare()
+        init.valid.allowOverride
+        init.valid := False
+        init
+      })
+
+      when (currentRvfi.valid) {
+        prevRvfi := currentRvfi
+      }
+
+      val rvfi = out(new Rvfi).keep()
+      rvfi := prevRvfi
+      rvfi.pc_wdata.allowOverride
+      rvfi.pc_wdata := currentRvfi.pc_rdata
+      rvfi.valid.allowOverride
+      rvfi.valid := currentRvfi.valid && prevRvfi.valid
     }
 
     rvfiArea.setName("")
