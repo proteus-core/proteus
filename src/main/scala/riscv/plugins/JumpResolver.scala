@@ -19,14 +19,14 @@ class JumpResolver(implicit config: Config) extends Plugin with JumpService {
     pipeline plug new Area {
       val nextPc = Reg(UInt(config.xlen bits)).init(0)
 
-      when (pipeline.fetch.arbitration.isValid) {
+      when (pipeline.fetch.arbitration.isDone) {
         nextPc := pipeline.fetch.output(pipeline.data.NEXT_PC)
       }
 
       pipeline.fetch.input(pipeline.data.NEXT_PC) := nextPc
 
       for (stage <- jumpStages) {
-        when (stage.arbitration.jumpRequested) {
+        when (stage.arbitration.isDone && stage.arbitration.jumpRequested) {
           for (prevStage <- pipeline.stages.takeWhile(_ != stage)) {
             prevStage.arbitration.isValid := False
           }

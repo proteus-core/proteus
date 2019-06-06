@@ -123,7 +123,7 @@ class BranchUnit(implicit config: Config) extends Plugin {
           arbitration.rs2Needed := True
         }
 
-        when (branchTaken) {
+        when (branchTaken && !arbitration.isStalled) {
           when (!misaligned) {
             jumpService.jump(pipeline, pipeline.execute, target)
 
