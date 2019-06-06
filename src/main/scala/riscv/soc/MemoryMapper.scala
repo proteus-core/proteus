@@ -4,6 +4,7 @@ import riscv._
 
 import spinal.core._
 import spinal.lib._
+import spinal.lib.misc.HexTools
 
 sealed trait MemorySegment {
   def start: Int
@@ -21,6 +22,11 @@ case class MemSegment(start: Int, length: Int)(implicit config: Config) extends 
 
   override val ibus = new MemBus(config.xlen)
   ibus.rdata := mem(ibus.address.resized)
+
+  def init(memHexPath: String): this.type = {
+    HexTools.initRam(mem, memHexPath, start)
+    this
+  }
 }
 
 case class MmioSegment(start: Int, device: MmioDevice) extends MemorySegment {

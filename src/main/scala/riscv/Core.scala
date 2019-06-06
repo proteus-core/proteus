@@ -48,11 +48,10 @@ class Core(imemHexPath: String, formal: Boolean = false) extends Component {
   val soc = new Soc(
     pipeline,
     Seq(
-      MemSegment(0, 2048),
+      MemSegment(0, 2048).init(imemHexPath),
       MmioSegment(2048, new MachineTimers()),
       MmioSegment(2064, charDev)
-    ),
-    imemHexPath
+    )
   )
 }
 
