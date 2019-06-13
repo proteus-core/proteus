@@ -94,7 +94,7 @@ class RegisterFile(implicit config: Config) extends Plugin {
 
       regFileIo.rd := value(pipeline.data.RD)
       regFileIo.data := value(pipeline.data.RD_DATA)
-      regFileIo.write := value(pipeline.data.WRITE_RD)
+      regFileIo.write := value(pipeline.data.WRITE_RD) && arbitration.isDone
     }
 
     pipeline plug new Area {
