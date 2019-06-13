@@ -3,6 +3,7 @@ package riscv.plugins
 import riscv._
 
 import spinal.core._
+import spinal.lib._
 
 private class Misa(implicit config: Config) extends Csr {
   val mxlVal = config.xlen match {
@@ -144,6 +145,18 @@ private class Mhartid(implicit config: Config) extends Csr {
 }
 
 class MachineMode(implicit config: Config) extends Plugin {
+  object Opcodes {
+    val ECALL  = M"00000000000000000000000001110011"
+    val EBREAK = M"00000000000100000000000001110011"
+    val MRET   = M"00110000001000000000000001110011"
+  }
+
+  object Data {
+    object ECALL  extends PipelineData(Bool())
+    object EBREAK extends PipelineData(Bool())
+    object MRET   extends PipelineData(Bool())
+  }
+
   override def setup(pipeline: Pipeline): Unit = {
     val csr = pipeline.getService[CsrService]
 
@@ -160,5 +173,51 @@ class MachineMode(implicit config: Config) extends Plugin {
     csr.registerCsr(pipeline, 0x341, new Mepc)
     csr.registerCsr(pipeline, 0x342, new Mcause)
     csr.registerCsr(pipeline, 0x343, new Mtval)
+
+    pipeline.getService[DecoderService].configure(pipeline) {config =>
+      config.addDefault(Map(
+        Data.ECALL  -> False,
+        Data.EBREAK -> False,
+        Data.MRET   -> False
+      ))
+
+      config.addDecoding(Opcodes.ECALL, InstructionType.I,
+                         Map(Data.ECALL -> True))
+      config.addDecoding(Opcodes.EBREAK, InstructionType.I,
+                         Map(Data.EBREAK -> True))
+      config.addDecoding(Opcodes.MRET, InstructionType.I,
+                         Map(Data.MRET -> True))
+    }
+  }
+
+  override def build(pipeline: Pipeline): Unit = {
+    val stage = pipeline.execute
+
+    val area = stage plug new Area {
+      import stage._
+
+      val mepc = slave(new CsrIo)
+
+      def trap(cause: TrapCause) = {
+        val trapHandler = pipeline.getService[TrapService]
+        trapHandler.trap(pipeline, stage, cause)
+      }
+
+      when (arbitration.isValid) {
+        when (value(Data.ECALL)) {
+          trap(TrapCause.EnvironmentCallFromMMode)
+        }.elsewhen (value(Data.EBREAK)) {
+          trap(TrapCause.Breakpoint)
+        }.elsewhen (value(Data.MRET)) {
+          val jumpService = pipeline.getService[JumpService]
+          jumpService.jump(pipeline, stage, mepc.read())
+        }
+      }
+    }
+
+    pipeline plug new Area {
+      val csrService = pipeline.getService[CsrService]
+      area.mepc <> csrService.getCsr(pipeline, 0x341)
+    }
   }
 }
