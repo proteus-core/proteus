@@ -191,16 +191,14 @@ class MachineMode(implicit config: Config) extends Plugin {
   }
 
   override def build(pipeline: Pipeline): Unit = {
-    val stage = pipeline.execute
+    val ecallStage = pipeline.execute
 
-    val area = stage plug new Area {
-      import stage._
-
-      val mepc = slave(new CsrIo)
+    val ecallArea = ecallStage plug new Area {
+      import ecallStage._
 
       def trap(cause: TrapCause) = {
         val trapHandler = pipeline.getService[TrapService]
-        trapHandler.trap(pipeline, stage, cause)
+        trapHandler.trap(pipeline, ecallStage, cause)
       }
 
       when (arbitration.isValid) {
@@ -208,16 +206,26 @@ class MachineMode(implicit config: Config) extends Plugin {
           trap(TrapCause.EnvironmentCallFromMMode)
         }.elsewhen (value(Data.EBREAK)) {
           trap(TrapCause.Breakpoint)
-        }.elsewhen (value(Data.MRET)) {
-          val jumpService = pipeline.getService[JumpService]
-          jumpService.jump(pipeline, stage, mepc.read())
         }
+      }
+    }
+
+    val mretStage = pipeline.writeback
+
+    val mretArea = mretStage plug new Area {
+      import mretStage._
+
+      val mepc = slave(new CsrIo)
+
+      when (arbitration.isValid && value(Data.MRET)) {
+        val jumpService = pipeline.getService[JumpService]
+        jumpService.jump(pipeline, mretStage, mepc.read())
       }
     }
 
     pipeline plug new Area {
       val csrService = pipeline.getService[CsrService]
-      area.mepc <> csrService.getCsr(pipeline, 0x341)
+      mretArea.mepc <> csrService.getCsr(pipeline, 0x341)
     }
   }
 }
