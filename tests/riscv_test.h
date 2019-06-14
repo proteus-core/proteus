@@ -1,7 +1,13 @@
 #ifndef RISCV_TEST_H
 #define RISCV_TEST_H
 
+#include "riscv-test-env/encoding.h"
+
 #define RVTEST_RV64U                                                    \
+    .macro init;                                                        \
+    .endm
+
+#define RVTEST_RV64M                                                    \
     .macro init;                                                        \
     .endm
 
@@ -9,10 +15,24 @@
     .macro init;                                                        \
     .endm
 
+#define RVTEST_RV32M                                                    \
+    .macro init;                                                        \
+    .endm
+
 #define RVTEST_CODE_BEGIN                                               \
     .text;                                                              \
+    .weak mtvec_handler;                                                \
     .globl _start;                                                      \
-_start:
+_start:                                                                 \
+    la t0, trap_vector;                                                 \
+    csrw mtvec, t0;                                                     \
+    j start_tests;                                                      \
+trap_vector:                                                            \
+    la t5, mtvec_handler;                                               \
+    beqz t5, 1f;                                                        \
+    jr t5;                                                              \
+1:  mret;                                                               \
+start_tests:
 
 #define RVTEST_CODE_END
 

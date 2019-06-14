@@ -8,15 +8,19 @@ RISCV_PREFIX = riscv32-unknown-elf
 CC = $(RISCV_PREFIX)-gcc
 OBJCOPY = $(RISCV_PREFIX)-objcopy
 
-ALL_ISA_TESTS = $(shell find $(ISA_TESTS_DIR)/rv32ui -name '*.S')
-ALL_TESTS = $(filter-out %fence_i.S,$(ALL_ISA_TESTS))
+TEST_DIRS = $(ISA_TESTS_DIR)/rv32ui $(ISA_TESTS_DIR)/rv32mi
+ALL_ISA_TESTS = $(shell find $(TESTS_DIRS) -name '*.S')
+UNSUPPORTED_TESTS = %fence_i.S %breakpoint.S
+ALL_TESTS = $(filter-out $(UNSUPPORTED_TESTS),$(ALL_ISA_TESTS))
 ALL_TARGETS = $(addsuffix .pass,$(basename $(addprefix $(BUILD_DIR)/,$(notdir $(ALL_TESTS)))))
 
 all: $(ALL_TARGETS)
 
 .SECONDARY:
 
-$(BUILD_DIR)/%.elf: $(ISA_TESTS_DIR)/rv32ui/%.S
+VPATH = $(TEST_DIRS)
+
+$(BUILD_DIR)/%.elf: %.S
 	mkdir -p $(@D)
 	$(CC) -ffreestanding -nostdlib -T tests.ld -I$(TESTS_DIR) -I$(ISA_TESTS_DIR)/macros/scalar -o $@ $^
 
