@@ -54,7 +54,8 @@ trait IntAluService {
 }
 
 trait JumpService {
-  def jump(pipeline: Pipeline, stage: Stage, target: UInt): Unit
+  def jump(pipeline: Pipeline, stage: Stage,
+           target: UInt, isTrap: Boolean = false): Unit
 }
 
 trait TrapService {

@@ -9,10 +9,26 @@ import scala.collection.mutable
 class JumpResolver(implicit config: Config) extends Plugin with JumpService {
   private val jumpStages = mutable.Set[Stage]()
 
-  override def jump(pipeline: Pipeline, stage: Stage, target: UInt): Unit = {
-    stage.output(pipeline.data.NEXT_PC) := target
-    stage.arbitration.jumpRequested := True
+  override def jump(pipeline: Pipeline, stage: Stage,
+                    target: UInt, isTrap: Boolean): Unit = {
     jumpStages += stage
+
+    def doJump() = {
+      stage.output(pipeline.data.NEXT_PC) := target
+      stage.arbitration.jumpRequested := True
+    }
+
+    if (isTrap) {
+      doJump()
+    } else {
+      when (target(1 downto 0) =/= 0) {
+        val trapHandler = pipeline.getService[TrapService]
+        trapHandler.trap(pipeline, stage,
+                         TrapCause.InstructionAddressMisaligned(target))
+      }.otherwise {
+        doJump()
+      }
+    }
   }
 
   override def finish(pipeline: Pipeline): Unit = {

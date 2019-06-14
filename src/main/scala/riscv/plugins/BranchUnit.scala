@@ -124,15 +124,11 @@ class BranchUnit(implicit config: Config) extends Plugin {
         }
 
         when (branchTaken && !arbitration.isStalled) {
-          when (!misaligned) {
-            jumpService.jump(pipeline, pipeline.execute, target)
+          jumpService.jump(pipeline, pipeline.execute, target)
 
-            when (value(Data.BU_WRITE_RET_ADDR_TO_RD)) {
-              output(pipeline.data.RD_DATA) := input(pipeline.data.NEXT_PC)
-              output(pipeline.data.RD_VALID) := True
-            }
-          } otherwise {
-            output(pipeline.data.PC_MISALIGNED) := True
+          when (value(Data.BU_WRITE_RET_ADDR_TO_RD)) {
+            output(pipeline.data.RD_DATA) := input(pipeline.data.NEXT_PC)
+            output(pipeline.data.RD_VALID) := True
           }
         }
       }

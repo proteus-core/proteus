@@ -225,7 +225,9 @@ class CsrFile(implicit config: Config) extends Plugin with CsrService {
 
         when (csrIo.error) {
           val trapHandler = pipeline.getService[TrapService]
-          trapHandler.trap(pipeline, csrStage, TrapCause.IllegalInstruction)
+          trapHandler.trap(
+            pipeline, csrStage,
+            TrapCause.IllegalInstruction(value(pipeline.data.IR)))
         }
       }
     }

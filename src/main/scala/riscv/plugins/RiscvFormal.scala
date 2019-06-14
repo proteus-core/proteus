@@ -87,8 +87,7 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
       currentRvfi.order := Counter(64 bits, currentRvfi.valid)
       currentRvfi.insn := stage.output(pipeline.data.IR)
       currentRvfi.trap := trapService.hasTrapped(pipeline, stage) ||
-                   stage.output(data.FORMAL_MISALIGNED) ||
-                   stage.output(pipeline.data.PC_MISALIGNED)
+                   stage.output(data.FORMAL_MISALIGNED)
       currentRvfi.halt := False
       currentRvfi.mode := 3
       currentRvfi.rs1_addr := stage.output(pipeline.data.RS1)

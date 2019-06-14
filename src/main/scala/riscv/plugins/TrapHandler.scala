@@ -4,13 +4,14 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-private object Data {
-  object HAS_TRAPPED extends PipelineData(Bool())
-  object TRAP_IS_INTERRUPT extends PipelineData(Bool())
-  object TRAP_CAUSE extends PipelineData(UInt(4 bits))
-}
-
 class TrapHandler(implicit config: Config) extends Plugin with TrapService {
+  private object Data {
+    object HAS_TRAPPED extends PipelineData(Bool())
+    object TRAP_IS_INTERRUPT extends PipelineData(Bool())
+    object TRAP_CAUSE extends PipelineData(UInt(4 bits))
+    object TRAP_VAL extends PipelineData(UInt(config.xlen bits))
+  }
+
   override def setup(pipeline: Pipeline): Unit = {
     pipeline.getService[DecoderService].configure(pipeline) {decoder =>
       decoder.addDefault(Data.HAS_TRAPPED, False)
@@ -29,6 +30,7 @@ class TrapHandler(implicit config: Config) extends Plugin with TrapService {
       val mtvec = slave(new CsrIo)
       val mcause = slave(new CsrIo)
       val mepc = slave(new CsrIo)
+      val mtval = slave(new CsrIo)
 
       when (arbitration.isValid && value(Data.HAS_TRAPPED)) {
         val cause = U(0, config.xlen bits)
@@ -37,9 +39,10 @@ class TrapHandler(implicit config: Config) extends Plugin with TrapService {
         mcause.write(cause)
 
         mepc.write(value(pipeline.data.PC))
+        mtval.write(value(Data.TRAP_VAL))
 
         val vecBase = mtvec.read()(config.xlen - 1 downto 2) << 2
-        jumpService.jump(pipeline, trapStage, vecBase)
+        jumpService.jump(pipeline, trapStage, vecBase, isTrap = true)
       }
     }
 
@@ -47,6 +50,7 @@ class TrapHandler(implicit config: Config) extends Plugin with TrapService {
       trapArea.mtvec <> csrService.getCsr(pipeline, 0x305)
       trapArea.mcause <> csrService.getCsr(pipeline, 0x342)
       trapArea.mepc <> csrService.getCsr(pipeline, 0x341)
+      trapArea.mtval <> csrService.getCsr(pipeline, 0x343)
 
       for (stage <- pipeline.stages.init) {
         // Make isValid False whenever there is a later stage that has a trapped
@@ -77,6 +81,9 @@ class TrapHandler(implicit config: Config) extends Plugin with TrapService {
     stage.output(Data.HAS_TRAPPED) := True
     stage.output(Data.TRAP_IS_INTERRUPT) := Bool(cause.isInterrupt)
     stage.output(Data.TRAP_CAUSE) := U(cause.code, 4 bits)
+
+    val mtval = if (cause.mtval == null) U(0).resized else cause.mtval
+    stage.output(Data.TRAP_VAL) := mtval
   }
 
   override def hasTrapped(pipeline: Pipeline, stage: Stage): Bool = {

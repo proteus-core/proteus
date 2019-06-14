@@ -145,6 +145,18 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
       formal.lsuDefault(lsuStage)
 
       when (isActive && misaligned) {
+        val trapHandler = pipeline.getService[TrapService]
+
+        def trap(cause: TrapCause) = {
+          trapHandler.trap(pipeline, lsuStage, cause)
+        }
+
+        when (isLoad) {
+          trap(TrapCause.LoadAddressMisaligned(address))
+        } otherwise {
+          trap(TrapCause.StoreAddressMisaligned(address))
+        }
+
         formal.lsuOnMisaligned(lsuStage)
       }
 
