@@ -38,6 +38,13 @@ class DataHazardResolver(implicit config: Config) extends Plugin {
       //    since the value isn't in the pipeline anymore. Therefore, we add
       //    additional registers (lastWrittenRd) to store the last value written
       //    by WB.
+      //  - There is still one issue to be resolved: let's say an instruction's
+      //    RS1 is forwarded from lastWrittenRd and the instruction needs to
+      //    stall a cycle for its RS2 to be available. After the stall cycle,
+      //    the RS1 value will be moved out of the pipeline and cannot be
+      //    forwarded anymore. To solve this, this instruction's RS1 value will
+      //    be moved in the RS1_DATA pipeline register before its stage so that
+      //    it will still be available in the next cycle.
       val lastWrittenRd = new Bundle {
         val id = Reg(pipeline.data.RD.dataType())
         val valid = Reg(pipeline.data.RD_VALID.dataType())
@@ -51,15 +58,18 @@ class DataHazardResolver(implicit config: Config) extends Plugin {
       }
 
       for (stage <- stages.dropWhile(_ != execute)) {
+        case class ResolveInfo(forwarded: Bool, value: UInt)
+
         def resolveRs(rsNeeded: Bool, rs: PipelineData[UInt],
-                      rsData: PipelineData[UInt]): Unit = {
+                      rsData: PipelineData[UInt]): ResolveInfo = {
           if (stage.hasInput(rsData)) {
+            val info = ResolveInfo(False, 0)
             val neededRs = stage.input(rs)
-            val neededRsData = stage.input(rsData)
 
             when (neededRs =/= 0) {
               when (lastWrittenRd.valid && lastWrittenRd.id === neededRs) {
-                neededRsData := lastWrittenRd.data
+                info.forwarded := True
+                info.value := lastWrittenRd.data
               }
 
               val nextStages = pipeline.stages.dropWhile(_ != stage).tail.reverse
@@ -69,18 +79,41 @@ class DataHazardResolver(implicit config: Config) extends Plugin {
                       nextStage.input(pipeline.data.WRITE_RD) &&
                       nextStage.input(pipeline.data.RD) === neededRs) {
                   when (nextStage.input(pipeline.data.RD_VALID)) {
-                    neededRsData := nextStage.input(pipeline.data.RD_DATA)
+                    info.forwarded := True
+                    info.value := nextStage.input(pipeline.data.RD_DATA)
                   } elsewhen (rsNeeded) {
+                    info.forwarded := False
                     stage.arbitration.isStalled := True
                   }
                 }
               }
+
+              when (info.forwarded) {
+                stage.input(rsData) := info.value
+              }
             }
+
+            info
+          } else {
+            null
           }
         }
 
-        resolveRs(stage.arbitration.rs1Needed, data.RS1, data.RS1_DATA)
-        resolveRs(stage.arbitration.rs2Needed, data.RS2, data.RS2_DATA)
+        val rs1Info = resolveRs(stage.arbitration.rs1Needed, data.RS1, data.RS1_DATA)
+        val rs2Info = resolveRs(stage.arbitration.rs2Needed, data.RS2, data.RS2_DATA)
+
+        if (rs1Info != null && rs2Info != null) {
+          when(stage.arbitration.isStalled) {
+            val prevStage = stages.takeWhile(_ != stage).last
+            val prevStageRegs = pipelineRegs(prevStage)
+
+            when (rs1Info.forwarded) {
+              prevStageRegs.setReg(data.RS1_DATA, rs1Info.value)
+            } elsewhen (rs2Info.forwarded) {
+              prevStageRegs.setReg(data.RS2_DATA, rs2Info.value)
+            }
+          }
+        }
       }
     }
   }
