@@ -47,7 +47,7 @@ private class Mstatus(implicit config: Config) extends Csr {
   val spie = False
   val mpie = Reg(Bool()).init(False)
   val spp = False
-  val mpp = B"00"
+  val mpp = B"11"
   val fs = B"00"
   val xs = B"00"
   val mprv = False
