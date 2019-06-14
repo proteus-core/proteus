@@ -87,14 +87,22 @@ class RegisterFile(implicit config: Config) extends Plugin {
       output(pipeline.data.RS2_DATA) := regFileIo.rs2Data
     }
 
-    val writeArea = pipeline.writeback plug new Area {
-      import pipeline.writeback._
+    val writeStage = pipeline.writeback
+
+    val writeArea = writeStage plug new Area {
+      import writeStage._
 
       val regFileIo = slave(WriteIo())
 
       regFileIo.rd := value(pipeline.data.RD)
       regFileIo.data := value(pipeline.data.RD_DATA)
-      regFileIo.write := value(pipeline.data.WRITE_RD) && arbitration.isDone
+
+      val trapHandler = pipeline.getService[TrapService];
+      val hasTrapped = trapHandler.hasTrapped(pipeline, writeStage)
+      regFileIo.write :=
+        value(pipeline.data.WRITE_RD) &&
+        arbitration.isDone &&
+        !hasTrapped
     }
 
     pipeline plug new Area {
