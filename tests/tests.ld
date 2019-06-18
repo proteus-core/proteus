@@ -13,5 +13,6 @@ SECTIONS
     .data : {
         . = ALIGN(4);
         *(.data);
+        . = ALIGN(4);
     } > RAM
 }
