@@ -48,9 +48,9 @@ class Core(imemHexPath: String, formal: Boolean = false) extends Component {
   val soc = new Soc(
     pipeline,
     Seq(
-      MemSegment(0, 2048).init(imemHexPath),
-      MmioSegment(2048, new MachineTimers()),
-      MmioSegment(2064, charDev)
+      MemSegment(0, 102400).init(imemHexPath),
+      MmioSegment(102400, new MachineTimers()),
+      MmioSegment(102416, charDev)
     )
   )
 }
@@ -105,22 +105,7 @@ class CoreTest(memHexPath: String) extends Component {
   implicit val config = new Config(BaseIsa.RV32I)
   val pipeline = createPipeline()
 
-  val testDev = new MmioDevice {
-    val io = master(Flow(UInt(config.xlen bits)))
-    io.valid := False
-    io.payload.assignDontCare()
-
-    addRegister(0, new MmioRegister {
-      override val width: BitCount = 32 bits
-
-      override def write(value: UInt): Unit = {
-        io.push(value)
-      }
-    })
-
-    build()
-  }
-
+  val testDev = new TestDev
   val testOut = master(Flow(UInt(config.xlen bits)))
   testOut << testDev.io
 
@@ -161,5 +146,39 @@ object CoreTestSim {
     }
 
     sys.exit(mainResult)
+  }
+}
+
+class CoreExtMem extends Component {
+  setDefinitionName("Core")
+
+  implicit val config = new Config(BaseIsa.RV32I)
+  val pipeline = createPipeline()
+
+  val ibus = slave(new MemBus(config.xlen))
+  val dbus = slave(new MemBus(config.xlen))
+
+  val charDev = new CharDev
+  val charOut = master(Flow(UInt(8 bits)))
+  charOut << charDev.io
+
+  val testDev = new TestDev
+  val testOut = master(Flow(UInt(config.xlen bits)))
+  testOut << testDev.io
+
+  val soc = new Soc(
+    pipeline,
+    Seq(
+      MemBusSegment(0, 102400, dbus, ibus),
+      MmioSegment(102400, new MachineTimers()),
+      MmioSegment(102416, charDev),
+      MmioSegment(102420, testDev)
+    )
+  )
+}
+
+object CoreExtMem {
+  def main(args: Array[String]) {
+    SpinalVerilog(new CoreExtMem)
   }
 }

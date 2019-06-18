@@ -1,0 +1,28 @@
+BASE_DIR = ..
+BUILD_DIR = build
+TOPLEVEL_MODULE = Core
+VERILOG_FILE_NAME = $(TOPLEVEL_MODULE).v
+VERILOG_INPUT = $(BUILD_DIR)/$(VERILOG_FILE_NAME)
+VERILATOR_NAME = V$(TOPLEVEL_MODULE)
+EXE_NAME = sim
+EXE_FILE = $(BUILD_DIR)/$(EXE_NAME)
+
+all: $(EXE_FILE)
+
+$(EXE_FILE): $(BUILD_DIR)/$(VERILATOR_NAME).mk main.cpp
+	make -C $(BUILD_DIR) -f $(VERILATOR_NAME).mk $(EXE_NAME)
+
+$(BUILD_DIR)/$(VERILATOR_NAME).mk: $(VERILOG_INPUT)
+	verilator --cc --exe --trace -O3 -CFLAGS -O3 -Wno-fatal -Mdir $(BUILD_DIR) $(VERILOG_INPUT) main.cpp -o $(EXE_NAME)
+
+$(VERILOG_INPUT): $(BASE_DIR)/$(VERILOG_FILE_NAME)
+	mkdir -p $(@D)
+	cp $< $@
+
+$(BASE_DIR)/$(VERILOG_FILE_NAME): FORCE
+	cd $(BASE_DIR); sbt "runMain riscv.CoreExtMem"
+
+FORCE:
+
+clean:
+	rm -rf $(BUILD_DIR)

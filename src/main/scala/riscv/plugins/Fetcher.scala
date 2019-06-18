@@ -25,8 +25,10 @@ class Fetcher(implicit config: Config) extends Plugin with IBusService {
       val nextPc = pc + 4
 
       ibus.address := (pc >> 2).resized
+      ibus.read := True
       ibus.write := False
       ibus.wdata := 0
+      ibus.wmask.assignDontCare()
       output(pipeline.data.PC) := pc
       output(pipeline.data.NEXT_PC) := nextPc
       output(pipeline.data.IR) := ibus.rdata

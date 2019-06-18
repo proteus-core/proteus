@@ -14,6 +14,9 @@ sealed trait MemorySegment {
   def end: Int = start + length
 }
 
+case class MemBusSegment(start: Int, length: Int, dbus: MemBus,
+                         override val ibus: MemBus = null) extends MemorySegment
+
 case class MemSegment(start: Int, length: Int)(implicit config: Config) extends MemorySegment {
   val mem = Mem(UInt(config.xlen bits), length / (config.xlen / 8))
   val dbus = new MemBus(config.xlen)
