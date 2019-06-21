@@ -30,7 +30,8 @@ object createPipeline {
       new CsrFile,
       new Timers,
       new MachineMode,
-      new TrapHandler
+      new TrapHandler,
+      new Interrupts
     ) ++ extraPlugins
 
     new Pipeline(config, plugins)
@@ -49,7 +50,7 @@ class Core(imemHexPath: String, formal: Boolean = false) extends Component {
     pipeline,
     Seq(
       MemSegment(0, 102400).init(imemHexPath),
-      MmioSegment(102400, new MachineTimers()),
+      MmioSegment(102400, new MachineTimers(pipeline)),
       MmioSegment(102416, charDev)
     )
   )
@@ -113,7 +114,7 @@ class CoreTest(memHexPath: String) extends Component {
     pipeline,
     Seq(
       MemSegment(0, 8192).init(memHexPath),
-      MmioSegment(8192, testDev)
+      MmioSegment(102420, testDev)
     )
   )
 }
@@ -170,7 +171,7 @@ class CoreExtMem extends Component {
     pipeline,
     Seq(
       MemBusSegment(0, 102400, dbus, ibus),
-      MmioSegment(102400, new MachineTimers()),
+      MmioSegment(102400, new MachineTimers(pipeline)),
       MmioSegment(102416, charDev),
       MmioSegment(102420, testDev)
     )

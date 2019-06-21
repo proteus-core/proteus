@@ -2,7 +2,7 @@ package riscv
 
 import riscv._
 import spinal.core._
-import spinal.lib.IMasterSlave
+import spinal.lib._
 
 trait IBusService {
   def getIBus: MemBus
@@ -61,6 +61,8 @@ trait JumpService {
 trait TrapService {
   def trap(pipeline: Pipeline, stage: Stage, cause: TrapCause): Unit
   def hasTrapped(pipeline: Pipeline, stage: Stage): Bool
+  def hasException(pipeline: Pipeline, stage: Stage): Bool
+  def hasInterrupt(pipeline: Pipeline, stage: Stage): Bool
 }
 
 trait Csr extends Area {
@@ -97,6 +99,40 @@ class CsrIo(implicit config: Config) extends Bundle with IMasterSlave {
 trait CsrService {
   def registerCsr[T <: Csr](pipeline: Pipeline, id: Int, reg: => T): T
   def getCsr(pipeline: Pipeline, id: Int): CsrIo
+}
+
+class MachineTimerIo extends Bundle with IMasterSlave {
+  val update = Bool()
+  val interruptPending = Bool()
+
+  def init(): Unit = {
+    if (isMasterInterface) {
+      update := False
+      interruptPending := False
+    }
+  }
+
+  def postInterrupt(): Unit = {
+    assert(isMasterInterface)
+
+    update := True
+    interruptPending := True
+  }
+
+  def clearInterrupt(): Unit = {
+    assert(isMasterInterface)
+
+    update := True
+    interruptPending := False
+  }
+
+  override def asMaster(): Unit = {
+    out(update, interruptPending)
+  }
+}
+
+trait InterruptService {
+  def getMachineTimerIo: MachineTimerIo
 }
 
 trait FormalService {

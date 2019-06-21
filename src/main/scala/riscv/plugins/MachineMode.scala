@@ -63,7 +63,8 @@ private class Mstatus(implicit config: Config) extends Csr {
                 upie ## mie ## False ## sie ## uie
 
   val writableRanges = Map[Range, BaseType](
-    (3 downto 3) -> mie
+    (3 downto 3) -> mie,
+    (7 downto 7) -> mpie
   )
 
   for ((range, reg) <- writableRanges) {
@@ -148,13 +149,11 @@ class MachineMode(implicit config: Config) extends Plugin {
   object Opcodes {
     val ECALL  = M"00000000000000000000000001110011"
     val EBREAK = M"00000000000100000000000001110011"
-    val MRET   = M"00110000001000000000000001110011"
   }
 
   object Data {
     object ECALL  extends PipelineData(Bool())
     object EBREAK extends PipelineData(Bool())
-    object MRET   extends PipelineData(Bool())
   }
 
   override def setup(pipeline: Pipeline): Unit = {
@@ -177,16 +176,13 @@ class MachineMode(implicit config: Config) extends Plugin {
     pipeline.getService[DecoderService].configure(pipeline) {config =>
       config.addDefault(Map(
         Data.ECALL  -> False,
-        Data.EBREAK -> False,
-        Data.MRET   -> False
+        Data.EBREAK -> False
       ))
 
       config.addDecoding(Opcodes.ECALL, InstructionType.I,
                          Map(Data.ECALL -> True))
       config.addDecoding(Opcodes.EBREAK, InstructionType.I,
                          Map(Data.EBREAK -> True))
-      config.addDecoding(Opcodes.MRET, InstructionType.I,
-                         Map(Data.MRET -> True))
     }
   }
 
@@ -208,24 +204,6 @@ class MachineMode(implicit config: Config) extends Plugin {
           trap(TrapCause.Breakpoint)
         }
       }
-    }
-
-    val mretStage = pipeline.writeback
-
-    val mretArea = mretStage plug new Area {
-      import mretStage._
-
-      val mepc = slave(new CsrIo)
-
-      when (arbitration.isValid && value(Data.MRET)) {
-        val jumpService = pipeline.getService[JumpService]
-        jumpService.jump(pipeline, mretStage, mepc.read())
-      }
-    }
-
-    pipeline plug new Area {
-      val csrService = pipeline.getService[CsrService]
-      mretArea.mepc <> csrService.getCsr(pipeline, 0x341)
     }
   }
 }

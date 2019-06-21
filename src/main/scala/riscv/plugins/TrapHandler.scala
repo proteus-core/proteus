@@ -4,21 +4,79 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
+import scala.collection.mutable
+
+private class TrapSignals(implicit config: Config) extends Bundle {
+  val hasTrapped = False
+  val trapCause = UInt(4 bits).assignDontCare()
+  val trapVal = UInt(config.xlen bits).assignDontCare()
+}
+
+private class StageTrapSignals(implicit config: Config) extends Area {
+  val interruptSignals = new TrapSignals
+  val exceptionSignals = new TrapSignals
+}
+
 class TrapHandler(implicit config: Config) extends Plugin with TrapService {
+  private object Opcodes {
+    val MRET = M"00110000001000000000000001110011"
+  }
+
   private object Data {
     object HAS_TRAPPED extends PipelineData(Bool())
     object TRAP_IS_INTERRUPT extends PipelineData(Bool())
     object TRAP_CAUSE extends PipelineData(UInt(4 bits))
     object TRAP_VAL extends PipelineData(UInt(config.xlen bits))
+    object MRET extends PipelineData(Bool())
   }
+
+  private val stageSignals = mutable.Map[Stage, StageTrapSignals]()
 
   override def setup(pipeline: Pipeline): Unit = {
     pipeline.getService[DecoderService].configure(pipeline) {decoder =>
-      decoder.addDefault(Data.HAS_TRAPPED, False)
+      decoder.addDefault(Map(
+        Data.HAS_TRAPPED -> False,
+        Data.MRET -> False
+      ))
+
+      decoder.addDecoding(Opcodes.MRET, InstructionType.I,
+                          Map(Data.MRET -> True))
+    }
+
+    for (stage <- pipeline.stages) {
+      stageSignals(stage) = stage plug new StageTrapSignals
     }
   }
 
   override def build(pipeline: Pipeline): Unit = {
+    // To ensure interrupts have priority over exceptions (section 3.1.9, RISC-V
+    // Privileged Architecture), we keep track of two sets of trap-related
+    // signals: one for exceptions (exceptionSignals) and one for interrupts
+    // (interruptSignals). The trap() function assigns to one of those based on
+    // whether the trap was for an exception or interrupt. Here, we add logic
+    // that checks both sets of signals and outputs interruptSignals if an
+    // interrupt occurred and exceptionSignals if *only* an exception occurred.
+    for ((stage, signals) <- stageSignals) {
+      stage plug new Area {
+        val trapSignals = new TrapSignals
+        val isInterrupt = False
+
+        when (signals.interruptSignals.hasTrapped) {
+          trapSignals := signals.interruptSignals
+          isInterrupt := True
+        } otherwise {
+          trapSignals := signals.exceptionSignals
+        }
+
+        when (trapSignals.hasTrapped) {
+          stage.output(Data.HAS_TRAPPED) := True
+          stage.output(Data.TRAP_IS_INTERRUPT) := isInterrupt
+          stage.output(Data.TRAP_CAUSE) := trapSignals.trapCause
+          stage.output(Data.TRAP_VAL) := trapSignals.trapVal
+        }
+      }
+    }
+
     val jumpService = pipeline.getService[JumpService]
     val csrService = pipeline.getService[CsrService]
 
@@ -27,12 +85,20 @@ class TrapHandler(implicit config: Config) extends Plugin with TrapService {
     val trapArea = trapStage plug new Area {
       import trapStage._
 
+      val mstatus = slave(new CsrIo)
       val mtvec = slave(new CsrIo)
       val mcause = slave(new CsrIo)
       val mepc = slave(new CsrIo)
       val mtval = slave(new CsrIo)
 
       when (arbitration.isValid && value(Data.HAS_TRAPPED)) {
+        val mstatusCurrent = mstatus.read()
+        val mstatusNew = UInt(config.xlen bits)
+        mstatusNew := mstatusCurrent
+        mstatusNew(3) := False // mie = 0
+        mstatusNew(7) := mstatusCurrent(3) // mpie = mie
+        mstatus.write(mstatusNew)
+
         val cause = U(0, config.xlen bits)
         cause.msb := value(Data.TRAP_IS_INTERRUPT)
         cause(3 downto 0) := value(Data.TRAP_CAUSE)
@@ -44,9 +110,21 @@ class TrapHandler(implicit config: Config) extends Plugin with TrapService {
         val vecBase = mtvec.read()(config.xlen - 1 downto 2) << 2
         jumpService.jump(pipeline, trapStage, vecBase, isTrap = true)
       }
+
+      when (arbitration.isValid && value(Data.MRET)) {
+        val mstatusCurrent = mstatus.read()
+        val mstatusNew = UInt(config.xlen bits)
+        mstatusNew := mstatusCurrent
+        mstatusNew(3) := mstatusCurrent(7) // mie = mpie
+        mstatusNew(7) := True // mpie = 1
+        mstatus.write(mstatusNew)
+
+        jumpService.jump(pipeline, trapStage, mepc.read())
+      }
     }
 
     pipeline plug new Area {
+      trapArea.mstatus <> csrService.getCsr(pipeline, 0x300)
       trapArea.mtvec <> csrService.getCsr(pipeline, 0x305)
       trapArea.mcause <> csrService.getCsr(pipeline, 0x342)
       trapArea.mepc <> csrService.getCsr(pipeline, 0x341)
@@ -78,15 +156,27 @@ class TrapHandler(implicit config: Config) extends Plugin with TrapService {
   }
 
   override def trap(pipeline: Pipeline, stage: Stage, cause: TrapCause): Unit = {
-    stage.output(Data.HAS_TRAPPED) := True
-    stage.output(Data.TRAP_IS_INTERRUPT) := Bool(cause.isInterrupt)
-    stage.output(Data.TRAP_CAUSE) := U(cause.code, 4 bits)
+    val stageTrapSignals = stageSignals(stage)
+    val trapSignals = if (cause.isInterrupt) {
+      stageTrapSignals.interruptSignals
+    } else {
+      stageTrapSignals.exceptionSignals
+    }
 
-    val mtval = if (cause.mtval == null) U(0).resized else cause.mtval
-    stage.output(Data.TRAP_VAL) := mtval
+    trapSignals.hasTrapped := True
+    trapSignals.trapCause := U(cause.code, 4 bits)
+    trapSignals.trapVal := (if (cause.mtval == null) U(0).resized else cause.mtval)
   }
 
   override def hasTrapped(pipeline: Pipeline, stage: Stage): Bool = {
     stage.output(Data.HAS_TRAPPED)
+  }
+
+  override def hasException(pipeline: Pipeline, stage: Stage): Bool = {
+    hasTrapped(pipeline, stage) && !stage.output(Data.TRAP_IS_INTERRUPT)
+  }
+
+  override def hasInterrupt(pipeline: Pipeline, stage: Stage): Bool = {
+    hasTrapped(pipeline, stage) && stage.output(Data.TRAP_IS_INTERRUPT)
   }
 }

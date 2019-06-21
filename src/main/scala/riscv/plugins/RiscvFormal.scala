@@ -67,6 +67,10 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
       val mem_addr = UInt(config.xlen bits)
       val mem_rmask, mem_wmask = Bits(config.xlen / 8 bits)
       val mem_rdata, mem_wdata = UInt(config.xlen bits)
+
+      // Internal signals
+      // Has this instruction experienced an exception or interrupt?
+      val hasTrapped = Bool()
     }
 
     val stage = pipeline.stages.last
@@ -86,8 +90,7 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
       currentRvfi.valid := stage.arbitration.isDone
       currentRvfi.order := Counter(64 bits, currentRvfi.valid)
       currentRvfi.insn := stage.output(pipeline.data.IR)
-      currentRvfi.trap := trapService.hasTrapped(pipeline, stage) ||
-                   stage.output(data.FORMAL_MISALIGNED)
+      currentRvfi.trap := trapService.hasException(pipeline, stage)
       currentRvfi.halt := False
       currentRvfi.mode := 3
       currentRvfi.rs1_addr := stage.output(pipeline.data.RS1)
@@ -105,6 +108,7 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
       currentRvfi.mem_wmask := stage.output(data.FORMAL_MEM_WMASK)
       currentRvfi.mem_rdata := stage.output(data.FORMAL_MEM_RDATA)
       currentRvfi.mem_wdata := stage.output(data.FORMAL_MEM_WDATA)
+      currentRvfi.hasTrapped := trapService.hasTrapped(pipeline, stage)
 
       val prevRvfi = Reg(new Rvfi).init({
         val init = new Rvfi
@@ -123,7 +127,9 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
       rvfi.pc_wdata.allowOverride
       rvfi.pc_wdata := currentRvfi.pc_rdata
       rvfi.valid.allowOverride
-      rvfi.valid := currentRvfi.valid && prevRvfi.valid
+      // Only send out instructions that have not trapped once a next
+      // instruction has arrived
+      rvfi.valid := currentRvfi.valid && prevRvfi.valid && !prevRvfi.hasTrapped
     }
 
     rvfiArea.setName("")
