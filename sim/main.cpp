@@ -40,12 +40,19 @@ public:
 
     void eval()
     {
-        if (top_.ibus_read)
-            top_.ibus_rdata = read(top_.ibus_address);
-        if (top_.dbus_read)
-            top_.dbus_rdata = read(top_.dbus_address);
-        if (top_.dbus_write)
-            write(top_.dbus_address, top_.dbus_wmask, top_.dbus_wdata);
+        if (top_.ibus_cmd_valid && top_.ibus_rsp_ready) {
+            top_.ibus_rsp_valid = true;
+            top_.ibus_rsp_payload_rdata = read(top_.ibus_cmd_payload_address);
+        }
+
+        if (top_.dbus_cmd_valid && top_.dbus_cmd_payload_write) {
+            write(top_.dbus_cmd_payload_address, top_.dbus_cmd_payload_wmask, top_.dbus_cmd_payload_wdata);
+        } else {
+            if (top_.dbus_rsp_ready) {
+                top_.dbus_rsp_valid = true;
+                top_.dbus_rsp_payload_rdata = read(top_.dbus_cmd_payload_address);
+            }
+        }
     }
 
 private:

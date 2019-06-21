@@ -100,17 +100,18 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
     val lsuArea = lsuStage plug new Area {
       import lsuStage._
 
-      val dbus = slave(new MemBus(config.xlen))
+      val dbus = slave(new MemBus(config.dbusConfig))
+      dbus.cmd.valid := False
+      dbus.rsp.ready := False
 
       val address = UInt(config.xlen bits)
       address := input(pipeline.getService[IntAluService].resultData)
       val memAddress = address >> 2
 
-      dbus.address := memAddress.resized
-      dbus.read := False
-      dbus.write := False
-      dbus.wdata := 0
-      dbus.wmask := 0
+      dbus.cmd.address := memAddress.resized
+      dbus.cmd.write := False
+      dbus.cmd.wdata := 0
+      dbus.cmd.wmask := 0
 
       val isLoad = value(Data.LSU_IS_LOAD)
       val isStore = value(Data.LSU_IS_STORE)
@@ -162,8 +163,9 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
 
       when (arbitration.isValid && !misaligned) {
         when (isLoad) {
-          dbus.read := True
-          val wValue = dbus.rdata
+          dbus.cmd.valid := True
+          dbus.rsp.ready := True
+          val wValue = dbus.rsp.rdata
           val result = UInt(config.xlen bits)
           result := wValue
 
@@ -232,9 +234,10 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
             }
           }
 
-          dbus.write := True
-          dbus.wdata := data
-          dbus.wmask := mask
+          dbus.cmd.valid := True
+          dbus.cmd.write := True
+          dbus.cmd.wdata := data
+          dbus.cmd.wmask := mask
 
           formal.lsuOnStore(lsuStage, memAddress << 2, mask, data)
         }
@@ -242,7 +245,7 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
     }
 
     val pipelineArea = pipeline plug new Area {
-      val dbus = slave(new MemBus(config.xlen))
+      val dbus = slave(new MemBus(config.dbusConfig))
       dbus <> lsuArea.dbus
       Lsu.this.dbus = dbus
     }

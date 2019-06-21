@@ -19,23 +19,24 @@ class Fetcher(implicit config: Config) extends Plugin with IBusService {
     val fetchArea = pipeline.fetch plug new Area {
       import pipeline.fetch._
 
-      val ibus = slave(new MemBus(config.xlen))
+      val ibus = slave(new MemBus(config.ibusConfig))
+      ibus.cmd.valid := arbitration.isValid
+      ibus.rsp.ready := arbitration.isValid
+      // TODO: Stall pipeline until ibus.rsp.valid
 
       val pc = input(pipeline.data.NEXT_PC)
       val nextPc = pc + 4
+      var ir = ibus.rsp.rdata
 
-      ibus.address := (pc >> 2).resized
-      ibus.read := True
-      ibus.write := False
-      ibus.wdata := 0
-      ibus.wmask.assignDontCare()
+      ibus.cmd.address := (pc >> 2).resized
+
       output(pipeline.data.PC) := pc
       output(pipeline.data.NEXT_PC) := nextPc
-      output(pipeline.data.IR) := ibus.rdata
+      output(pipeline.data.IR) := ir
     }
 
     val pipelineArea = pipeline plug new Area {
-      val ibus = slave(new MemBus(config.xlen))
+      val ibus = slave(new MemBus(config.ibusConfig))
       ibus <> fetchArea.ibus
       Fetcher.this.ibus = ibus
     }

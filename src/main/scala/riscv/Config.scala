@@ -23,4 +23,7 @@ object BaseIsa {
 class Config(val baseIsa: BaseIsa) {
   def xlen = baseIsa.xlen
   def numRegs = baseIsa.xlen
+
+  def ibusConfig = MemBusConfig(baseIsa.xlen, false)
+  def dbusConfig = MemBusConfig(baseIsa.xlen)
 }
