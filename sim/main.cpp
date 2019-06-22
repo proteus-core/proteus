@@ -188,7 +188,7 @@ int main(int argc, char** argv)
     top->trace(tracer.get(), 99);
     tracer->open("sim.vcd");
 
-    auto mainTime = std::uint64_t{0};
+    vluint64_t mainTime = 0;
     auto isDone = false;
     int result = 0;
 
