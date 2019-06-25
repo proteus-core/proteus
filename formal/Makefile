@@ -5,7 +5,7 @@ CORE_DIR = $(RISCV_FORMAL_DIR)/cores/riscv
 
 all: formal
 
-$(RISCV_DIR)/Core.v:
+$(RISCV_DIR)/Core.v: FORCE
 	cd $(RISCV_DIR); sbt "runMain riscv.CoreFormal"
 
 setup: $(RISCV_DIR)/Core.v
@@ -21,3 +21,6 @@ formal: setup
 
 formal-insn-%: setup
 	$(MAKE) -C $(CORE_DIR)/checks insn_$(subst formal-insn-,,$@)_ch0
+
+.PHONY: FORCE
+
