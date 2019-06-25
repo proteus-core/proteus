@@ -110,6 +110,10 @@ class CoreTest(memHexPath: String) extends Component {
   val testOut = master(Flow(UInt(config.xlen bits)))
   testOut << testDev.io
 
+  val dummyTimerIo = pipeline.getService[InterruptService].getMachineTimerIo
+  dummyTimerIo.update := False
+  dummyTimerIo.interruptPending.assignDontCare()
+
   val soc = new Soc(
     pipeline,
     Seq(
