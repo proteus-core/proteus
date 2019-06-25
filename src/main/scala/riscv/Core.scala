@@ -31,7 +31,8 @@ object createPipeline {
       new Timers,
       new MachineMode,
       new TrapHandler,
-      new Interrupts
+      new Interrupts,
+      new MulDiv
     ) ++ extraPlugins
 
     new Pipeline(config, plugins)
