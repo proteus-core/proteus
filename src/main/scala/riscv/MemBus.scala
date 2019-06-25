@@ -4,8 +4,8 @@ import spinal.core._
 import spinal.lib._
 
 case class MemBusConfig(
-  val width: Int,
-  val readWrite: Boolean = true
+  width: Int,
+  readWrite: Boolean = true
 )
 
 case class MemBusCmd(config: MemBusConfig) extends Bundle {

@@ -26,7 +26,7 @@ class Fetcher(implicit config: Config) extends Plugin with IBusService {
 
       val pc = input(pipeline.data.NEXT_PC)
       val nextPc = pc + 4
-      var ir = ibus.rsp.rdata
+      val ir = ibus.rsp.rdata
 
       ibus.cmd.address := (pc >> 2).resized
 
