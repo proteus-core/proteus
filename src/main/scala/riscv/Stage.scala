@@ -12,6 +12,8 @@ class Arbitration extends Bundle {
   val rs1Needed, rs2Needed = out Bool()
   val jumpRequested = out Bool()
 
+  isReady := True
+  isReady.allowOverride
   rs1Needed := False
   rs2Needed := False
   jumpRequested := False

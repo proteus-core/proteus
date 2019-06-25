@@ -103,7 +103,7 @@ class DataHazardResolver(implicit config: Config) extends Plugin {
         val rs2Info = resolveRs(stage.arbitration.rs2Needed, data.RS2, data.RS2_DATA)
 
         if (rs1Info != null && rs2Info != null) {
-          when(stage.arbitration.isStalled) {
+          when(stage.arbitration.isStalled || !stage.arbitration.isReady) {
             val prevStage = stages.takeWhile(_ != stage).last
             val prevStageRegs = pipelineRegs(prevStage)
 

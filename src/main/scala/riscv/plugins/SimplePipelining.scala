@@ -11,9 +11,9 @@ class SimplePipelining(implicit config: Config) extends Plugin {
 
       for (stage <- stages) {
         stage plug new Area {
-          stage.arbitration.isReady := stage.arbitration.isValid
-          stage.arbitration.isDone :=
-            stage.arbitration.isReady && !stage.arbitration.isStalled
+          stage.arbitration.isDone := stage.arbitration.isValid &&
+                                      stage.arbitration.isReady &&
+                                      !stage.arbitration.isStalled
         }
       }
 
@@ -21,7 +21,9 @@ class SimplePipelining(implicit config: Config) extends Plugin {
       stages.head.arbitration.isValid.allowOverride
 
       for ((stage, nextStage) <- stages.zip(stages.tail)) {
-        stage.arbitration.isStalled := nextStage.arbitration.isStalled
+        stage.arbitration.isStalled :=
+          nextStage.arbitration.isStalled ||
+          (nextStage.arbitration.isValid && !nextStage.arbitration.isReady)
       }
 
       stages.last.arbitration.isStalled := False
