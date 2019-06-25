@@ -161,8 +161,8 @@ class CoreExtMem extends Component {
   implicit val config = new Config(BaseIsa.RV32I)
   val pipeline = createPipeline()
 
-  val ibus = slave(new MemBus(config.xlen))
-  val dbus = slave(new MemBus(config.xlen))
+  val ibus = slave(new MemBus(config.ibusConfig))
+  val dbus = slave(new MemBus(config.dbusConfig))
 
   val charDev = new CharDev
   val charOut = master(Flow(UInt(8 bits)))

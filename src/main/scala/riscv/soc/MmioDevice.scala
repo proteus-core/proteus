@@ -35,33 +35,43 @@ abstract class MmioDevice(implicit config: Config) extends Component {
     })
   }
 
-  val bus = master(new MemBus(config.xlen))
-  bus.rdata.assignDontCare()
+  val dbus = master(new MemBus(config.dbusConfig))
+  dbus.cmd.ready := True
+  dbus.rsp.valid := False
+  dbus.rsp.rdata.assignDontCare()
 
   protected def build() {
-    switch (bus.byteAddress) {
-      for ((regOffset, reg) <- registers) {
-        if (reg.width.value == 32) {
-          is (regOffset) {
-            when (bus.read) {
-              bus.rdata := reg.read()
-            }.elsewhen (bus.write) {
-              reg.write(bus.wdata)
+    when (dbus.cmd.valid) {
+      switch (dbus.byteAddress) {
+        for ((regOffset, reg) <- registers) {
+          if (reg.width.value == 32) {
+            is (regOffset) {
+              when (dbus.cmd.write) {
+                reg.write(dbus.cmd.wdata)
+              }.otherwise {
+                // TODO: Wait for bus.rsp.ready?
+                dbus.rsp.valid := True
+                dbus.rsp.rdata := reg.read()
+              }
             }
-          }
-        } else if (reg.width.value == 64) {
-          is (regOffset) {
-            when (bus.read) {
-              bus.rdata := reg.read()(31 downto 0)
-            }.elsewhen (bus.write) {
-              reg.write(reg.read()(63 downto 32) @@ bus.wdata)
+          } else if (reg.width.value == 64) {
+            is (regOffset) {
+              when (dbus.cmd.write) {
+                reg.write(reg.read()(63 downto 32) @@ dbus.cmd.wdata)
+              }.otherwise {
+                // TODO: Wait for bus.rsp.ready?
+                dbus.rsp.valid := True
+                dbus.rsp.rdata := reg.read()(31 downto 0)
+              }
             }
-          }
-          is (regOffset + 4) {
-            when (bus.read) {
-              bus.rdata := reg.read()(63 downto 32)
-            }.elsewhen (bus.write) {
-              reg.write(bus.wdata @@ reg.read()(31 downto 0))
+            is (regOffset + 4) {
+              when (dbus.cmd.write) {
+                reg.write(dbus.cmd.wdata @@ reg.read()(31 downto 0))
+              }.otherwise {
+                // TODO: Wait for bus.rsp.ready?
+                dbus.rsp.valid := True
+                dbus.rsp.rdata := reg.read()(63 downto 32)
+              }
             }
           }
         }
