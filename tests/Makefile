@@ -12,7 +12,7 @@ OBJCOPY = $(RISCV_PREFIX)-objcopy
 
 TEST_DIRS = $(ISA_TESTS_DIR)/rv32ui $(ISA_TESTS_DIR)/rv32mi $(ISA_TESTS_DIR)/rv32um
 ALL_ISA_TESTS = $(shell find $(TEST_DIRS) -name '*.S')
-UNSUPPORTED_TESTS = %fence_i.S %breakpoint.S %div.S %divu.S %rem.S %remu.S
+UNSUPPORTED_TESTS = %fence_i.S %breakpoint.S
 ALL_TESTS = $(filter-out $(UNSUPPORTED_TESTS),$(ALL_ISA_TESTS))
 ALL_TARGETS = $(addsuffix .pass,$(basename $(addprefix $(BUILD_DIR)/,$(notdir $(ALL_TESTS)))))
 
