@@ -5,8 +5,10 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-private class Misa(implicit config: Config) extends Csr {
-  val mxlVal = config.xlen match {
+private class Misa(pipeline: Pipeline) extends Csr {
+  val xlen = pipeline.config.xlen
+
+  val mxlVal = xlen match {
     case 32 => 1
     case 64 => 2
   }
@@ -14,18 +16,11 @@ private class Misa(implicit config: Config) extends Csr {
   val mxl = U(mxlVal, 2 bits)
   val extensions = U(0, 26 bits)
 
-  val baseExtension = config.baseIsa match {
-    case BaseIsa.RV32E => 'E'
-    case _ => 'I'
+  for (extension <- pipeline.getImplementedExtensions) {
+    extensions(extension.char - 'A') := True
   }
 
-  val supportedExtensions = Seq(baseExtension)
-
-  for (extension <- supportedExtensions) {
-    extensions(extension - 'A') := True
-  }
-
-  val filling = U(0, config.xlen - 28 bits)
+  val filling = U(0, xlen - 28 bits)
 
   val misa = mxl ## filling ## extensions
 
@@ -165,7 +160,7 @@ class MachineMode(implicit config: Config) extends Plugin {
     csr.registerCsr(pipeline, 0xF14, new Mhartid)
 
     csr.registerCsr(pipeline, 0x300, new Mstatus)
-    csr.registerCsr(pipeline, 0x301, new Misa)
+    csr.registerCsr(pipeline, 0x301, new Misa(pipeline))
     csr.registerCsr(pipeline, 0x305, new Mtvec)
 
     csr.registerCsr(pipeline, 0x340, new Mscratch)

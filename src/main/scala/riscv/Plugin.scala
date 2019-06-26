@@ -21,4 +21,7 @@ abstract class Plugin(implicit val config: Config) {
       result
     }
   }
+
+  def getImplementedExtensions: Seq[Extension] = Seq()
+  implicit def charToExtension(char: Char) = Extension(char)
 }

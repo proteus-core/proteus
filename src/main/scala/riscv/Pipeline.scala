@@ -39,7 +39,7 @@ class PipelineRegs(stage: Stage) extends Component {
   }
 }
 
-class Pipeline(config: Config, plugins: Seq[Plugin]) extends Component {
+class Pipeline(val config: Config, plugins: Seq[Plugin]) extends Component {
   val fetch = new Stage("IF")
   val decode = new Stage("ID")
   val execute = new Stage("EX")
@@ -157,5 +157,9 @@ class Pipeline(config: Config, plugins: Seq[Plugin]) extends Component {
       case _: T => true
       case _    => false
     })
+  }
+
+  def getImplementedExtensions: Seq[Extension] = {
+    Extension(config.baseIsa) +: plugins.flatMap(_.getImplementedExtensions)
   }
 }

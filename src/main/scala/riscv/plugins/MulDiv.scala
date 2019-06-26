@@ -26,6 +26,9 @@ private object Data {
 }
 
 class MulDiv(implicit config: Config) extends Plugin {
+
+  override def getImplementedExtensions = Seq('M')
+
   override def setup(pipeline: Pipeline): Unit = {
     pipeline.getService[DecoderService].configure(pipeline) {decoder =>
       decoder.addDefault(Map(

@@ -2,6 +2,17 @@ package riscv
 
 import spinal.core._
 
+case class Extension(char: Char) {
+  assert(char >= 'A' && char <= 'Z')
+}
+
+object Extension {
+  def apply(baseIsa: BaseIsa): Extension = new Extension(baseIsa match {
+    case BaseIsa.RV32E => 'E'
+    case _ => 'I'
+  })
+}
+
 sealed abstract class InstructionType(val rs1Used: Boolean,
                                       val rs2Used: Boolean,
                                       val rdUsed: Boolean)
