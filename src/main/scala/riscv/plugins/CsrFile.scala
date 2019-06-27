@@ -37,15 +37,6 @@ private class CsrComponent(implicit config: Config) extends Component {
 }
 
 class CsrFile(implicit config: Config) extends Plugin with CsrService {
-  object Opcodes {
-    val CSRRW  = M"-----------------001-----1110011"
-    val CSRRS  = M"-----------------010-----1110011"
-    val CSRRC  = M"-----------------011-----1110011"
-    val CSRRWI = M"-----------------101-----1110011"
-    val CSRRSI = M"-----------------110-----1110011"
-    val CSRRCI = M"-----------------111-----1110011"
-  }
-
   object CsrOp extends SpinalEnum {
     val NONE, RW, RS, RC = newElement()
   }

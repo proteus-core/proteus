@@ -5,17 +5,6 @@ import spinal.core._
 import spinal.lib._
 
 class Lsu(implicit config: Config) extends Plugin with DBusService {
-  object Opcodes {
-    val LB  = M"-----------------000-----0000011"
-    val LH  = M"-----------------001-----0000011"
-    val LW  = M"-----------------010-----0000011"
-    val LBU = M"-----------------100-----0000011"
-    val LHU = M"-----------------101-----0000011"
-    val SB  = M"-----------------000-----0100011"
-    val SH  = M"-----------------001-----0100011"
-    val SW  = M"-----------------010-----0100011"
-  }
-
   object LsuAccessWidth extends SpinalEnum {
     val B, H, W = newElement()
   }

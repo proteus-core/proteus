@@ -5,17 +5,6 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-private object Opcodes {
-  val MUL    = M"0000001----------000-----0110011"
-  val MULH   = M"0000001----------001-----0110011"
-  val MULHSU = M"0000001----------010-----0110011"
-  val MULHU  = M"0000001----------011-----0110011"
-  val DIV    = M"0000001----------100-----0110011"
-  val DIVU   = M"0000001----------101-----0110011"
-  val REM    = M"0000001----------110-----0110011"
-  val REMU   = M"0000001----------111-----0110011"
-}
-
 private object Data {
   object MUL extends PipelineData(Bool())
   object MUL_HIGH extends PipelineData(Bool())

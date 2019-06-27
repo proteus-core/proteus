@@ -141,11 +141,6 @@ private class Mhartid(implicit config: Config) extends Csr {
 }
 
 class MachineMode(implicit config: Config) extends Plugin {
-  object Opcodes {
-    val ECALL  = M"00000000000000000000000001110011"
-    val EBREAK = M"00000000000100000000000001110011"
-  }
-
   object Data {
     object ECALL  extends PipelineData(Bool())
     object EBREAK extends PipelineData(Bool())

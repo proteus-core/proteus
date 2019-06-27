@@ -5,15 +5,6 @@ import riscv._
 import spinal.core._
 
 class Shifter(implicit config: Config) extends Plugin {
-  object Opcodes {
-    val SLLI = M"0000000----------001-----0010011"
-    val SRLI = M"0000000----------101-----0010011"
-    val SRAI = M"0100000----------101-----0010011"
-    val SLL  = M"0000000----------001-----0110011"
-    val SRL  = M"0000000----------101-----0110011"
-    val SRA  = M"0100000----------101-----0110011"
-  }
-
   object ShiftOp extends SpinalEnum {
     val NONE, SLL, SRL, SRA = newElement()
   }

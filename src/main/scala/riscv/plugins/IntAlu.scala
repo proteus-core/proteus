@@ -5,24 +5,6 @@ import riscv._
 import spinal.core._
 
 class IntAlu(implicit config: Config) extends Plugin with IntAluService {
-  object Opcodes {
-    val ADD   = M"0000000----------000-----0110011"
-    val SUB   = M"0100000----------000-----0110011"
-    val SLT   = M"0000000----------010-----0110011"
-    val SLTU  = M"0000000----------011-----0110011"
-    val XOR   = M"0000000----------100-----0110011"
-    val OR    = M"0000000----------110-----0110011"
-    val AND   = M"0000000----------111-----0110011"
-    val ADDI  = M"-----------------000-----0010011"
-    val SLTI  = M"-----------------010-----0010011"
-    val SLTIU = M"-----------------011-----0010011"
-    val XORI  = M"-----------------100-----0010011"
-    val ORI   = M"-----------------110-----0010011"
-    val ANDI  = M"-----------------111-----0010011"
-    val LUI   = M"-------------------------0110111"
-    val AUIPC = M"-------------------------0010111"
-  }
-
   object Data {
     object ALU_OP extends PipelineData(AluOp())
     object ALU_SRC1 extends PipelineData(Src1Select())

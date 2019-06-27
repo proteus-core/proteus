@@ -5,17 +5,6 @@ import riscv._
 import spinal.core._
 
 class BranchUnit(implicit config: Config) extends Plugin {
-  object Opcodes {
-    val JAL  = M"-------------------------1101111"
-    val JALR = M"-----------------000-----1100111"
-    val BEQ  = M"-----------------000-----1100011"
-    val BNE  = M"-----------------001-----1100011"
-    val BLT  = M"-----------------100-----1100011"
-    val BGE  = M"-----------------101-----1100011"
-    val BLTU = M"-----------------110-----1100011"
-    val BGEU = M"-----------------111-----1100011"
-  }
-
   object BranchCondition extends SpinalEnum {
     val NONE, EQ, NE, LT, GE, LTU, GEU = newElement()
   }

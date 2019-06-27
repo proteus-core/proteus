@@ -18,10 +18,6 @@ private class StageTrapSignals(implicit config: Config) extends Area {
 }
 
 class TrapHandler(implicit config: Config) extends Plugin with TrapService {
-  private object Opcodes {
-    val MRET = M"00110000001000000000000001110011"
-  }
-
   private object Data {
     object HAS_TRAPPED extends PipelineData(Bool())
     object TRAP_IS_INTERRUPT extends PipelineData(Bool())
