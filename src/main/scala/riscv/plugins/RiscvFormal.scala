@@ -55,6 +55,7 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
       val halt = Bool()
       val intr = Bool()
       val mode = UInt(2 bits)
+      val ixl = UInt(2 bits)
 
       // Integer Register Read/Write
       val rs1_addr,  rs2_addr,  rd_addr = UInt(5 bits)
@@ -93,6 +94,7 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
       currentRvfi.trap := trapService.hasException(pipeline, stage)
       currentRvfi.halt := False
       currentRvfi.mode := 3
+      currentRvfi.ixl := 1
       currentRvfi.rs1_addr := stage.output(pipeline.data.RS1)
       currentRvfi.rs2_addr := stage.output(pipeline.data.RS2)
       currentRvfi.rs1_rdata := (currentRvfi.rs1_addr === 0) ?
