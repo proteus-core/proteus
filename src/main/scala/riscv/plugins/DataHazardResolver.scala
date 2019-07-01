@@ -24,6 +24,8 @@ class DataHazardResolver(implicit config: Config) extends Plugin {
     pipeline plug new Area {
       import pipeline._
 
+      val trapHandler = pipeline.getService[TrapService]
+
       // RS forwarding logic:
       //  - Values are forwarded ASAP: all stages are checked if their current
       //    instruction will eventually need RS* (input(RS*) =/= 0). If so, all
@@ -51,7 +53,8 @@ class DataHazardResolver(implicit config: Config) extends Plugin {
         val data = Reg(pipeline.data.RD_DATA.dataType())
       }
 
-      when (stages.last.arbitration.isDone) {
+      when (stages.last.arbitration.isDone &&
+            !trapHandler.hasTrapped(pipeline, stages.last)) {
         lastWrittenRd.id := stages.last.output(pipeline.data.RD)
         lastWrittenRd.valid := stages.last.output(pipeline.data.RD_VALID)
         lastWrittenRd.data := stages.last.output(pipeline.data.RD_DATA)
@@ -76,6 +79,7 @@ class DataHazardResolver(implicit config: Config) extends Plugin {
 
               for (nextStage <- nextStages) {
                 when (nextStage.arbitration.isValid &&
+                      !trapHandler.hasTrapped(pipeline, nextStage) &&
                       nextStage.input(pipeline.data.WRITE_RD) &&
                       nextStage.input(pipeline.data.RD) === neededRs) {
                   when (nextStage.input(pipeline.data.RD_VALID)) {
