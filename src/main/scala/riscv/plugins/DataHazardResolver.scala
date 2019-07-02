@@ -106,15 +106,20 @@ class DataHazardResolver(implicit config: Config) extends Plugin {
         val rs1Info = resolveRs(stage.arbitration.rs1Needed, data.RS1, data.RS1_DATA)
         val rs2Info = resolveRs(stage.arbitration.rs2Needed, data.RS2, data.RS2_DATA)
 
-        if (rs1Info != null && rs2Info != null) {
+        if (rs1Info != null || rs2Info != null) {
           when(stage.arbitration.isStalled || !stage.arbitration.isReady) {
             val prevStage = stages.takeWhile(_ != stage).last
             val prevStageRegs = pipelineRegs(prevStage)
 
-            when (rs1Info.forwarded) {
-              prevStageRegs.setReg(data.RS1_DATA, rs1Info.value)
-            } elsewhen (rs2Info.forwarded) {
-              prevStageRegs.setReg(data.RS2_DATA, rs2Info.value)
+            if (rs1Info != null) {
+              when (rs1Info.forwarded) {
+                prevStageRegs.setReg(data.RS1_DATA, rs1Info.value)
+              }
+            }
+            if (rs2Info != null) {
+              when (rs2Info.forwarded) {
+                prevStageRegs.setReg(data.RS2_DATA, rs2Info.value)
+              }
             }
           }
         }
