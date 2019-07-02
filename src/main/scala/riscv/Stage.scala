@@ -12,6 +12,21 @@ class Arbitration extends Bundle {
   val rs1Needed, rs2Needed = out Bool()
   val jumpRequested = out Bool()
 
+  /** Is this stage currently idling?
+    *
+    * True when there either is no instruction in the current stage or it is
+    * stalled. When implementing a multi-cycle stage operation, make sure to
+    * reset the internal state machine when this signal is high.
+    */
+  def isIdle: Bool = !isValid || isStalled
+
+  /** Is this stage currently processing an instruction?
+    *
+    * True when there is a valid instruction that is not stalled in the current
+    * stage. Use in stage logic to know when to process an instruction.
+    */
+  def isRunning: Bool = !isIdle
+
   isReady := True
   isReady.allowOverride
   rs1Needed := False
