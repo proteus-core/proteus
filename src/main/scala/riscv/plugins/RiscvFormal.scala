@@ -4,7 +4,7 @@ import riscv._
 import spinal.core._
 import spinal.lib.Counter
 
-class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
+class RiscvFormal(altops: Boolean = false)(implicit config: Config) extends Plugin with FormalService {
   class Data(config: Config) {
     private val xlen = config.xlen
 
@@ -14,6 +14,34 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
     object FORMAL_MEM_RDATA extends PipelineData(UInt(xlen bits))
     object FORMAL_MEM_WDATA extends PipelineData(UInt(xlen bits))
     object FORMAL_MISALIGNED extends PipelineData(Bool())
+  }
+
+  class Rvfi extends Bundle {
+    // Instruction Metadata
+    val valid = Bool()
+    val order = UInt(64 bits)
+    val insn = UInt(32 bits)
+    val trap = Bool()
+    val halt = Bool()
+    val intr = Bool()
+    val mode = UInt(2 bits)
+    val ixl = UInt(2 bits)
+
+    // Integer Register Read/Write
+    val rs1_addr,  rs2_addr,  rd_addr = UInt(5 bits)
+    val rs1_rdata, rs2_rdata, rd_wdata = UInt(config.xlen bits)
+
+    // Program Counter
+    val pc_rdata, pc_wdata = UInt(config.xlen bits)
+
+    // Memory Access
+    val mem_addr = UInt(config.xlen bits)
+    val mem_rmask, mem_wmask = Bits(config.xlen / 8 bits)
+    val mem_rdata, mem_wdata = UInt(config.xlen bits)
+
+    // Internal signals
+    // Has this instruction experienced an exception or interrupt?
+    val hasTrapped = Bool()
   }
 
   private val data = new Data(config)
@@ -46,34 +74,6 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
   }
 
   override def build(pipeline: Pipeline): Unit = {
-    class Rvfi extends Bundle {
-      // Instruction Metadata
-      val valid = Bool()
-      val order = UInt(64 bits)
-      val insn = UInt(32 bits)
-      val trap = Bool()
-      val halt = Bool()
-      val intr = Bool()
-      val mode = UInt(2 bits)
-      val ixl = UInt(2 bits)
-
-      // Integer Register Read/Write
-      val rs1_addr,  rs2_addr,  rd_addr = UInt(5 bits)
-      val rs1_rdata, rs2_rdata, rd_wdata = UInt(config.xlen bits)
-
-      // Program Counter
-      val pc_rdata, pc_wdata = UInt(config.xlen bits)
-
-      // Memory Access
-      val mem_addr = UInt(config.xlen bits)
-      val mem_rmask, mem_wmask = Bits(config.xlen / 8 bits)
-      val mem_rdata, mem_wdata = UInt(config.xlen bits)
-
-      // Internal signals
-      // Has this instruction experienced an exception or interrupt?
-      val hasTrapped = Bool()
-    }
-
     val stage = pipeline.stages.last
     val trapService = pipeline.getService[TrapService]
 
@@ -112,6 +112,10 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
       currentRvfi.mem_wdata := stage.output(data.FORMAL_MEM_WDATA)
       currentRvfi.hasTrapped := trapService.hasTrapped(pipeline, stage)
 
+      if (altops) {
+        implementAltops(currentRvfi)
+      }
+
       val prevRvfi = Reg(new Rvfi).init({
         val init = new Rvfi
         init.assignDontCare()
@@ -135,5 +139,29 @@ class RiscvFormal(implicit config: Config) extends Plugin with FormalService {
     }
 
     rvfiArea.setName("")
+  }
+
+  private def implementAltops(rvfi: Rvfi) = {
+    val altopsTable = Seq[(MaskedLiteral, (UInt, UInt) => UInt, BigInt)](
+      (Opcodes.MUL,    _ + _, 0x2cdf52a55876063eL),
+      (Opcodes.MULH,   _ + _, 0x15d01651f6583fb7L),
+      (Opcodes.MULHSU, _ - _, 0xea3969edecfbe137L),
+      (Opcodes.MULHU,  _ + _, 0xd13db50d949ce5e8L),
+      (Opcodes.DIV,    _ - _, 0x29bbf66f7f8529ecL),
+      (Opcodes.DIVU,   _ - _, 0x8c629acb10e8fd70L),
+      (Opcodes.REM,    _ - _, 0xf5b7d8538da68fa5L),
+      (Opcodes.REMU,   _ - _, 0xbc4402413138d0e1L)
+    )
+
+    switch (rvfi.insn) {
+      for ((opcode, altop, fullMask) <- altopsTable) {
+        is (opcode) {
+          val mask = if (config.xlen == 32) fullMask & 0xffffffffL else fullMask
+          when (rvfi.rd_addr =/= 0) {
+            rvfi.rd_wdata := altop(rvfi.rs1_rdata, rvfi.rs2_rdata) ^ mask
+          }
+        }
+      }
+    }
   }
 }
