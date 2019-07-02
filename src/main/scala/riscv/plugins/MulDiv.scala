@@ -85,11 +85,19 @@ class MulDiv(implicit config: Config) extends Plugin {
       val multiplier = UInt(config.xlen bits)
       multiplicand := 0
       multiplier := 0
+      val isMul = value(Data.MUL)
 
-      when (arbitration.isValid && value(Data.MUL)) {
-        arbitration.isReady := False
+      when (arbitration.isIdle) {
+        initMul := True
+      }
+
+      when (arbitration.isValid && isMul) {
         arbitration.rs1Needed := True
         arbitration.rs2Needed := True
+      }
+
+      when (arbitration.isRunning && isMul) {
+        arbitration.isReady := False
 
         val rs1 = value(pipeline.data.RS1_DATA)
         val rs2 = value(pipeline.data.RS2_DATA)
@@ -111,6 +119,7 @@ class MulDiv(implicit config: Config) extends Plugin {
         when (initMul) {
           productH := 0
           productL := multiplier
+          step.clear()
           initMul := False
         } elsewhen (step.willOverflowIfInc) {
           step.increment()
@@ -152,11 +161,19 @@ class MulDiv(implicit config: Config) extends Plugin {
       val remainder = Reg(UInt(config.xlen bits)).init(0)
       val initDiv = Reg(Bool()).init(True)
       val step = Counter(33)
+      val isDiv = value(Data.DIV)
 
-      when (arbitration.isValid && value(Data.DIV)) {
-        arbitration.isReady := False
+      when (arbitration.isIdle) {
+        initDiv := True
+      }
+
+      when (arbitration.isValid && isDiv) {
         arbitration.rs1Needed := True
         arbitration.rs2Needed := True
+      }
+
+      when (arbitration.isRunning && isDiv) {
+        arbitration.isReady := False
 
         val rs1 = value(pipeline.data.RS1_DATA)
         val rs2 = value(pipeline.data.RS2_DATA)
@@ -174,6 +191,7 @@ class MulDiv(implicit config: Config) extends Plugin {
         } elsewhen (initDiv) {
           quotient := dividend
           remainder := 0
+          step.clear()
           initDiv := False
         } elsewhen (step.willOverflowIfInc) {
           val correctedQuotient, correctedRemainder = UInt(config.xlen bits)
