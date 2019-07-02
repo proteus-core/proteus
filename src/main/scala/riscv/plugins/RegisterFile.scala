@@ -97,7 +97,7 @@ class RegisterFile(implicit config: Config) extends Plugin {
       regFileIo.rd := value(pipeline.data.RD)
       regFileIo.data := value(pipeline.data.RD_DATA)
 
-      val trapHandler = pipeline.getService[TrapService];
+      val trapHandler = pipeline.getService[TrapService]
       val hasTrapped = trapHandler.hasTrapped(pipeline, writeStage)
       regFileIo.write :=
         value(pipeline.data.WRITE_RD) &&
