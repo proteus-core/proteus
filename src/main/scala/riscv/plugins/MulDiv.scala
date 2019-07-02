@@ -104,8 +104,9 @@ class MulDiv(implicit config: Config) extends Plugin {
 
         when (value(Data.MULDIV_RS2_SIGNED) && rs2.asSInt < 0) {
           // If RS2 is signed, RS1 is also signed
-          multiplicand := DataTools.signExtend(0 - rs1, config.xlen + 1)
-          multiplier := 0 - rs2
+          multiplicand :=
+            DataTools.signExtend(DataTools.twosComplement(rs1), config.xlen + 1)
+          multiplier := DataTools.twosComplement(rs2)
         } otherwise {
           when (value(Data.MULDIV_RS1_SIGNED)) {
             multiplicand := DataTools.signExtend(rs1, config.xlen + 1)
@@ -180,8 +181,8 @@ class MulDiv(implicit config: Config) extends Plugin {
         val signed = value(Data.MULDIV_RS1_SIGNED)
         val dividendIsNeg = signed && (rs1.asSInt < 0)
         val divisorIsNeg = signed && (rs2.asSInt < 0)
-        val dividend = dividendIsNeg ? (0 - rs1) | rs1
-        val divisor = divisorIsNeg ? (0 - rs2) | rs2
+        val dividend = dividendIsNeg ? DataTools.twosComplement(rs1) | rs1
+        val divisor = divisorIsNeg ? DataTools.twosComplement(rs2) | rs2
 
         when (divisor === 0) {
           arbitration.isReady := True
@@ -199,11 +200,11 @@ class MulDiv(implicit config: Config) extends Plugin {
           correctedRemainder := remainder
 
           when (dividendIsNeg =/= divisorIsNeg) {
-            correctedQuotient := 0 - quotient
+            correctedQuotient := DataTools.twosComplement(quotient)
           }
 
           when (dividendIsNeg) {
-            correctedRemainder := 0 - remainder
+            correctedRemainder := DataTools.twosComplement(remainder)
           }
 
           output(pipeline.data.RD_DATA) :=

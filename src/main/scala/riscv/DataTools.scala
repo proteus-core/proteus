@@ -16,4 +16,6 @@ object DataTools {
 
     (B((width - 1 - dataWidth downto 0) -> False) ## data).as(data.clone().setWidth(width))
   }
+
+  def twosComplement(data: UInt): UInt = ~data + 1
 }
