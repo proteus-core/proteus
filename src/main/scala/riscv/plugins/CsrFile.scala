@@ -173,7 +173,7 @@ class CsrFile(implicit config: Config) extends Plugin with CsrService {
       val src = UInt(config.xlen bits)
 
       when (value(Data.CSR_USE_IMM)) {
-        src := DataTools.zeroExtend(value(pipeline.data.RS1), config.xlen)
+        src := Utils.zeroExtend(value(pipeline.data.RS1), config.xlen)
       } otherwise {
         src := value(pipeline.data.RS1_DATA)
         arbitration.rs1Needed := True

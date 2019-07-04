@@ -163,9 +163,9 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
               val hValue = wValue(offset, 16 bits)
 
               when (value(Data.LSU_IS_UNSIGNED)) {
-                result := DataTools.zeroExtend(hValue, config.xlen)
+                result := Utils.zeroExtend(hValue, config.xlen)
               } otherwise {
-                result := DataTools.signExtend(hValue, config.xlen)
+                result := Utils.signExtend(hValue, config.xlen)
               }
             }
             is (LsuAccessWidth.B) {
@@ -173,9 +173,9 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
               val bValue = wValue(offset, 8 bits)
 
               when (value(Data.LSU_IS_UNSIGNED)) {
-                result := DataTools.zeroExtend(bValue, config.xlen)
+                result := Utils.zeroExtend(bValue, config.xlen)
               } otherwise {
-                result := DataTools.signExtend(bValue, config.xlen)
+                result := Utils.signExtend(bValue, config.xlen)
               }
             }
           }

@@ -9,7 +9,7 @@ import scala.collection.mutable
 
 case class ImmediateDecoder(ir: Bits) {
   private def signExtend(data: Bits): UInt = {
-    DataTools.signExtend(data, 32).asUInt
+    Utils.signExtend(data, 32).asUInt
   }
 
   def i = signExtend(ir(31 downto 20))

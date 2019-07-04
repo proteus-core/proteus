@@ -2,7 +2,7 @@ package riscv
 
 import spinal.core._
 
-object DataTools {
+object Utils {
   def signExtend[T <: BitVector](data: T, width: Int): T = {
     val dataWidth = data.getBitsWidth
     assert(dataWidth <= width && dataWidth > 0)

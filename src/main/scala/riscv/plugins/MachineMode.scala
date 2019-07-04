@@ -104,7 +104,7 @@ private class Mepc(implicit config: Config) extends Csr {
 private class Mcause(implicit config: Config) extends Csr {
   val interrupt = Reg(Bool()).init(False)
   val cause = Reg(UInt(4 bits)).init(0)
-  val mcause = interrupt ## DataTools.zeroExtend(cause, config.xlen - 1)
+  val mcause = interrupt ## Utils.zeroExtend(cause, config.xlen - 1)
 
   override def read(): UInt = mcause.asUInt
   override def write(value: UInt): Unit = {

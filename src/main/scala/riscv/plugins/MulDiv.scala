@@ -105,13 +105,13 @@ class MulDiv(implicit config: Config) extends Plugin {
         when (value(Data.MULDIV_RS2_SIGNED) && rs2.asSInt < 0) {
           // If RS2 is signed, RS1 is also signed
           multiplicand :=
-            DataTools.signExtend(DataTools.twosComplement(rs1), config.xlen + 1)
-          multiplier := DataTools.twosComplement(rs2)
+            Utils.signExtend(Utils.twosComplement(rs1), config.xlen + 1)
+          multiplier := Utils.twosComplement(rs2)
         } otherwise {
           when (value(Data.MULDIV_RS1_SIGNED)) {
-            multiplicand := DataTools.signExtend(rs1, config.xlen + 1)
+            multiplicand := Utils.signExtend(rs1, config.xlen + 1)
           } otherwise {
-            multiplicand := DataTools.zeroExtend(rs1, config.xlen + 1)
+            multiplicand := Utils.zeroExtend(rs1, config.xlen + 1)
           }
 
           multiplier := rs2
@@ -135,9 +135,9 @@ class MulDiv(implicit config: Config) extends Plugin {
           val extendedProductH = UInt(config.xlen + 1 bits)
 
           when (value(Data.MULDIV_RS1_SIGNED) || value(Data.MULDIV_RS2_SIGNED)) {
-            extendedProductH := DataTools.signExtend(productH, config.xlen + 1)
+            extendedProductH := Utils.signExtend(productH, config.xlen + 1)
           } otherwise {
-            extendedProductH := DataTools.zeroExtend(productH, config.xlen + 1)
+            extendedProductH := Utils.zeroExtend(productH, config.xlen + 1)
           }
 
           val partialSum = UInt(config.xlen + 1 bits)
@@ -181,8 +181,8 @@ class MulDiv(implicit config: Config) extends Plugin {
         val signed = value(Data.MULDIV_RS1_SIGNED)
         val dividendIsNeg = signed && (rs1.asSInt < 0)
         val divisorIsNeg = signed && (rs2.asSInt < 0)
-        val dividend = dividendIsNeg ? DataTools.twosComplement(rs1) | rs1
-        val divisor = divisorIsNeg ? DataTools.twosComplement(rs2) | rs2
+        val dividend = dividendIsNeg ? Utils.twosComplement(rs1) | rs1
+        val divisor = divisorIsNeg ? Utils.twosComplement(rs2) | rs2
 
         when (divisor === 0) {
           arbitration.isReady := True
@@ -200,11 +200,11 @@ class MulDiv(implicit config: Config) extends Plugin {
           correctedRemainder := remainder
 
           when (dividendIsNeg =/= divisorIsNeg) {
-            correctedQuotient := DataTools.twosComplement(quotient)
+            correctedQuotient := Utils.twosComplement(quotient)
           }
 
           when (dividendIsNeg) {
-            correctedRemainder := DataTools.twosComplement(remainder)
+            correctedRemainder := Utils.twosComplement(remainder)
           }
 
           output(pipeline.data.RD_DATA) :=
