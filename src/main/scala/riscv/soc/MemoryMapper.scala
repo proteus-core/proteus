@@ -23,13 +23,13 @@ case class MemSegment(start: Int, length: Int)(implicit config: Config) extends 
   val dbus = new MemBus(config.dbusConfig)
   dbus.cmd.ready := True
   dbus.rsp.valid := True
-  dbus.rsp.rdata := mem(dbus.byte2WordAddress(dbus.cmd.address))
+  dbus.rsp.rdata := mem(dbus.byte2WordAddress(dbus.cmd.address).resized)
   mem.write(dbus.cmd.address.resized, dbus.cmd.wdata, dbus.cmd.write, dbus.cmd.wmask)
 
   override val ibus = new MemBus(config.ibusConfig)
   ibus.cmd.ready := True
   ibus.rsp.valid := True
-  ibus.rsp.rdata := mem(ibus.byte2WordAddress(ibus.cmd.address))
+  ibus.rsp.rdata := mem(ibus.byte2WordAddress(ibus.cmd.address).resized)
 
   def init(memHexPath: String): this.type = {
     HexTools.initRam(mem, memHexPath, start)
