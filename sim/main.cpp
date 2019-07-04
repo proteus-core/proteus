@@ -40,7 +40,7 @@ public:
 
     void eval()
     {
-        if (top_.ibus_cmd_valid && top_.ibus_rsp_ready) {
+        if (top_.ibus_cmd_valid) {
             top_.ibus_rsp_valid = true;
             top_.ibus_rsp_payload_rdata = read(top_.ibus_cmd_payload_address);
         }
