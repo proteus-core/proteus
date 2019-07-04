@@ -1,6 +1,7 @@
 package riscv
 
 import spinal.core._
+import spinal.lib._
 
 object Utils {
   def signExtend[T <: BitVector](data: T, width: Int): T = {
@@ -18,4 +19,16 @@ object Utils {
   }
 
   def twosComplement(data: UInt): UInt = ~data + 1
+
+  def delay(cycles: Int)(logic: => Unit) = {
+    assert(cycles >= 0)
+
+    val delayCounter = Counter(cycles + 1)
+
+    when (delayCounter.willOverflowIfInc) {
+      logic
+    }
+
+    delayCounter.increment()
+  }
 }
