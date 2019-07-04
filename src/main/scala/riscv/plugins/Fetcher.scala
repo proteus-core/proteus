@@ -22,7 +22,12 @@ class Fetcher(implicit config: Config) extends Plugin with IBusService {
       val ibus = slave(new MemBus(config.ibusConfig))
       ibus.cmd.valid := False
       ibus.cmd.address.assignDontCare()
-      ibus.rsp.ready := False
+
+      // This ensures that stale requests are always dropped. If we only set
+      // this to True when ibus.rsp.valid is True, it might happen that we just
+      // started a new request and the response of the previous request is still
+      // valid, causing us to use the stale response.
+      ibus.rsp.ready := True
 
       arbitration.isReady := False
 
@@ -34,7 +39,6 @@ class Fetcher(implicit config: Config) extends Plugin with IBusService {
         ibus.cmd.valid := True
 
         when (ibus.rsp.valid) {
-          ibus.rsp.ready := True
           arbitration.isReady := True
 
           output(pipeline.data.PC) := pc
