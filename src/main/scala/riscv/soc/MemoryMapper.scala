@@ -17,7 +17,8 @@ sealed trait MemorySegment {
 case class MemBusSegment(start: Int, length: Int, dbus: MemBus,
                          override val ibus: MemBus = null) extends MemorySegment
 
-case class MemSegment(start: Int, length: Int)(implicit config: Config) extends MemorySegment {
+case class MemSegment(start: Int, length: Int, ibusLatency: Int = 0)
+                     (implicit config: Config) extends MemorySegment {
   val mem = Mem(UInt(config.xlen bits), length / (config.xlen / 8))
 
   val dbus = new MemBus(config.dbusConfig)
@@ -27,9 +28,17 @@ case class MemSegment(start: Int, length: Int)(implicit config: Config) extends 
   mem.write(dbus.cmd.address.resized, dbus.cmd.wdata, dbus.cmd.write, dbus.cmd.wmask)
 
   override val ibus = new MemBus(config.ibusConfig)
-  ibus.cmd.ready := True
-  ibus.rsp.valid := True
-  ibus.rsp.rdata := mem(ibus.byte2WordAddress(ibus.cmd.address).resized)
+  ibus.cmd.ready := False
+  ibus.rsp.valid := False
+  ibus.rsp.rdata.assignDontCare()
+
+  when (ibus.cmd.valid) {
+    Utils.delay(ibusLatency) {
+      ibus.cmd.ready := True
+      ibus.rsp.valid := True
+      ibus.rsp.rdata := mem(ibus.byte2WordAddress(ibus.cmd.address).resized)
+    }
+  }
 
   def init(memHexPath: String): this.type = {
     HexTools.initRam(mem, memHexPath, start)
