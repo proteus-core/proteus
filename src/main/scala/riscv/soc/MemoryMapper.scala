@@ -17,15 +17,33 @@ sealed trait MemorySegment {
 case class MemBusSegment(start: Int, length: Int, dbus: MemBus,
                          override val ibus: MemBus = null) extends MemorySegment
 
-case class MemSegment(start: Int, length: Int, ibusLatency: Int = 0)
+case class MemSegment(start: Int, length: Int,
+                      ibusLatency: Int = 0,
+                      dbusReadLatency: Int = 0,
+                      dbusWriteLatency: Int = 0)
                      (implicit config: Config) extends MemorySegment {
   val mem = Mem(UInt(config.xlen bits), length / (config.xlen / 8))
 
   val dbus = new MemBus(config.dbusConfig)
-  dbus.cmd.ready := True
-  dbus.rsp.valid := True
-  dbus.rsp.rdata := mem(dbus.byte2WordAddress(dbus.cmd.address).resized)
-  mem.write(dbus.cmd.address.resized, dbus.cmd.wdata, dbus.cmd.write, dbus.cmd.wmask)
+  dbus.cmd.ready := False
+  dbus.rsp.valid := False
+  dbus.rsp.rdata.assignDontCare()
+
+  when (dbus.cmd.valid) {
+    when (dbus.cmd.write) {
+      Utils.delay(dbusWriteLatency) {
+        dbus.cmd.ready := True
+        mem.write(dbus.byte2WordAddress(dbus.cmd.address).resized,
+                  dbus.cmd.wdata, mask = dbus.cmd.wmask)
+      }
+    } otherwise {
+      Utils.delay(dbusReadLatency) {
+        dbus.cmd.ready := True
+        dbus.rsp.valid := True
+        dbus.rsp.rdata := mem(dbus.byte2WordAddress(dbus.cmd.address).resized)
+      }
+    }
+  }
 
   override val ibus = new MemBus(config.ibusConfig)
   ibus.cmd.ready := False
