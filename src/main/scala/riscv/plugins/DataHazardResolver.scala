@@ -69,31 +69,33 @@ class DataHazardResolver(implicit config: Config) extends Plugin {
             val info = ResolveInfo(False, 0)
             val neededRs = stage.input(rs)
 
-            when (neededRs =/= 0) {
-              when (lastWrittenRd.valid && lastWrittenRd.id === neededRs) {
-                info.forwarded := True
-                info.value := lastWrittenRd.data
-              }
+            when (stage.arbitration.isValid) {
+              when (neededRs =/= 0) {
+                when (lastWrittenRd.valid && lastWrittenRd.id === neededRs) {
+                  info.forwarded := True
+                  info.value := lastWrittenRd.data
+                }
 
-              val nextStages = pipeline.stages.dropWhile(_ != stage).tail.reverse
+                val nextStages = pipeline.stages.dropWhile(_ != stage).tail.reverse
 
-              for (nextStage <- nextStages) {
-                when (nextStage.arbitration.isValid &&
-                      !trapHandler.hasTrapped(pipeline, nextStage) &&
-                      nextStage.input(pipeline.data.WRITE_RD) &&
-                      nextStage.input(pipeline.data.RD) === neededRs) {
-                  when (nextStage.input(pipeline.data.RD_VALID)) {
-                    info.forwarded := True
-                    info.value := nextStage.input(pipeline.data.RD_DATA)
-                  } elsewhen (rsNeeded) {
-                    info.forwarded := False
-                    stage.arbitration.isStalled := True
+                for (nextStage <- nextStages) {
+                  when (nextStage.arbitration.isValid &&
+                        !trapHandler.hasTrapped(pipeline, nextStage) &&
+                        nextStage.input(pipeline.data.WRITE_RD) &&
+                        nextStage.input(pipeline.data.RD) === neededRs) {
+                    when (nextStage.input(pipeline.data.RD_VALID)) {
+                      info.forwarded := True
+                      info.value := nextStage.input(pipeline.data.RD_DATA)
+                    } elsewhen (rsNeeded) {
+                      info.forwarded := False
+                      stage.arbitration.isStalled := True
+                    }
                   }
                 }
-              }
 
-              when (info.forwarded) {
-                stage.input(rsData) := info.value
+                when (info.forwarded) {
+                  stage.input(rsData) := info.value
+                }
               }
             }
 
