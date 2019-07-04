@@ -154,6 +154,8 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
         when (isLoad) {
           dbus.cmd.valid := True
           dbus.rsp.ready := True
+          arbitration.isReady := dbus.rsp.valid
+
           val wValue = dbus.rsp.rdata
           val result = UInt(config.xlen bits)
           result := wValue
@@ -228,6 +230,7 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
           dbus.cmd.wdata := data
           dbus.cmd.wmask := mask
           dbus.rsp.ready := True
+          arbitration.isReady := dbus.cmd.ready
 
           formal.lsuOnStore(lsuStage, busAddress, mask, data)
         }
