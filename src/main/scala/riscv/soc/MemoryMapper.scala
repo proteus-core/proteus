@@ -23,13 +23,13 @@ case class MemSegment(start: Int, length: Int)(implicit config: Config) extends 
   val dbus = new MemBus(config.dbusConfig)
   dbus.cmd.ready := True
   dbus.rsp.valid := True
-  dbus.rsp.rdata := mem(dbus.cmd.address.resized)
+  dbus.rsp.rdata := mem(dbus.byte2WordAddress(dbus.cmd.address))
   mem.write(dbus.cmd.address.resized, dbus.cmd.wdata, dbus.cmd.write, dbus.cmd.wmask)
 
   override val ibus = new MemBus(config.ibusConfig)
   ibus.cmd.ready := True
   ibus.rsp.valid := True
-  ibus.rsp.rdata := mem(ibus.cmd.address.resized)
+  ibus.rsp.rdata := mem(ibus.byte2WordAddress(ibus.cmd.address))
 
   def init(memHexPath: String): this.type = {
     HexTools.initRam(mem, memHexPath, start)
@@ -90,13 +90,13 @@ class MemoryMapper(segments: Seq[MemorySegment])(implicit config: Config) extend
       val lowerBoundCheck = if (segment.start == 0) {
         True
       } else {
-        master.byteAddress >= segment.start
+        master.cmd.address >= segment.start
       }
 
-      when (lowerBoundCheck && master.byteAddress < segment.end) {
+      when (lowerBoundCheck && master.cmd.address < segment.end) {
         master <> slave
         slave.cmd.address.allowOverride
-        slave.cmd.address := master.cmd.address - master.byte2WordAddress(segment.start)
+        slave.cmd.address := master.cmd.address - segment.start
       }
     }
 

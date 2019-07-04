@@ -42,7 +42,7 @@ abstract class MmioDevice(implicit config: Config) extends Component {
 
   protected def build() {
     when (dbus.cmd.valid) {
-      switch (dbus.byteAddress) {
+      switch (dbus.cmd.address) {
         for ((regOffset, reg) <- registers) {
           if (reg.width.value == 32) {
             is (regOffset) {

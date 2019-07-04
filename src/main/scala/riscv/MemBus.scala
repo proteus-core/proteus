@@ -25,7 +25,6 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
 
   def byte2WordAddress(ba: UInt): UInt = ba >> log2Up(config.width / 8)
   def word2ByteAddress(wa: UInt): UInt = wa << log2Up(config.width / 8)
-  def byteAddress: UInt = word2ByteAddress(cmd.address)
 
   override def asMaster(): Unit = {
     slave(cmd)

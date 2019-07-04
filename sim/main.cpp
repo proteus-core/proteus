@@ -66,7 +66,7 @@ private:
     Word read(Address address)
     {
         ensureEnoughMemory(address);
-        return memory_[address];
+        return memory_[(address >> 2)];
     }
 
     void write(Address address, Mask mask, Word value)
@@ -79,18 +79,18 @@ private:
         if (mask & 0x4) bitMask |= 0x00ff0000;
         if (mask & 0x8) bitMask |= 0xff000000;
 
-        auto& memoryValue = memory_[address];
+        auto& memoryValue = memory_[(address >> 2)];
         memoryValue &= ~bitMask;
         memoryValue |= value & bitMask;
     }
 
     void ensureEnoughMemory(Address address)
     {
-        if (address >= memory_.size())
+        if ((address >> 2) >= memory_.size())
         {
-            memory_.reserve(address + 1);
+            memory_.reserve((address >> 2) + 1);
 
-            while (address >= memory_.size())
+            while ((address >> 2) >= memory_.size())
                 memory_.push_back(0xcafebabe);
         }
     }

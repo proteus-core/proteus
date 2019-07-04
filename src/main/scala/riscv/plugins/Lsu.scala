@@ -95,9 +95,8 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
 
       val address = UInt(config.xlen bits)
       address := input(pipeline.getService[IntAluService].resultData)
-      val memAddress = address >> 2
 
-      dbus.cmd.address := memAddress.resized
+      dbus.cmd.address := address
       dbus.cmd.write := False
       dbus.cmd.wdata := 0
       dbus.cmd.wmask := 0
@@ -184,7 +183,7 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
           output(pipeline.data.RD_DATA) := result
           output(pipeline.data.RD_VALID) := True
 
-          formal.lsuOnLoad(lsuStage, memAddress << 2, mask, wValue)
+          formal.lsuOnLoad(lsuStage, address, mask, wValue)
         }
 
         when (isStore) {
@@ -227,8 +226,9 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
           dbus.cmd.write := True
           dbus.cmd.wdata := data
           dbus.cmd.wmask := mask
+          dbus.rsp.ready := True
 
-          formal.lsuOnStore(lsuStage, memAddress << 2, mask, data)
+          formal.lsuOnStore(lsuStage, address, mask, data)
         }
       }
     }
