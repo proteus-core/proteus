@@ -270,3 +270,26 @@ object CoreFpga {
     SpinalVerilog(new CoreFpga(Option(imemHexPath)))
   }
 }
+
+object CoreFpgaSim {
+  def main(args: Array[String]) {
+    SimConfig.withWave.compile(new CoreFpga(Some(args(0)))).doSim {dut =>
+      dut.clockDomain.forkStimulus(10)
+
+      var done = false
+      var cycles = 0
+
+      dut.clockDomain.onRisingEdges {
+        cycles += 1
+      }
+
+      while (!done) {
+        dut.clockDomain.waitSampling()
+
+        if (cycles >= 10000) {
+          done = true
+        }
+      }
+    }
+  }
+}
