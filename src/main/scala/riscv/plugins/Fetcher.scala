@@ -5,8 +5,6 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-import java.io.File
-
 class Fetcher(implicit config: Config) extends Plugin with IBusService {
   private var ibus: MemBus = null
 
@@ -20,14 +18,7 @@ class Fetcher(implicit config: Config) extends Plugin with IBusService {
       import pipeline.fetch._
 
       val ibus = slave(new MemBus(config.ibusConfig))
-      ibus.cmd.valid := False
-      ibus.cmd.address.assignDontCare()
-
-      // This ensures that stale requests are always dropped. If we only set
-      // this to True when ibus.rsp.valid is True, it might happen that we just
-      // started a new request and the response of the previous request is still
-      // valid, causing us to use the stale response.
-      ibus.rsp.ready := True
+      val ibusCtrl = new MemBusControl(ibus)
 
       arbitration.isReady := False
 
@@ -35,15 +26,14 @@ class Fetcher(implicit config: Config) extends Plugin with IBusService {
       val nextPc = pc + 4
 
       when (arbitration.isRunning) {
-        ibus.cmd.address := pc
-        ibus.cmd.valid := True
+        val (valid, rdata) = ibusCtrl.read(pc)
 
-        when (ibus.rsp.valid) {
+        when (valid) {
           arbitration.isReady := True
 
           output(pipeline.data.PC) := pc
           output(pipeline.data.NEXT_PC) := nextPc
-          output(pipeline.data.IR) := ibus.rsp.rdata
+          output(pipeline.data.IR) := rdata
         }
       }
     }

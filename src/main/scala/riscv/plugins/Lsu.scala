@@ -90,17 +90,11 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
       import lsuStage._
 
       val dbus = slave(new MemBus(config.dbusConfig))
-      dbus.cmd.valid := False
-      dbus.rsp.ready := False
+      val dbusCtrl = new MemBusControl(dbus)
 
       val address = UInt(config.xlen bits)
       address := input(pipeline.getService[IntAluService].resultData)
       val busAddress = address & U(0xfffffffcL)
-
-      dbus.cmd.address := busAddress
-      dbus.cmd.write := False
-      dbus.cmd.wdata := 0
-      dbus.cmd.wmask := 0
 
       val isLoad = value(Data.LSU_IS_LOAD)
       val isStore = value(Data.LSU_IS_STORE)
@@ -152,11 +146,8 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
 
       when (arbitration.isValid && !misaligned) {
         when (isLoad) {
-          dbus.cmd.valid := True
-          dbus.rsp.ready := True
-          arbitration.isReady := dbus.rsp.valid
-
-          val wValue = dbus.rsp.rdata
+          val (valid, wValue) = dbusCtrl.read(busAddress)
+          arbitration.isReady := valid
           val result = UInt(config.xlen bits)
           result := wValue
 
@@ -225,12 +216,8 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
             }
           }
 
-          dbus.cmd.valid := True
-          dbus.cmd.write := True
-          dbus.cmd.wdata := data
-          dbus.cmd.wmask := mask
-          dbus.rsp.ready := True
-          arbitration.isReady := dbus.cmd.ready
+          val accepted = dbusCtrl.write(busAddress, data, mask)
+          arbitration.isReady := accepted
 
           formal.lsuOnStore(lsuStage, busAddress, mask, data)
         }
