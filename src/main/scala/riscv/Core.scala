@@ -203,61 +203,83 @@ class CoreFpga(imemHexPath: Option[String]) extends Component {
   }
 
   implicit val config = new Config(BaseIsa.RV32I)
-  val pipeline = createPipeline()
 
-  val dummyTimerIo = pipeline.getService[InterruptService].getMachineTimerIo
-  dummyTimerIo.update := False
-  dummyTimerIo.interruptPending.assignDontCare()
-
-  val ibus = pipeline.getService[IBusService].getIBus
-  val dbus = pipeline.getService[DBusService].getDBus
-
-  val ram = Axi4SharedOnChipRam(
-    byteCount = 4 KiB,
-    dataWidth = config.xlen,
-    idWidth = 4
+  val socClockDomain = ClockDomain(
+    clock = clockDomain.clock,
+    reset = clockDomain.reset,
+    frequency = FixedFrequency(100 MHz)
   )
-  if (!imemHexPath.isEmpty) {
-    HexTools.initRam(ram.ram, imemHexPath.get, 0x00000000L)
+
+  val coreClockDomain = ClockDomain(
+    clock = clockDomain.clock,
+    reset = clockDomain.reset
+  )
+
+  val soc = new ClockingArea(socClockDomain) {
+    val core = new ClockingArea(coreClockDomain) {
+      val pipeline = createPipeline()
+
+      val dummyTimerIo = pipeline.getService[InterruptService].getMachineTimerIo
+      dummyTimerIo.update := False
+      dummyTimerIo.interruptPending.assignDontCare()
+
+      val ibus = pipeline.getService[IBusService].getIBus
+      val dbus = pipeline.getService[DBusService].getDBus
+    }
+
+    val ram = Axi4SharedOnChipRam(
+      byteCount = 4 KiB,
+      dataWidth = config.xlen,
+      idWidth = 4
+    )
+    if (!imemHexPath.isEmpty) {
+      HexTools.initRam(ram.ram, imemHexPath.get, 0x00000000L)
+    }
+
+    val apbBridge = Axi4SharedToApb3Bridge(
+      addressWidth = 24,
+      dataWidth = config.xlen,
+      idWidth = 4
+    )
+
+    val uartCtrlConfig = UartCtrlMemoryMappedConfig(
+      uartCtrlConfig = UartCtrlGenerics(),
+      initConfig = UartCtrlInitConfig(
+        baudrate = 115200,
+        dataLength = 7,
+        parity = UartParityType.NONE,
+        stop = UartStopType.ONE
+      )
+    )
+    val uartCtrl = Apb3UartCtrl(uartCtrlConfig)
+
+    val axiCrossbar = Axi4CrossbarFactory()
+    axiCrossbar.addSlaves(
+      ram.io.axi       -> (0x00000000L, 4 KiB),
+      apbBridge.io.axi -> (0xF0000000L, 1 MiB)
+    )
+    axiCrossbar.addConnections(
+      core.ibus.toAxi4ReadOnly() -> List(ram.io.axi),
+      core.dbus.toAxi4Shared()   -> List(ram.io.axi, apbBridge.io.axi)
+    )
+    axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar, bridge) => {
+      crossbar.sharedCmd.halfPipe() >> bridge.sharedCmd
+      crossbar.writeData.halfPipe() >> bridge.writeData
+      crossbar.writeRsp             << bridge.writeRsp
+      crossbar.readRsp              << bridge.readRsp
+    })
+
+    axiCrossbar.build()
+
+    val apbDecoder = Apb3Decoder(
+      master = apbBridge.io.apb,
+      slaves = List(
+        uartCtrl.io.apb -> (0x000000L, 4 KiB)
+      )
+    )
   }
 
-  val apbBridge = Axi4SharedToApb3Bridge(
-    addressWidth = 24,
-    dataWidth = config.xlen,
-    idWidth = 4
-  )
-
-  val uartCtrlConfig = UartCtrlMemoryMappedConfig(
-    uartCtrlConfig = UartCtrlGenerics()
-  )
-  val uartCtrl = Apb3UartCtrl(uartCtrlConfig)
-
-  val axiCrossbar = Axi4CrossbarFactory()
-  axiCrossbar.addSlaves(
-    ram.io.axi       -> (0x00000000L, 4 KiB),
-    apbBridge.io.axi -> (0xF0000000L, 1 MiB)
-  )
-  axiCrossbar.addConnections(
-    ibus.toAxi4ReadOnly() -> List(ram.io.axi),
-    dbus.toAxi4Shared()   -> List(ram.io.axi, apbBridge.io.axi)
-  )
-  axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar, bridge) => {
-    crossbar.sharedCmd.halfPipe() >> bridge.sharedCmd
-    crossbar.writeData.halfPipe() >> bridge.writeData
-    crossbar.writeRsp             << bridge.writeRsp
-    crossbar.readRsp              << bridge.readRsp
-  })
-
-  axiCrossbar.build()
-
-  val apbDecoder = Apb3Decoder(
-    master = apbBridge.io.apb,
-    slaves = List(
-      uartCtrl.io.apb -> (0x000000L, 4 KiB)
-    )
-  )
-
-  io.uart <> uartCtrl.io.uart
+  io.uart <> soc.uartCtrl.io.uart
 }
 
 object CoreFpga {
