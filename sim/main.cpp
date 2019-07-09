@@ -11,6 +11,12 @@
 #include <cstdint>
 #include <cassert>
 
+const double TIMESCALE       = 1e-9;
+const int    CLOCK_FREQUENCY = 100*1e6;
+const int    CLOCK_PERIOD    = 1/(CLOCK_FREQUENCY*TIMESCALE);
+
+const int    MAX_CYCLES      = 50000;
+
 class Memory
 {
 public:
@@ -196,12 +202,12 @@ int main(int argc, char** argv)
 
     while (!isDone)
     {
-        auto clockEdge = (mainTime % 5 == 0);
+        auto clockEdge = (mainTime % (CLOCK_PERIOD/2) == 0);
 
         if (clockEdge)
             top->clk = !top->clk;
 
-        if (mainTime > 50)
+        if (mainTime >= 5*CLOCK_PERIOD)
             top->reset = 0;
 
         top->eval();
@@ -227,6 +233,9 @@ int main(int argc, char** argv)
                 else
                     std::cout << "All tests passed\n";
             }
+
+            if (mainTime >= MAX_CYCLES*CLOCK_PERIOD)
+                isDone = true;
         }
 
         tracer->dump(mainTime);
