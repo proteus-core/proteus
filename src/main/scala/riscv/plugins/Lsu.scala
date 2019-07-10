@@ -89,7 +89,7 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
     val lsuArea = lsuStage plug new Area {
       import lsuStage._
 
-      val dbus = slave(new MemBus(config.dbusConfig))
+      val dbus = master(new MemBus(config.dbusConfig))
       val dbusCtrl = new MemBusControl(dbus)
 
       val address = UInt(config.xlen bits)
@@ -225,7 +225,7 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
     }
 
     val pipelineArea = pipeline plug new Area {
-      val dbus = slave(new MemBus(config.dbusConfig))
+      val dbus = master(new MemBus(config.dbusConfig))
       dbus <> lsuArea.dbus
       Lsu.this.dbus = dbus
     }

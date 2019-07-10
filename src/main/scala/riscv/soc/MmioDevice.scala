@@ -35,7 +35,7 @@ abstract class MmioDevice(implicit config: Config) extends Component {
     })
   }
 
-  val dbus = master(new MemBus(config.dbusConfig))
+  val dbus = slave(new MemBus(config.dbusConfig))
   dbus.cmd.ready := True
   dbus.rsp.valid := False
   dbus.rsp.rdata.assignDontCare()

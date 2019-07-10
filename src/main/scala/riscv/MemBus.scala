@@ -28,8 +28,8 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
   def word2ByteAddress(wa: UInt): UInt = wa << log2Up(config.width / 8)
 
   override def asMaster(): Unit = {
-    slave(cmd)
-    master(rsp)
+    master(cmd)
+    slave(rsp)
   }
 
   def toAxi4ReadOnly(): Axi4ReadOnly = {

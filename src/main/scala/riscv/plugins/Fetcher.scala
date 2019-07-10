@@ -17,7 +17,7 @@ class Fetcher(implicit config: Config) extends Plugin with IBusService {
     val fetchArea = pipeline.fetch plug new Area {
       import pipeline.fetch._
 
-      val ibus = slave(new MemBus(config.ibusConfig))
+      val ibus = master(new MemBus(config.ibusConfig))
       val ibusCtrl = new MemBusControl(ibus)
 
       arbitration.isReady := False
@@ -39,7 +39,7 @@ class Fetcher(implicit config: Config) extends Plugin with IBusService {
     }
 
     val pipelineArea = pipeline plug new Area {
-      val ibus = slave(new MemBus(config.ibusConfig))
+      val ibus = master(new MemBus(config.ibusConfig))
       ibus <> fetchArea.ibus
       Fetcher.this.ibus = ibus
     }

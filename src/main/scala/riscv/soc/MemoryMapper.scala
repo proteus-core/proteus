@@ -70,18 +70,18 @@ case class MmioSegment(start: Int, device: MmioDevice) extends MemorySegment {
 }
 
 class MemoryMapper(segments: Seq[MemorySegment])(implicit config: Config) extends Component {
-  val dbus = master(new MemBus(config.dbusConfig))
+  val dbus = slave(new MemBus(config.dbusConfig))
   dbus.cmd.ready := False
   dbus.rsp.valid := False
   dbus.rsp.rdata.assignDontCare()
-  val ibus = master(new MemBus(config.ibusConfig))
+  val ibus = slave(new MemBus(config.ibusConfig))
   ibus.cmd.ready := False
   ibus.rsp.valid := False
   ibus.rsp.rdata.assignDontCare()
 
   val slaves = segments.map {segment =>
     def createSlaveBus(segmentBus: MemBus) = {
-      val bus = slave(new MemBus(segmentBus.config))
+      val bus = master(new MemBus(segmentBus.config))
       bus.cmd.valid := False
       bus.rsp.ready := False
 
