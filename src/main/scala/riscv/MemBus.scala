@@ -2,7 +2,8 @@ package riscv
 
 import spinal.core._
 import spinal.lib._
-import spinal.lib.bus.amba4.axi.{Axi4Config, Axi4ReadOnly, Axi4Shared}
+import spinal.lib.bus.amba3.apb._
+import spinal.lib.bus.amba4.axi._
 
 case class MemBusConfig(
   addressWidth: Int,
@@ -33,7 +34,27 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
     slave(rsp)
   }
 
+  def toApb3(): Apb3 = {
+    assert(!isMasterInterface)
+
+    var apb3Config = MemBus.getApb3Config(config)
+    val apb3Bus = Apb3(apb3Config)
+
+    cmd.valid := apb3Bus.PSEL.asBool
+    cmd.address := apb3Bus.PADDR
+    cmd.write := apb3Bus.PWRITE
+    cmd.wdata := apb3Bus.PWDATA.asUInt
+
+    apb3Bus.PREADY := rsp.valid
+    apb3Bus.PRDATA := rsp.rdata.asBits
+    rsp.ready := apb3Bus.PENABLE
+
+    apb3Bus
+  }
+
   def toAxi4ReadOnly(): Axi4ReadOnly = {
+    assert(isMasterInterface)
+
     val axi4Config = MemBus.getAxi4Config(config)
     val axi4Bus = Axi4ReadOnly(axi4Config)
 
@@ -49,6 +70,8 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
   }
 
   def toAxi4Shared(): Axi4Shared = {
+    assert(isMasterInterface)
+
     val axi4Config = MemBus.getAxi4Config(config)
     val axi4Bus = Axi4Shared(axi4Config)
 
@@ -73,6 +96,13 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
 }
 
 object MemBus {
+  def getApb3Config(config: MemBusConfig) = Apb3Config(
+    addressWidth = config.addressWidth,
+    dataWidth = config.dataWidth,
+    selWidth = 1,
+    useSlaveError = false
+  )
+
   def getAxi4Config(config: MemBusConfig) = Axi4Config(
     addressWidth = config.addressWidth,
     dataWidth = config.dataWidth,

@@ -35,6 +35,7 @@ abstract class MmioDevice(implicit config: Config) extends Component {
     })
   }
 
+  // TODO: Can we determine the address width dynamically based this.size?
   val dbus = slave(new MemBus(config.dbusConfig))
   dbus.cmd.ready := True
   dbus.rsp.valid := False
@@ -42,6 +43,8 @@ abstract class MmioDevice(implicit config: Config) extends Component {
 
   protected def build() {
     when (dbus.cmd.valid) {
+      dbus.rsp.valid := True
+
       switch (dbus.cmd.address) {
         for ((regOffset, reg) <- registers) {
           if (reg.width.value == 32) {
@@ -49,8 +52,6 @@ abstract class MmioDevice(implicit config: Config) extends Component {
               when (dbus.cmd.write) {
                 reg.write(dbus.cmd.wdata)
               }.otherwise {
-                // TODO: Wait for bus.rsp.ready?
-                dbus.rsp.valid := True
                 dbus.rsp.rdata := reg.read()
               }
             }
@@ -59,8 +60,6 @@ abstract class MmioDevice(implicit config: Config) extends Component {
               when (dbus.cmd.write) {
                 reg.write(reg.read()(63 downto 32) @@ dbus.cmd.wdata)
               }.otherwise {
-                // TODO: Wait for bus.rsp.ready?
-                dbus.rsp.valid := True
                 dbus.rsp.rdata := reg.read()(31 downto 0)
               }
             }
@@ -68,12 +67,14 @@ abstract class MmioDevice(implicit config: Config) extends Component {
               when (dbus.cmd.write) {
                 reg.write(dbus.cmd.wdata @@ reg.read()(31 downto 0))
               }.otherwise {
-                // TODO: Wait for bus.rsp.ready?
-                dbus.rsp.valid := True
                 dbus.rsp.rdata := reg.read()(63 downto 32)
               }
             }
           }
+        }
+
+        default {
+          dbus.rsp.rdata := 0
         }
       }
     }

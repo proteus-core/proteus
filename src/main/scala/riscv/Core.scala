@@ -219,10 +219,6 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
     val core = new ClockingArea(coreClockDomain) {
       val pipeline = createPipeline()
 
-      val dummyTimerIo = pipeline.getService[InterruptService].getMachineTimerIo
-      dummyTimerIo.update := False
-      dummyTimerIo.interruptPending.assignDontCare()
-
       val ibus = pipeline.getService[IBusService].getIBus
       val dbus = pipeline.getService[DBusService].getDBus
     }
@@ -242,17 +238,6 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
       idWidth = 4
     )
 
-    val uartCtrlConfig = UartCtrlMemoryMappedConfig(
-      uartCtrlConfig = UartCtrlGenerics(),
-      initConfig = UartCtrlInitConfig(
-        baudrate = 115200,
-        dataLength = 7,
-        parity = UartParityType.NONE,
-        stop = UartStopType.ONE
-      )
-    )
-    val uartCtrl = Apb3UartCtrl(uartCtrlConfig)
-
     val axiCrossbar = Axi4CrossbarFactory()
     axiCrossbar.addSlaves(
       ram.io.axi       -> (0x00000000L, 4 KiB),
@@ -271,10 +256,24 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
 
     axiCrossbar.build()
 
+    val uartCtrlConfig = UartCtrlMemoryMappedConfig(
+      uartCtrlConfig = UartCtrlGenerics(),
+      initConfig = UartCtrlInitConfig(
+        baudrate = 115200,
+        dataLength = 7,
+        parity = UartParityType.NONE,
+        stop = UartStopType.ONE
+      )
+    )
+    val uartCtrl = Apb3UartCtrl(uartCtrlConfig)
+
+    val machineTimers = new MachineTimers(core.pipeline)
+
     val apbDecoder = Apb3Decoder(
       master = apbBridge.io.apb,
       slaves = List(
-        uartCtrl.io.apb -> (0x000000L, 4 KiB)
+        uartCtrl.io.apb             -> (0x000000L, 4 KiB),
+        machineTimers.dbus.toApb3() -> (0x001000L, 4 KiB)
       )
     )
   }
