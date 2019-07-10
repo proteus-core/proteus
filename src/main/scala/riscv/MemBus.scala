@@ -5,27 +5,28 @@ import spinal.lib._
 import spinal.lib.bus.amba4.axi.{Axi4Config, Axi4ReadOnly, Axi4Shared}
 
 case class MemBusConfig(
-  width: Int,
+  addressWidth: Int,
+  dataWidth: Int,
   readWrite: Boolean = true
 )
 
 case class MemBusCmd(config: MemBusConfig) extends Bundle {
-  val address = UInt(config.width bits)
+  val address = UInt(config.addressWidth bits)
   val write = if (config.readWrite) Bool() else null
-  val wdata = if (config.readWrite) UInt(config.width bits) else null
-  val wmask = if (config.readWrite) Bits(config.width / 8 bits) else null
+  val wdata = if (config.readWrite) UInt(config.dataWidth bits) else null
+  val wmask = if (config.readWrite) Bits(config.dataWidth / 8 bits) else null
 }
 
 case class MemBusRsp(config: MemBusConfig) extends Bundle {
-  val rdata = UInt(config.width bits)
+  val rdata = UInt(config.dataWidth bits)
 }
 
 class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
   val cmd = Stream(MemBusCmd(config))
   val rsp = Stream(MemBusRsp(config))
 
-  def byte2WordAddress(ba: UInt): UInt = ba >> log2Up(config.width / 8)
-  def word2ByteAddress(wa: UInt): UInt = wa << log2Up(config.width / 8)
+  def byte2WordAddress(ba: UInt): UInt = ba >> log2Up(config.dataWidth / 8)
+  def word2ByteAddress(wa: UInt): UInt = wa << log2Up(config.dataWidth / 8)
 
   override def asMaster(): Unit = {
     master(cmd)
@@ -33,7 +34,7 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
   }
 
   def toAxi4ReadOnly(): Axi4ReadOnly = {
-    val axi4Config = MemBus.getAxi4Config(config.width)
+    val axi4Config = MemBus.getAxi4Config(config)
     val axi4Bus = Axi4ReadOnly(axi4Config)
 
     axi4Bus.readCmd.valid := cmd.valid
@@ -48,7 +49,7 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
   }
 
   def toAxi4Shared(): Axi4Shared = {
-    val axi4Config = MemBus.getAxi4Config(config.width)
+    val axi4Config = MemBus.getAxi4Config(config)
     val axi4Bus = Axi4Shared(axi4Config)
 
     axi4Bus.sharedCmd.valid := cmd.valid
@@ -72,9 +73,9 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
 }
 
 object MemBus {
-  def getAxi4Config(width: Int) = Axi4Config(
-    addressWidth = width,
-    dataWidth = width,
+  def getAxi4Config(config: MemBusConfig) = Axi4Config(
+    addressWidth = config.addressWidth,
+    dataWidth = config.dataWidth,
     useId = false,
     useRegion = false,
     useBurst = false,
@@ -158,7 +159,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
 
   def read(address: UInt): (Bool, UInt) = {
     val valid = False
-    val rdata = U(0, bus.config.width bits)
+    val rdata = U(0, bus.config.dataWidth bits)
     val dropRsp = False
 
     when (!currentCmd.isIssued) {

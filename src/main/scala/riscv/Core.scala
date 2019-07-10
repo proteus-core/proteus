@@ -237,8 +237,8 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
     }
 
     val apbBridge = Axi4SharedToApb3Bridge(
-      addressWidth = 24,
-      dataWidth = config.xlen,
+      addressWidth = config.dbusConfig.addressWidth - 8,
+      dataWidth = config.dbusConfig.dataWidth,
       idWidth = 4
     )
 
