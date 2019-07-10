@@ -24,6 +24,19 @@ case class MemSegment(start: Int, length: Int,
                      (implicit config: Config) extends MemorySegment {
   val mem = Mem(UInt(config.xlen bits), length / (config.xlen / 8))
 
+  override val ibus = new MemBus(config.ibusConfig)
+  ibus.cmd.ready := False
+  ibus.rsp.valid := False
+  ibus.rsp.rdata.assignDontCare()
+
+  when (ibus.cmd.valid) {
+    Utils.delay(ibusLatency) {
+      ibus.cmd.ready := True
+      ibus.rsp.valid := True
+      ibus.rsp.rdata := mem(ibus.byte2WordAddress(ibus.cmd.address).resized)
+    }
+  }
+
   val dbus = new MemBus(config.dbusConfig)
   dbus.cmd.ready := False
   dbus.rsp.valid := False
@@ -45,19 +58,6 @@ case class MemSegment(start: Int, length: Int,
     }
   }
 
-  override val ibus = new MemBus(config.ibusConfig)
-  ibus.cmd.ready := False
-  ibus.rsp.valid := False
-  ibus.rsp.rdata.assignDontCare()
-
-  when (ibus.cmd.valid) {
-    Utils.delay(ibusLatency) {
-      ibus.cmd.ready := True
-      ibus.rsp.valid := True
-      ibus.rsp.rdata := mem(ibus.byte2WordAddress(ibus.cmd.address).resized)
-    }
-  }
-
   def init(memHexPath: String): this.type = {
     HexTools.initRam(mem, memHexPath, start)
     this
@@ -70,14 +70,14 @@ case class MmioSegment(start: Int, device: MmioDevice) extends MemorySegment {
 }
 
 class MemoryMapper(segments: Seq[MemorySegment])(implicit config: Config) extends Component {
-  val dbus = slave(new MemBus(config.dbusConfig))
-  dbus.cmd.ready := False
-  dbus.rsp.valid := False
-  dbus.rsp.rdata.assignDontCare()
   val ibus = slave(new MemBus(config.ibusConfig))
   ibus.cmd.ready := False
   ibus.rsp.valid := False
   ibus.rsp.rdata.assignDontCare()
+  val dbus = slave(new MemBus(config.dbusConfig))
+  dbus.cmd.ready := False
+  dbus.rsp.valid := False
+  dbus.rsp.rdata.assignDontCare()
 
   val slaves = segments.map {segment =>
     def createSlaveBus(segmentBus: MemBus) = {
@@ -99,18 +99,18 @@ class MemoryMapper(segments: Seq[MemorySegment])(implicit config: Config) extend
       bus
     }
 
-    val dslave = createSlaveBus(segment.dbus).setName("dslave")
-
     val islave = if (segment.ibus == null) {
       null
     } else {
       createSlaveBus(segment.ibus).setName("islave")
     }
 
-    (dslave, islave)
+    val dslave = createSlaveBus(segment.dbus).setName("dslave")
+
+    (islave, dslave)
   }
 
-  for ((segment, (dslave, islave)) <- segments.zip(slaves)) {
+  for ((segment, (islave, dslave)) <- segments.zip(slaves)) {
     def connectSlave(master: MemBus, slave: MemBus): Unit = {
       // Verilator errs when checking if a signal is >= 0 because this
       // comparison is always true.
@@ -127,10 +127,10 @@ class MemoryMapper(segments: Seq[MemorySegment])(implicit config: Config) extend
       }
     }
 
-    connectSlave(dbus, dslave)
-
     if (islave != null) {
       connectSlave(ibus, islave)
     }
+
+    connectSlave(dbus, dslave)
   }
 }
