@@ -2,6 +2,7 @@ package riscv
 
 import spinal.core._
 import spinal.lib._
+import spinal.lib.bus.amba4.axi.{Axi4Config, Axi4ReadOnly, Axi4Shared}
 
 case class MemBusConfig(
   width: Int,
@@ -30,6 +31,63 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
     slave(cmd)
     master(rsp)
   }
+
+  def toAxi4ReadOnly(): Axi4ReadOnly = {
+    val axi4Config = MemBus.getAxi4Config(config.width)
+    val axi4Bus = Axi4ReadOnly(axi4Config)
+
+    axi4Bus.readCmd.valid := cmd.valid
+    axi4Bus.readCmd.addr := cmd.address
+    cmd.ready := axi4Bus.readCmd.ready
+
+    rsp.valid := axi4Bus.readRsp.valid
+    rsp.rdata := axi4Bus.readRsp.data.asUInt
+    axi4Bus.readRsp.ready := rsp.ready
+
+    axi4Bus
+  }
+
+  def toAxi4Shared(): Axi4Shared = {
+    val axi4Config = MemBus.getAxi4Config(config.width)
+    val axi4Bus = Axi4Shared(axi4Config)
+
+    axi4Bus.sharedCmd.valid := cmd.valid
+    axi4Bus.sharedCmd.addr := cmd.address
+    axi4Bus.sharedCmd.write := cmd.write
+    cmd.ready := axi4Bus.sharedCmd.ready
+
+    axi4Bus.writeData.valid := cmd.valid
+    axi4Bus.writeData.data := cmd.wdata.asBits
+    axi4Bus.writeData.strb := cmd.wmask
+    axi4Bus.writeData.last := True
+
+    // TODO: Set useResp to true and verify response?
+    axi4Bus.writeRsp.ready := rsp.ready
+    axi4Bus.readRsp.ready := rsp.ready
+    rsp.valid := axi4Bus.writeRsp.valid || axi4Bus.readRsp.valid
+    rsp.rdata := axi4Bus.readRsp.data.asUInt
+
+    axi4Bus
+  }
+}
+
+object MemBus {
+  def getAxi4Config(width: Int) = Axi4Config(
+    addressWidth = width,
+    dataWidth = width,
+    useId = false,
+    useRegion = false,
+    useBurst = false,
+    useLock = false,
+    useCache = false,
+    useSize = false,
+    useQos = false,
+    useLen = false,
+    useLast = true,
+    useResp = false,
+    useProt = false,
+    useStrb = true
+  )
 }
 
 class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
