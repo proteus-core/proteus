@@ -89,7 +89,7 @@ class RiscvFormal(altops: Boolean = false)(implicit config: Config) extends Plug
       // reflects the PC of the next instruction.
       val currentRvfi = new Rvfi
       currentRvfi.valid := stage.arbitration.isDone
-      currentRvfi.order := Counter(64 bits, currentRvfi.valid)
+      currentRvfi.order.assignDontCare()
       currentRvfi.insn := stage.output(pipeline.data.IR)
       currentRvfi.trap := trapService.hasException(pipeline, stage)
       currentRvfi.halt := False
@@ -135,7 +135,9 @@ class RiscvFormal(altops: Boolean = false)(implicit config: Config) extends Plug
       rvfi.valid.allowOverride
       // Only send out instructions that have not trapped once a next
       // instruction has arrived
-      rvfi.valid := currentRvfi.valid && prevRvfi.valid && !prevRvfi.hasTrapped
+      rvfi.valid := currentRvfi.valid && prevRvfi.valid// && !prevRvfi.hasTrapped
+      rvfi.order.allowOverride
+      rvfi.order := Counter(64 bits, rvfi.valid)
     }
 
     rvfiArea.setName("")

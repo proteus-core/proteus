@@ -71,7 +71,14 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
                            wdata: UInt = null, wmask: Bits = null) = {
     assert(!write || bus.config.readWrite)
 
-    currentCmd.valid := True
+    when (bus.cmd.ready) {
+      currentCmd.valid := False
+      currentCmd.ready := True
+    } otherwise {
+      currentCmd.valid := True
+      currentCmd.ready := False
+    }
+
     currentCmd.cmd.address := address
     bus.cmd.valid := True
     bus.cmd.address := address
