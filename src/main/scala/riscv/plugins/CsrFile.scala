@@ -143,7 +143,7 @@ class CsrFile(implicit config: Config) extends Plugin with CsrService {
               if (isReadOnly(id)) {
                 io.error := True
               } else {
-                reg.write(io.wdata)
+                reg.swWrite(io.wdata)
               }
             }
           }

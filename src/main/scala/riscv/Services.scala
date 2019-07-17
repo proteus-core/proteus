@@ -67,7 +67,16 @@ trait TrapService {
 
 trait Csr extends Area {
   def read(): UInt
+
+  /**
+    * Called for internal writes through the CsrIo interface.
+    */
   def write(value: UInt): Unit = assert(false, "Cannot write RO CSR")
+
+  /**
+    * Called for software writes (CSR* instructions).
+    */
+  def swWrite(value: UInt): Unit = write(value)
 }
 
 class CsrIo(implicit config: Config) extends Bundle with IMasterSlave {

@@ -23,12 +23,12 @@ private class Mip(implicit config: Config) extends Csr {
     mip.asUInt
   }
 
-  // FIXME: This is needed for the Interrupt class to be able to set the mtip
-  // bit. However, it also allows software writes of it which is not allowed by
-  // the specification.
   override def write(value: UInt): Unit = {
     mtip := value(7)
   }
+
+  // SW writes to mtip are not allowed
+  override def swWrite(value: UInt): Unit = ()
 }
 
 private class Mie(implicit config: Config) extends Csr {
