@@ -194,7 +194,7 @@ object CoreExtMem {
   }
 }
 
-class CoreFpga(imemHexPath: Option[String]) extends Component {
+class CoreAxi4(imemHexPath: Option[String]) extends Component {
   setDefinitionName("Core")
 
   val io = new Bundle{
@@ -282,20 +282,20 @@ class CoreFpga(imemHexPath: Option[String]) extends Component {
   io.uart <> soc.uartCtrl.io.uart
 }
 
-object CoreFpga {
+object CoreAxi4 {
   def main(args: Array[String]) {
     var imemHexPath: String = null
     if (args.length > 0) {
       imemHexPath = args(0)
     }
 
-    SpinalVerilog(new CoreFpga(Option(imemHexPath)))
+    SpinalVerilog(new CoreAxi4(Option(imemHexPath)))
   }
 }
 
-object CoreFpgaSim {
+object CoreAxi4Sim {
   def main(args: Array[String]) {
-    SimConfig.withWave.compile(new CoreFpga(Some(args(0)))).doSim {dut =>
+    SimConfig.withWave.compile(new CoreAxi4(Some(args(0)))).doSim {dut =>
       dut.clockDomain.forkStimulus(10)
 
       var done = false
