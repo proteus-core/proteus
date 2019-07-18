@@ -101,7 +101,9 @@ class RiscvFormal(altops: Boolean = false)(implicit config: Config) extends Plug
                         U(0) | stage.output(pipeline.data.RS1_DATA)
       currentRvfi.rs2_rdata := (currentRvfi.rs2_addr === 0) ?
                         U(0) | stage.output(pipeline.data.RS2_DATA)
-      currentRvfi.rd_addr := stage.output(pipeline.data.RD)
+      // FIXME This will hide bugs that still write RD on traps
+      currentRvfi.rd_addr := currentRvfi.trap ?
+                        U(0) | stage.output(pipeline.data.RD)
       currentRvfi.rd_wdata := (currentRvfi.rd_addr === 0) ?
                        U(0) | stage.output(pipeline.data.RD_DATA)
       currentRvfi.pc_rdata := stage.output(pipeline.data.PC)
