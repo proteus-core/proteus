@@ -121,9 +121,19 @@ class MemoryMapper(segments: Seq[MemorySegment])(implicit config: Config) extend
       }
 
       when (lowerBoundCheck && master.cmd.address < segment.end) {
-        master <> slave
-        slave.cmd.address.allowOverride
-        slave.cmd.address := master.cmd.address - segment.start
+        val address = master.cmd.address - segment.start
+
+        slave.cmd.arbitrationFrom(master.cmd)
+        master.rsp.arbitrationFrom(slave.rsp)
+
+        slave.cmd.address := address.resized
+        if (master.config.readWrite) {
+          slave.cmd.write := master.cmd.write
+          slave.cmd.wdata := master.cmd.wdata
+          slave.cmd.wmask := master.cmd.wmask
+        }
+
+        master.rsp.rdata := slave.rsp.rdata
       }
     }
 

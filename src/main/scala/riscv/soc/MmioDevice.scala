@@ -14,6 +14,7 @@ trait MmioRegister {
 }
 
 abstract class MmioDevice(implicit config: Config) extends Component {
+  var dbus: MemBus = null
   private val registers = mutable.Map[Int, MmioRegister]()
 
   protected def addRegister(offset: Int, register: MmioRegister): Unit = {
@@ -35,13 +36,17 @@ abstract class MmioDevice(implicit config: Config) extends Component {
     })
   }
 
-  // TODO: Can we determine the address width dynamically based this.size?
-  val dbus = slave(new MemBus(config.dbusConfig))
-  dbus.cmd.ready := True
-  dbus.rsp.valid := False
-  dbus.rsp.rdata.assignDontCare()
-
   protected def build() {
+    assert(size > 1)
+    val dbusConfig = config.dbusConfig.copy(
+      addressWidth = log2Up(size)
+    )
+
+    dbus = slave(new MemBus(dbusConfig))
+    dbus.cmd.ready := True
+    dbus.rsp.valid := False
+    dbus.rsp.rdata.assignDontCare()
+
     when (dbus.cmd.valid) {
       dbus.rsp.valid := True
 
