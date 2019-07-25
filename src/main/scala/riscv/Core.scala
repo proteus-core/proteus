@@ -223,6 +223,8 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
       val dbus = pipeline.getService[DBusService].getDBus
     }
 
+    core.setName("")
+
     val ram = Axi4SharedOnChipRam(
       byteCount = 4 KiB,
       dataWidth = config.xlen,
