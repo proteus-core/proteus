@@ -7,17 +7,17 @@ import spinal.lib._
 import spinal.lib.misc.HexTools
 
 sealed trait MemorySegment {
-  def start: Int
-  def length: Int
+  def start: BigInt
+  def length: BigInt
   def dbus: MemBus
   def ibus: MemBus = null
-  def end: Int = start + length
+  def end: BigInt = start + length
 }
 
-case class MemBusSegment(start: Int, length: Int, dbus: MemBus,
+case class MemBusSegment(start: BigInt, length: BigInt, dbus: MemBus,
                          override val ibus: MemBus = null) extends MemorySegment
 
-case class MemSegment(start: Int, length: Int,
+case class MemSegment(start: BigInt, length: BigInt,
                       ibusLatency: Int = 0,
                       dbusReadLatency: Int = 0,
                       dbusWriteLatency: Int = 0)
@@ -64,7 +64,7 @@ case class MemSegment(start: Int, length: Int,
   }
 }
 
-case class MmioSegment(start: Int, device: MmioDevice) extends MemorySegment {
+case class MmioSegment(start: BigInt, device: MmioDevice) extends MemorySegment {
   val length = device.size
   val dbus = device.dbus
 }

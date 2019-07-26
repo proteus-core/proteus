@@ -85,7 +85,7 @@ abstract class MmioDevice(implicit config: Config) extends Component {
     }
   }
 
-  def size: Int = {
+  def size: BigInt = {
     registers.map({case (offset, register) =>
       offset + register.width.value / 8
     }).max
