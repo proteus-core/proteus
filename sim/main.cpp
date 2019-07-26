@@ -44,11 +44,14 @@ public:
         }
     }
 
-    void eval()
+    bool eval()
     {
+        auto updated = false;
+
         if (top_.ibus_cmd_valid) {
             top_.ibus_rsp_valid = true;
             top_.ibus_rsp_payload_rdata = read(top_.ibus_cmd_payload_address);
+            updated = true;
         }
 
         if (top_.dbus_cmd_valid) {
@@ -60,7 +63,11 @@ public:
                 top_.dbus_rsp_valid = true;
                 top_.dbus_rsp_payload_rdata = read(top_.dbus_cmd_payload_address);
             }
+
+            updated = true;
         }
+
+        return updated;
     }
 
 private:
@@ -214,7 +221,9 @@ int main(int argc, char** argv)
 
         if (clockEdge && top->clk)
         {
-            memory.eval();
+            if (memory.eval())
+                top->eval();
+
             charDev.eval();
             testDev.eval();
 
