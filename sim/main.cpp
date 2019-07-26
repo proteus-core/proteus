@@ -235,7 +235,10 @@ int main(int argc, char** argv)
             }
 
             if (mainTime >= MAX_CYCLES*CLOCK_PERIOD)
+            {
                 isDone = true;
+                result = 1;
+            }
         }
 
         tracer->dump(mainTime);
