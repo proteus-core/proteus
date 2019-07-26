@@ -55,9 +55,9 @@ class Core(imemHexPath: String, formal: Boolean = false) extends Component {
   val soc = new Soc(
     pipeline,
     Seq(
-      MemSegment(0, 102400).init(imemHexPath),
-      MmioSegment(102400, new MachineTimers(pipeline)),
-      MmioSegment(102416, charDev)
+      MemSegment(0x0, 1 MiB).init(imemHexPath),
+      MmioSegment(0xf0001000L, new MachineTimers(pipeline)),
+      MmioSegment(0xf0002000L, charDev)
     )
   )
 }
@@ -123,8 +123,8 @@ class CoreTest(memHexPath: String) extends Component {
   val soc = new Soc(
     pipeline,
     Seq(
-      MemSegment(0, 8192).init(memHexPath),
-      MmioSegment(102420, testDev)
+      MemSegment(0x0, 1 MiB).init(memHexPath),
+      MmioSegment(0xf0003000L, testDev)
     )
   )
 }
@@ -180,10 +180,10 @@ class CoreExtMem extends Component {
   val soc = new Soc(
     pipeline,
     Seq(
-      MemBusSegment(0, 102400, dbus, ibus),
-      MmioSegment(102400, new MachineTimers(pipeline)),
-      MmioSegment(102416, charDev),
-      MmioSegment(102420, testDev)
+      MemBusSegment(0x0, 102400, dbus, ibus),
+      MmioSegment(0xf0001000L, new MachineTimers(pipeline)),
+      MmioSegment(0xf0002000L, charDev),
+      MmioSegment(0xf0003000L, testDev)
     )
   )
 }
