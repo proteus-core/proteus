@@ -191,9 +191,11 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     val valid = False
     val rdata = U(0, bus.config.dataWidth bits)
     val dropRsp = False
+    val issuedThisCycle = False
 
     when (!currentCmd.isIssued) {
       issueCommand(address)
+      issuedThisCycle := True
     } elsewhen (currentCmd.cmd.address =/= address) {
       dropRsp := True
     }
@@ -202,7 +204,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
       currentCmd.valid := False
       currentCmd.ready := False
 
-      when (!dropRsp && !currentCmd.isWrite) {
+      when (issuedThisCycle || (!dropRsp && !currentCmd.isWrite)) {
         valid := True
         rdata := bus.rsp.rdata
       }
@@ -216,9 +218,11 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
 
     val accepted = False
     val dropRsp = False
+    val issuedThisCycle = False
 
     when (!currentCmd.isIssued) {
       issueCommand(address, write = true, wdata, wmask)
+      issuedThisCycle := True
     } elsewhen (currentCmd.cmd.address =/= address) {
       dropRsp := True
     }
@@ -227,7 +231,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
       currentCmd.valid := False
       currentCmd.ready := False
 
-      when (!dropRsp && currentCmd.isWrite) {
+      when (issuedThisCycle || (!dropRsp && currentCmd.isWrite)) {
         accepted := True
       }
     }
