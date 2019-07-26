@@ -48,20 +48,28 @@ public:
     {
         auto updated = false;
 
-        if (top_.ibus_cmd_valid) {
+        if (top_.ibus_cmd_valid)
+        {
             top_.ibus_rsp_valid = true;
             top_.ibus_rsp_payload_rdata = read(top_.ibus_cmd_payload_address);
             updated = true;
         }
 
-        if (top_.dbus_cmd_valid) {
+        if (top_.dbus_cmd_valid)
+        {
             top_.dbus_cmd_ready = true;
 
-            if (top_.dbus_cmd_payload_write) {
-                write(top_.dbus_cmd_payload_address, top_.dbus_cmd_payload_wmask, top_.dbus_cmd_payload_wdata);
-            } else {
+            if (top_.dbus_cmd_payload_write)
+            {
+                write(top_.dbus_cmd_payload_address,
+                      top_.dbus_cmd_payload_wmask,
+                      top_.dbus_cmd_payload_wdata);
+            }
+            else
+            {
                 top_.dbus_rsp_valid = true;
-                top_.dbus_rsp_payload_rdata = read(top_.dbus_cmd_payload_address);
+                top_.dbus_rsp_payload_rdata =
+                    read(top_.dbus_cmd_payload_address);
             }
 
             updated = true;
