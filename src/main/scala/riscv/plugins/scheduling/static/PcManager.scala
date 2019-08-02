@@ -31,14 +31,14 @@ class PcManager extends Plugin[StaticPipeline] with JumpService {
 
   override def finish(): Unit = {
     pipeline plug new Area {
-      val nextPc = Reg(UInt(config.xlen bits)).init(0)
+      val pc = Reg(UInt(config.xlen bits)).init(0)
       val fetchStage = pipeline.stages.head
 
       when (fetchStage.arbitration.isDone) {
-        nextPc := fetchStage.output(pipeline.data.NEXT_PC)
+        pc := fetchStage.output(pipeline.data.NEXT_PC)
       }
 
-      fetchStage.input(pipeline.data.NEXT_PC) := nextPc
+      fetchStage.input(pipeline.data.PC) := pc
 
       for (stage <- jumpStages) {
         when (stage.arbitration.isDone && stage.arbitration.jumpRequested) {
@@ -46,7 +46,7 @@ class PcManager extends Plugin[StaticPipeline] with JumpService {
             prevStage.arbitration.isValid := False
           }
 
-          nextPc := stage.output(pipeline.data.NEXT_PC)
+          pc := stage.output(pipeline.data.NEXT_PC)
         }
       }
     }

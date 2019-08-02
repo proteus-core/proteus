@@ -34,6 +34,10 @@ class Scheduler(canStallExternally: Boolean = false)
       for ((stage, regs) <- pipeline.pipelineRegs) {
         regs.shift := stage.arbitration.isDone
       }
+
+      stages.head.input(pipeline.data.PC) :=
+        stages.head.output(pipeline.data.NEXT_PC)
+      stages.head.input(pipeline.data.PC).allowOverride
     }
   }
 

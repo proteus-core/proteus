@@ -22,7 +22,7 @@ class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] with IBusService {
 
       arbitration.isReady := False
 
-      val pc = input(pipeline.data.NEXT_PC)
+      val pc = input(pipeline.data.PC)
       val nextPc = pc + 4
 
       when (arbitration.isRunning) {
@@ -31,7 +31,6 @@ class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] with IBusService {
         when (valid) {
           arbitration.isReady := True
 
-          output(pipeline.data.PC) := pc
           output(pipeline.data.NEXT_PC) := nextPc
           output(pipeline.data.IR) := rdata
         }
