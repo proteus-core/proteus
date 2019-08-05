@@ -3,12 +3,39 @@ package riscv
 import spinal.core._
 import spinal.lib._
 
-trait IBusService {
-  def getIBus: MemBus
-}
+trait MemoryService {
+  /**
+    * Returns the Pipeline's instruction bus.
+    */
+  def getExternalIBus: MemBus
 
-trait DBusService {
-  def getDBus: MemBus
+  /**
+    * Returns the Pipeline's data bus.
+    */
+  def getExternalDBus: MemBus
+
+  /**
+    * Creates a new instruction bus to be used in stage.
+    */
+  def createInternalIBus(stage: Stage): MemBus
+
+  /**
+    * Creates a new data bus to be used in stage.
+    */
+  def createInternalDBus(stage: Stage): MemBus
+
+  type MemBusFilter = (Stage, MemBus, MemBus) => Unit
+
+  /**
+    * The `filter` function is called on every created data bus. The passed
+    * arguments are 1) the stage in which the data bus is created, 2) the data
+    * bus that is used in this stage, and 2) the data bus that will be connected
+    * to the external data bus. When `filter` is called, the two data buses are
+    * fully connected. Inside `filter`, these connection can be arbitrarily
+    * altered or broken. The `filter` function is called in the context of the
+    * top-level Pipeline component.
+    */
+  def filterDBus(filter: MemBusFilter): Unit
 }
 
 trait DecoderService {

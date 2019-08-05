@@ -4,7 +4,7 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with DBusService {
+class Lsu(lsuStage: Stage) extends Plugin[Pipeline] {
   object LsuAccessWidth extends SpinalEnum {
     val B, H, W = newElement()
   }
@@ -23,13 +23,6 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with DBusService {
     override def lsuOnStore(stage: Stage, addr: UInt,
                             wmask: Bits, wdata: UInt): Unit = ()
     override def lsuOnMisaligned(stage: Stage): Unit = ()
-  }
-
-  private var dbus: MemBus = null
-
-  override def getDBus: MemBus = {
-    assert(dbus != null, "Call build() first")
-    dbus
   }
 
   override def setup(): Unit = {
@@ -86,7 +79,7 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with DBusService {
     val lsuArea = lsuStage plug new Area {
       import lsuStage._
 
-      val dbus = master(new MemBus(config.dbusConfig))
+      val dbus = pipeline.getService[MemoryService].createInternalDBus(lsuStage)
       val dbusCtrl = new MemBusControl(dbus)
 
       val address = UInt(config.xlen bits)
@@ -220,13 +213,5 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with DBusService {
         }
       }
     }
-
-    val pipelineArea = pipeline plug new Area {
-      val dbus = master(new MemBus(config.dbusConfig))
-      dbus <> lsuArea.dbus
-      Lsu.this.dbus = dbus
-    }
-
-    pipelineArea.setName("")
   }
 }

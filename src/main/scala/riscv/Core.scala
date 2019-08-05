@@ -42,6 +42,7 @@ object createStaticPipeline {
     }
 
     pipeline.addPlugins(Seq(
+      new MemoryBackbone,
       new Fetcher(pipeline.fetch),
       new Decoder(pipeline.decode),
       new RegisterFile(pipeline.decode, pipeline.writeback),
@@ -254,8 +255,9 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
     val core = new ClockingArea(coreClockDomain) {
       val pipeline = createStaticPipeline()
 
-      val ibus = pipeline.getService[IBusService].getIBus
-      val dbus = pipeline.getService[DBusService].getDBus
+      val memService = pipeline.getService[MemoryService]
+      val ibus = memService.getExternalIBus
+      val dbus = memService.getExternalDBus
     }
 
     core.setName("")
@@ -391,13 +393,6 @@ object createDynamicPipeline {
       new IntAlu(pipeline.intAlu),
       new MulDiv(pipeline.intMul)
     ))
-
-    // Temporary hack to make Soc work (which needs a dbus).
-    pipeline.addPlugin(new Plugin with DBusService {
-      val dbus = new MemBus(conf.dbusConfig)
-      dbus.assignDontCare()
-      override def getDBus: MemBus = dbus
-    })
 
     pipeline.build()
     pipeline

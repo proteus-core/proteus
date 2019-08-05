@@ -5,19 +5,12 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] with IBusService {
-  private var ibus: MemBus = null
-
-  override def getIBus: MemBus = {
-    assert(ibus != null, "Call build() first")
-    ibus
-  }
-
+class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] {
   override def build(): Unit = {
-    val fetchArea = fetchStage plug new Area {
+    fetchStage plug new Area {
       import fetchStage._
 
-      val ibus = master(new MemBus(config.ibusConfig))
+      val ibus = pipeline.getService[MemoryService].createInternalIBus(fetchStage)
       val ibusCtrl = new MemBusControl(ibus)
 
       arbitration.isReady := False
@@ -36,13 +29,5 @@ class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] with IBusService {
         }
       }
     }
-
-    val pipelineArea = pipeline plug new Area {
-      val ibus = master(new MemBus(config.ibusConfig))
-      ibus <> fetchArea.ibus
-      Fetcher.this.ibus = ibus
-    }
-
-    pipelineArea.setName("")
   }
 }

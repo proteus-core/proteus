@@ -36,7 +36,7 @@ class Scheduler(canStallExternally: Boolean = false)
       }
 
       stages.head.input(pipeline.data.PC) :=
-        stages.head.output(pipeline.data.NEXT_PC)
+        stages(1).input(pipeline.data.NEXT_PC)
       stages.head.input(pipeline.data.PC).allowOverride
     }
   }

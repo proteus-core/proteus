@@ -7,8 +7,9 @@ import spinal.core._
 class Soc(pipeline: Pipeline,
           memMap: Seq[MemorySegment])(implicit config: Config) {
   val memMapper = new MemoryMapper(memMap)
-  val dbus = pipeline.getService[DBusService].getDBus
+  val memService = pipeline.getService[MemoryService]
+  val dbus = memService.getExternalDBus
   dbus <> memMapper.dbus
-  val ibus = pipeline.getService[IBusService].getIBus
+  val ibus = memService.getExternalIBus
   ibus <> memMapper.ibus
 }
