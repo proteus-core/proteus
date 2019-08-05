@@ -32,7 +32,6 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
   override def setup(): Unit = {
     pipeline.getService[DecoderService].configure {decoder =>
       decoder.addDefault(Map(
-        Data.HAS_TRAPPED -> False,
         Data.MRET -> False
       ))
 
@@ -46,6 +45,10 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
   }
 
   override def build(): Unit = {
+    pipeline plug {
+      pipeline.stages.head.input(Data.HAS_TRAPPED) := False
+    }
+
     // To ensure interrupts have priority over exceptions (section 3.1.9, RISC-V
     // Privileged Architecture), we keep track of two sets of trap-related
     // signals: one for exceptions (exceptionSignals) and one for interrupts
