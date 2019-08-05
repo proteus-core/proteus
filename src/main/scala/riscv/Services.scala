@@ -91,6 +91,17 @@ trait IntAluService {
 
 trait JumpService {
   def jump(stage: Stage, target: UInt, isTrap: Boolean = false): Unit
+
+  type PcUpdateObserver = (Stage, UInt, UInt) => Unit
+
+  /**
+    * Register a callback to be called whenever the program counter is updated;
+    * whether explicitly through a jump or implicitly after each instruction.
+    * The parameters passed to `observer` are 1) the stage that caused the
+    * update, 2) the current PC, and 3) the new PC. It is called on the context
+    * of the top-level Pipeline.
+    */
+  def onPcUpdate(observer: PcUpdateObserver): Unit
 }
 
 trait TrapService {

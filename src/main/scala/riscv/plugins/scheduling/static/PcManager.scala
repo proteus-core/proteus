@@ -8,6 +8,11 @@ import scala.collection.mutable
 
 class PcManager extends Plugin[StaticPipeline] with JumpService {
   private val jumpStages = mutable.Set[Stage]()
+  private val pcUpdateObservers = mutable.Buffer[PcUpdateObserver]()
+
+  override def onPcUpdate(observer: PcUpdateObserver): Unit = {
+    pcUpdateObservers += observer
+  }
 
   override def jump(stage: Stage, target: UInt, isTrap: Boolean): Unit = {
     jumpStages += stage
@@ -34,8 +39,15 @@ class PcManager extends Plugin[StaticPipeline] with JumpService {
       val pc = Reg(UInt(config.xlen bits)).init(0)
       val fetchStage = pipeline.stages.head
 
+      def updatePc(stage: Stage) = {
+        val currPc = stage.output(pipeline.data.PC)
+        val nextPc = stage.output(pipeline.data.NEXT_PC)
+        pc := nextPc
+        pcUpdateObservers.foreach(_(stage, currPc, nextPc))
+      }
+
       when (fetchStage.arbitration.isDone) {
-        pc := fetchStage.output(pipeline.data.NEXT_PC)
+        updatePc(fetchStage)
       }
 
       fetchStage.input(pipeline.data.PC) := pc
@@ -46,7 +58,7 @@ class PcManager extends Plugin[StaticPipeline] with JumpService {
             prevStage.arbitration.isValid := False
           }
 
-          pc := stage.output(pipeline.data.NEXT_PC)
+          updatePc(stage)
         }
       }
     }
