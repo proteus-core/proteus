@@ -15,7 +15,7 @@ const double TIMESCALE       = 1e-9;
 const int    CLOCK_FREQUENCY = 100*1e6;
 const int    CLOCK_PERIOD    = 1/(CLOCK_FREQUENCY*TIMESCALE);
 
-const int    MAX_CYCLES      = 50000;
+const std::uint64_t MAX_CYCLES = 1000000000ULL;
 
 class Memory
 {
