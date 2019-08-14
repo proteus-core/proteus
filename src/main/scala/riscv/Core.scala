@@ -180,7 +180,7 @@ class CoreExtMem extends Component {
   val soc = new Soc(
     pipeline,
     Seq(
-      MemBusSegment(0x0, 102400, dbus, ibus),
+      MemBusSegment(0x0, 1 MiB, dbus, ibus),
       MmioSegment(0xf0001000L, new MachineTimers(pipeline)),
       MmioSegment(0xf0002000L, charDev),
       MmioSegment(0xf0003000L, testDev)
