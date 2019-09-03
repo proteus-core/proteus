@@ -36,6 +36,16 @@ trait MemoryService {
     * top-level Pipeline component.
     */
   def filterDBus(filter: MemBusFilter): Unit
+
+  type MemBusObserver = (Stage, MemBus) => Unit
+
+  /**
+    * The `observer` function is called on every created data bus. The passed
+    * arguments are 1) the stage in which the data bus is created, and 2) the
+    * data bus that is used in this stage. The `observer` function is called in
+    * the context of the top-level Pipeline component.
+    */
+  def observeDBus(observer: MemBusObserver): Unit
 }
 
 trait DecoderService {

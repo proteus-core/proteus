@@ -5,6 +5,8 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
+import scala.collection.mutable
+
 class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService {
   private var externalIBus: MemBus = null
   private var externalDBus: MemBus = null
@@ -12,6 +14,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
   private var internalDBus: MemBus = null
   private var internalDBusStage: Stage = null
   private var dbusFilter: Option[MemBusFilter] = None
+  private val dbusObservers = mutable.ArrayBuffer[MemBusObserver]()
 
   override def finish(): Unit = {
     assert(internalIBus != null)
@@ -24,6 +27,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
       externalDBus = master(new MemBus(config.dbusConfig)).setName("dbus")
       externalDBus <> internalDBus
       dbusFilter.foreach(_(internalDBusStage, internalDBus, externalDBus))
+      dbusObservers.foreach(_(internalDBusStage, internalDBus))
     }
   }
 
@@ -61,5 +65,9 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
   override def filterDBus(filter: MemBusFilter): Unit = {
     assert(dbusFilter.isEmpty)
     dbusFilter = Some(filter)
+  }
+
+  override def observeDBus(observer: MemBusObserver): Unit = {
+    dbusObservers += observer
   }
 }
