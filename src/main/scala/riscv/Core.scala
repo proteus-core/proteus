@@ -14,16 +14,17 @@ import spinal.lib.bus.amba4.axi._
 import spinal.lib.com.uart._
 
 object createPipeline {
-  def apply(disablePipelining: Boolean = false,
-            extraPlugins: Seq[Plugin] = Seq())
+  def apply(disablePipelining: Boolean = false, extraPlugins: Seq[Plugin] = Seq())
            (implicit config: Config): Pipeline = {
-    val pipelinePlugins = if (disablePipelining) {
-      Seq(new NoPipelining)
+    val pipeline = new Pipeline(config)
+
+    if (disablePipelining) {
+      pipeline.addPlugin(new NoPipelining)
     } else {
-      Seq(new SimplePipelining, new DataHazardResolver)
+      pipeline.addPlugins(Seq(new SimplePipelining, new DataHazardResolver))
     }
 
-    val plugins = pipelinePlugins ++ Seq(
+    pipeline.addPlugins(Seq(
       new Fetcher,
       new Decoder,
       new RegisterFile,
@@ -38,9 +39,10 @@ object createPipeline {
       new TrapHandler,
       new Interrupts,
       new MulDiv
-    ) ++ extraPlugins
+    ) ++ extraPlugins)
 
-    new Pipeline(config, plugins)
+    pipeline.build()
+    pipeline
   }
 }
 
