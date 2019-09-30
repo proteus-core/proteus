@@ -13,15 +13,17 @@ import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.amba4.axi._
 import spinal.lib.com.uart._
 
-object createPipeline {
+object createStaticPipeline {
   def apply(disablePipelining: Boolean = false, extraPlugins: Seq[Plugin] = Seq())
            (implicit config: Config): Pipeline = {
+    import riscv.plugins.scheduling.static._
+
     val pipeline = new Pipeline(config)
 
     if (disablePipelining) {
-      pipeline.addPlugin(new NoPipelining)
+      pipeline.addPlugin(new NoPipeliningScheduler)
     } else {
-      pipeline.addPlugins(Seq(new SimplePipelining, new DataHazardResolver))
+      pipeline.addPlugins(Seq(new Scheduler, new DataHazardResolver))
     }
 
     pipeline.addPlugins(Seq(
@@ -48,7 +50,7 @@ object createPipeline {
 
 class Core(imemHexPath: String, formal: Boolean = false) extends Component {
   implicit val config = new Config(BaseIsa.RV32I)
-  val pipeline = createPipeline()
+  val pipeline = createStaticPipeline()
 
   val charDev = new CharDev
   val charOut = master(Flow(UInt(8 bits)))
@@ -99,7 +101,7 @@ class CoreFormal extends Component {
   setDefinitionName("Core")
 
   implicit val config = new Config(BaseIsa.RV32I)
-  val pipeline = createPipeline(extraPlugins = Seq(new RiscvFormal))
+  val pipeline = createStaticPipeline(extraPlugins = Seq(new RiscvFormal))
 }
 
 object CoreFormal {
@@ -112,7 +114,7 @@ class CoreTest(memHexPath: String) extends Component {
   setDefinitionName("Core")
 
   implicit val config = new Config(BaseIsa.RV32I)
-  val pipeline = createPipeline()
+  val pipeline = createStaticPipeline()
 
   val testDev = new TestDev
   val testOut = master(Flow(UInt(config.xlen bits)))
@@ -166,7 +168,7 @@ class CoreExtMem extends Component {
   setDefinitionName("Core")
 
   implicit val config = new Config(BaseIsa.RV32I)
-  val pipeline = createPipeline()
+  val pipeline = createStaticPipeline()
 
   val ibus = master(new MemBus(config.ibusConfig))
   val dbus = master(new MemBus(config.dbusConfig))
@@ -219,7 +221,7 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
 
   val soc = new ClockingArea(socClockDomain) {
     val core = new ClockingArea(coreClockDomain) {
-      val pipeline = createPipeline()
+      val pipeline = createStaticPipeline()
 
       val ibus = pipeline.getService[IBusService].getIBus
       val dbus = pipeline.getService[DBusService].getDBus

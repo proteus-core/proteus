@@ -1,11 +1,11 @@
-package riscv.plugins
+package riscv.plugins.scheduling.static
 
 import riscv._
 
 import spinal.core._
 import spinal.lib._
 
-class NoPipelining(implicit config: Config) extends SimplePipelining {
+class NoPipeliningScheduler(implicit config: Config) extends Scheduler {
   override def build(pipeline: Pipeline): Unit = {
     super.build(pipeline)
     

@@ -1,4 +1,4 @@
-package riscv.plugins
+package riscv.plugins.scheduling.static
 
 import riscv._
 

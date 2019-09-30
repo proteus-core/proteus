@@ -1,10 +1,10 @@
-package riscv.plugins
+package riscv.plugins.scheduling.static
 
 import riscv._
 
 import spinal.core._
 
-class SimplePipelining(implicit config: Config) extends Plugin {
+class Scheduler(implicit config: Config) extends Plugin {
   override def build(pipeline: Pipeline): Unit = {
     pipeline plug new Area {
       import pipeline._
