@@ -4,7 +4,8 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class RegisterFile(implicit config: Config) extends Plugin {
+class RegisterFile(readStage: Stage, writeStage: Stage)
+                  (implicit config: Config) extends Plugin {
   private val registerNames = Seq(
     "zero", "ra", "sp", "gp", "tp", "t0", "t1", "t2", "s0_fp", "s1", "a0", "a1",
     "a2", "a3", "a4", "a5", "a6", "a7", "s2", "s3", "s4", "s5", "s6", "s7",
@@ -76,8 +77,8 @@ class RegisterFile(implicit config: Config) extends Plugin {
       }
     }
 
-    val readArea = pipeline.decode plug new Area {
-      import pipeline.decode._
+    val readArea = readStage plug new Area {
+      import readStage._
 
       val regFileIo = slave(ReadIo())
 
@@ -86,8 +87,6 @@ class RegisterFile(implicit config: Config) extends Plugin {
       output(pipeline.data.RS1_DATA) := regFileIo.rs1Data
       output(pipeline.data.RS2_DATA) := regFileIo.rs2Data
     }
-
-    val writeStage = pipeline.writeback
 
     val writeArea = writeStage plug new Area {
       import writeStage._

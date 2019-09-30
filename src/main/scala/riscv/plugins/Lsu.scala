@@ -4,7 +4,8 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class Lsu(implicit config: Config) extends Plugin with DBusService {
+class Lsu(lsuStage: Stage)
+         (implicit config: Config) extends Plugin with DBusService {
   object LsuAccessWidth extends SpinalEnum {
     val B, H, W = newElement()
   }
@@ -84,8 +85,6 @@ class Lsu(implicit config: Config) extends Plugin with DBusService {
   }
 
   override def build(pipeline: Pipeline): Unit = {
-    val lsuStage = pipeline.memory
-
     val lsuArea = lsuStage plug new Area {
       import lsuStage._
 

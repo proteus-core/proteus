@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class BranchUnit(implicit config: Config) extends Plugin {
+class BranchUnit(branchStage: Stage)(implicit config: Config) extends Plugin {
   object BranchCondition extends SpinalEnum {
     val NONE, EQ, NE, LT, GE, LTU, GEU = newElement()
   }
@@ -68,7 +68,7 @@ class BranchUnit(implicit config: Config) extends Plugin {
   }
 
   override def build(pipeline: Pipeline): Unit = {
-    pipeline.execute plug new Area {
+    branchStage plug new Area {
       import pipeline.execute._
 
       val aluResultData = pipeline.getService[IntAluService].resultData

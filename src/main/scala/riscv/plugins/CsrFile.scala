@@ -36,7 +36,8 @@ private class CsrComponent(implicit config: Config) extends Component {
   val io = master(new CsrFileIo)
 }
 
-class CsrFile(implicit config: Config) extends Plugin with CsrService {
+class CsrFile(csrStage: Stage)
+             (implicit config: Config) extends Plugin with CsrService {
   object CsrOp extends SpinalEnum {
     val NONE, RW, RS, RC = newElement()
   }
@@ -153,8 +154,6 @@ class CsrFile(implicit config: Config) extends Plugin with CsrService {
         }
       }
     }
-
-    val csrStage = pipeline.writeback
 
     val csrArea = csrStage plug new Area {
       import csrStage._

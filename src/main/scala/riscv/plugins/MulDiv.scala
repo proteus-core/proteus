@@ -14,7 +14,7 @@ private object Data {
   object REM extends PipelineData(Bool())
 }
 
-class MulDiv(implicit config: Config) extends Plugin {
+class MulDiv(exeStage: Stage)(implicit config: Config) extends Plugin {
 
   override def getImplementedExtensions = Seq('M')
 
@@ -66,7 +66,7 @@ class MulDiv(implicit config: Config) extends Plugin {
   }
 
   override def build(pipeline: Pipeline): Unit = {
-    val mulStage = pipeline.execute
+    val mulStage = exeStage
 
     mulStage plug new Area {
       import mulStage._
@@ -153,7 +153,7 @@ class MulDiv(implicit config: Config) extends Plugin {
       }
     }
 
-    val divStage = pipeline.execute
+    val divStage = exeStage
 
     divStage plug new Area {
       import divStage._

@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class Shifter(implicit config: Config) extends Plugin {
+class Shifter(exeStage: Stage)(implicit config: Config) extends Plugin {
   object ShiftOp extends SpinalEnum {
     val NONE, SLL, SRL, SRA = newElement()
   }
@@ -43,8 +43,8 @@ class Shifter(implicit config: Config) extends Plugin {
   }
 
   override def build(pipeline: Pipeline): Unit = {
-    pipeline.execute plug new Area {
-      import pipeline.execute._
+    exeStage plug new Area {
+      import exeStage._
 
       val src = UInt(config.xlen bits)
       src := value(pipeline.data.RS1_DATA)

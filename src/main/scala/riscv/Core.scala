@@ -25,20 +25,20 @@ object createPipeline {
     }
 
     pipeline.addPlugins(Seq(
-      new Fetcher,
-      new Decoder,
-      new RegisterFile,
-      new IntAlu,
-      new Shifter,
-      new Lsu,
-      new BranchUnit,
+      new Fetcher(pipeline.fetch),
+      new Decoder(pipeline.decode),
+      new RegisterFile(pipeline.decode, pipeline.writeback),
+      new IntAlu(pipeline.execute),
+      new Shifter(pipeline.execute),
+      new Lsu(pipeline.memory),
+      new BranchUnit(pipeline.execute),
       new JumpResolver,
-      new CsrFile,
+      new CsrFile(pipeline.writeback),
       new Timers,
-      new MachineMode,
-      new TrapHandler,
-      new Interrupts,
-      new MulDiv
+      new MachineMode(pipeline.execute),
+      new TrapHandler(pipeline.writeback),
+      new Interrupts(pipeline.writeback),
+      new MulDiv(pipeline.execute)
     ) ++ extraPlugins)
 
     pipeline.build()

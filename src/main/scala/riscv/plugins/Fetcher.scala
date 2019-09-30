@@ -5,7 +5,8 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class Fetcher(implicit config: Config) extends Plugin with IBusService {
+class Fetcher(fetchStage: Stage)
+             (implicit config: Config) extends Plugin with IBusService {
   private var ibus: MemBus = null
 
   override def getIBus: MemBus = {
@@ -14,8 +15,8 @@ class Fetcher(implicit config: Config) extends Plugin with IBusService {
   }
 
   override def build(pipeline: Pipeline): Unit = {
-    val fetchArea = pipeline.fetch plug new Area {
-      import pipeline.fetch._
+    val fetchArea = fetchStage plug new Area {
+      import fetchStage._
 
       val ibus = master(new MemBus(config.ibusConfig))
       val ibusCtrl = new MemBusControl(ibus)

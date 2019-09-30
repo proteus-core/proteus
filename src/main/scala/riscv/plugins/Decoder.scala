@@ -19,7 +19,8 @@ case class ImmediateDecoder(ir: Bits) {
   def j = signExtend(ir(31) ## ir(19 downto 12) ## ir(20) ## ir(30 downto 25) ## ir(24 downto 21) ## False)
 }
 
-class Decoder(implicit config: Config) extends Plugin with DecoderService {
+class Decoder(decodeStage: Stage)
+             (implicit config: Config) extends Plugin with DecoderService {
   private val instructionTypes = mutable.Map[MaskedLiteral, InstructionType]()
   private val decodings = mutable.Map[MaskedLiteral, Action]()
   private val defaults = mutable.Map[PipelineData[_ <: Data], Data]()
@@ -64,25 +65,25 @@ class Decoder(implicit config: Config) extends Plugin with DecoderService {
     }
   }
 
-  override protected def stage(pipeline: Pipeline): Stage = pipeline.decode
+  override protected def stage(pipeline: Pipeline): Stage = decodeStage
 
   override def build(pipeline: Pipeline): Unit = {
-    pipeline.decode plug new Area {
-      import pipeline.decode._
+    decodeStage plug new Area {
+      import decodeStage._
 
       val ir = value(pipeline.data.IR)
       output(pipeline.data.RS1) := ir(19 downto 15)
       output(pipeline.data.RS2) := ir(24 downto 20)
       output(pipeline.data.RD) := ir(11 downto 7)
 
-      applyAction(pipeline.decode, defaults.toMap)
+      applyAction(decodeStage, defaults.toMap)
 
       val immDecoder = ImmediateDecoder(ir.asBits)
 
       switch (value(pipeline.data.IR)) {
         for ((key, action) <- decodings) {
           is (key) {
-            applyAction(pipeline.decode, action)
+            applyAction(decodeStage, action)
 
             assert(instructionTypes.contains(key),
               s"Opcode $key has decodings but no instruction type set")
@@ -113,7 +114,7 @@ class Decoder(implicit config: Config) extends Plugin with DecoderService {
         }
         default {
           val trapHandler = pipeline.getService[TrapService]
-          trapHandler.trap(pipeline, pipeline.decode,
+          trapHandler.trap(pipeline, decodeStage,
                            TrapCause.IllegalInstruction(ir))
         }
       }

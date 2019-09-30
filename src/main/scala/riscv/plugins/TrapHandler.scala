@@ -17,7 +17,8 @@ private class StageTrapSignals(implicit config: Config) extends Area {
   val exceptionSignals = new TrapSignals
 }
 
-class TrapHandler(implicit config: Config) extends Plugin with TrapService {
+class TrapHandler(trapStage: Stage)
+                 (implicit config: Config) extends Plugin with TrapService {
   private object Data {
     object HAS_TRAPPED extends PipelineData(Bool())
     object TRAP_IS_INTERRUPT extends PipelineData(Bool())
@@ -75,8 +76,6 @@ class TrapHandler(implicit config: Config) extends Plugin with TrapService {
 
     val jumpService = pipeline.getService[JumpService]
     val csrService = pipeline.getService[CsrService]
-
-    val trapStage = pipeline.stages.last
 
     val trapArea = trapStage plug new Area {
       import trapStage._

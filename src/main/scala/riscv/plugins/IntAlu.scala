@@ -4,7 +4,8 @@ import riscv._
 
 import spinal.core._
 
-class IntAlu(implicit config: Config) extends Plugin with IntAluService {
+class IntAlu(aluStage: Stage)
+            (implicit config: Config) extends Plugin with IntAluService {
   object Data {
     object ALU_OP extends PipelineData(AluOp())
     object ALU_SRC1 extends PipelineData(Src1Select())
@@ -94,8 +95,8 @@ class IntAlu(implicit config: Config) extends Plugin with IntAluService {
   }
 
   override def build(pipeline: Pipeline): Unit = {
-    pipeline.execute plug new Area {
-      import pipeline.execute._
+    aluStage plug new Area {
+      import aluStage._
 
       val op = value(Data.ALU_OP)
       val src1, src2 = UInt(config.xlen bits)

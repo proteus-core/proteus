@@ -54,7 +54,8 @@ private class Mie(implicit config: Config) extends Csr {
   }
 }
 
-class Interrupts(implicit config: Config) extends Plugin with InterruptService {
+class Interrupts(interruptStage: Stage)
+                (implicit config: Config) extends Plugin with InterruptService {
   private var mtimer: MachineTimerIo = null
 
   override def getMachineTimerIo: MachineTimerIo = {
@@ -70,8 +71,6 @@ class Interrupts(implicit config: Config) extends Plugin with InterruptService {
   }
 
   override def build(pipeline: Pipeline): Unit = {
-    val interruptStage = pipeline.writeback
-
     val interruptArea = interruptStage plug new Area {
       val trapHandler = pipeline.getService[TrapService]
 

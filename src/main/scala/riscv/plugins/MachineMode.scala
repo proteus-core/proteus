@@ -140,7 +140,7 @@ private class Mhartid(implicit config: Config) extends Csr {
   override def read(): UInt = U(0, config.xlen bits)
 }
 
-class MachineMode(implicit config: Config) extends Plugin {
+class MachineMode(ecallStage: Stage)(implicit config: Config) extends Plugin {
   object Data {
     object ECALL  extends PipelineData(Bool())
     object EBREAK extends PipelineData(Bool())
@@ -177,8 +177,6 @@ class MachineMode(implicit config: Config) extends Plugin {
   }
 
   override def build(pipeline: Pipeline): Unit = {
-    val ecallStage = pipeline.execute
-
     val ecallArea = ecallStage plug new Area {
       import ecallStage._
 
