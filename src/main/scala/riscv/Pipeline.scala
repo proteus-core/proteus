@@ -6,6 +6,8 @@ import scala.collection.mutable
 import scala.reflect.ClassTag
 
 abstract class Pipeline(val config: Config) extends Component {
+  setDefinitionName("Pipeline")
+
   private val plugins = mutable.ArrayBuffer[Plugin[this.type]]()
 
   val data = new StandardPipelineData(config)
