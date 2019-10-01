@@ -140,7 +140,8 @@ private class Mhartid(implicit config: Config) extends Csr {
   override def read(): UInt = U(0, config.xlen bits)
 }
 
-class MachineMode(ecallStage: Stage)(implicit config: Config) extends Plugin {
+class MachineMode(ecallStage: Stage)(implicit config: Config)
+  extends Plugin[Pipeline] {
   object Data {
     object ECALL  extends PipelineData(Bool())
     object EBREAK extends PipelineData(Bool())

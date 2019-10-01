@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class BranchUnit(branchStage: Stage)(implicit config: Config) extends Plugin {
+class BranchUnit(branchStage: Stage)(implicit config: Config) extends Plugin[Pipeline] {
   object BranchCondition extends SpinalEnum {
     val NONE, EQ, NE, LT, GE, LTU, GEU = newElement()
   }
@@ -69,7 +69,7 @@ class BranchUnit(branchStage: Stage)(implicit config: Config) extends Plugin {
 
   override def build(pipeline: Pipeline): Unit = {
     branchStage plug new Area {
-      import pipeline.execute._
+      import branchStage._
 
       val aluResultData = pipeline.getService[IntAluService].resultData
       val target = aluResultData.dataType()
@@ -113,7 +113,7 @@ class BranchUnit(branchStage: Stage)(implicit config: Config) extends Plugin {
         }
 
         when (branchTaken && !arbitration.isStalled) {
-          jumpService.jump(pipeline, pipeline.execute, target)
+          jumpService.jump(pipeline, branchStage, target)
 
           when (value(Data.BU_WRITE_RET_ADDR_TO_RD)) {
             output(pipeline.data.RD_DATA) := input(pipeline.data.NEXT_PC)

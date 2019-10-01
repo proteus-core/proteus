@@ -4,7 +4,8 @@ import riscv._
 import spinal.core._
 import spinal.lib.Counter
 
-class RiscvFormal(altops: Boolean = false)(implicit config: Config) extends Plugin with FormalService {
+class RiscvFormal(altops: Boolean = false)(implicit config: Config)
+  extends Plugin[Pipeline] with FormalService {
   class Data(config: Config) {
     private val xlen = config.xlen
 
@@ -74,7 +75,7 @@ class RiscvFormal(altops: Boolean = false)(implicit config: Config) extends Plug
   }
 
   override def build(pipeline: Pipeline): Unit = {
-    val stage = pipeline.stages.last
+    val stage = pipeline.retirementStage
     val trapService = pipeline.getService[TrapService]
 
     val rvfiArea = pipeline plug new Area {

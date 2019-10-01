@@ -5,8 +5,8 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class Fetcher(fetchStage: Stage)
-             (implicit config: Config) extends Plugin with IBusService {
+class Fetcher(fetchStage: Stage)(implicit config: Config)
+  extends Plugin[Pipeline] with IBusService {
   private var ibus: MemBus = null
 
   override def getIBus: MemBus = {

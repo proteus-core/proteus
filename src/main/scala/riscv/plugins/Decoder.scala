@@ -20,7 +20,7 @@ case class ImmediateDecoder(ir: Bits) {
 }
 
 class Decoder(decodeStage: Stage)
-             (implicit config: Config) extends Plugin with DecoderService {
+             (implicit config: Config) extends Plugin[Pipeline] with DecoderService {
   private val instructionTypes = mutable.Map[MaskedLiteral, InstructionType]()
   private val decodings = mutable.Map[MaskedLiteral, Action]()
   private val defaults = mutable.Map[PipelineData[_ <: Data], Data]()

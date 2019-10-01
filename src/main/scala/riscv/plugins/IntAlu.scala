@@ -4,8 +4,8 @@ import riscv._
 
 import spinal.core._
 
-class IntAlu(aluStage: Stage)
-            (implicit config: Config) extends Plugin with IntAluService {
+class IntAlu(aluStage: Stage)(implicit config: Config)
+  extends Plugin[Pipeline] with IntAluService {
   object Data {
     object ALU_OP extends PipelineData(AluOp())
     object ALU_SRC1 extends PipelineData(Src1Select())

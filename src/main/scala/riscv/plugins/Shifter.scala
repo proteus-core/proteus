@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class Shifter(exeStage: Stage)(implicit config: Config) extends Plugin {
+class Shifter(exeStage: Stage)(implicit config: Config) extends Plugin[Pipeline] {
   object ShiftOp extends SpinalEnum {
     val NONE, SLL, SRL, SRA = newElement()
   }

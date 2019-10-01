@@ -14,7 +14,7 @@ private object Data {
   object REM extends PipelineData(Bool())
 }
 
-class MulDiv(exeStage: Stage)(implicit config: Config) extends Plugin {
+class MulDiv(exeStage: Stage)(implicit config: Config) extends Plugin[Pipeline] {
 
   override def getImplementedExtensions = Seq('M')
 

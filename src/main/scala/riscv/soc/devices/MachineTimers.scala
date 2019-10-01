@@ -13,6 +13,7 @@ class MachineTimers(pipeline: Pipeline)(implicit config: Config) extends MmioDev
   private val mtimecmp = Reg(UInt(64 bits)).init(0)
 
   val mtimerIo = master(new MachineTimerIo)
+  mtimerIo.setName("mtimer")
   mtimerIo.init()
 
   parent rework {

@@ -4,8 +4,8 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class Lsu(lsuStage: Stage)
-         (implicit config: Config) extends Plugin with DBusService {
+class Lsu(lsuStage: Stage)(implicit config: Config)
+  extends Plugin[Pipeline] with DBusService {
   object LsuAccessWidth extends SpinalEnum {
     val B, H, W = newElement()
   }

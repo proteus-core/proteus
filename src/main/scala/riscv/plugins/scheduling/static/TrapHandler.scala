@@ -1,4 +1,4 @@
-package riscv.plugins
+package riscv.plugins.scheduling.static
 
 import riscv._
 import spinal.core._
@@ -17,8 +17,8 @@ private class StageTrapSignals(implicit config: Config) extends Area {
   val exceptionSignals = new TrapSignals
 }
 
-class TrapHandler(trapStage: Stage)
-                 (implicit config: Config) extends Plugin with TrapService {
+class TrapHandler(trapStage: Stage)(implicit config: Config)
+  extends Plugin[StaticPipeline] with TrapService {
   private object Data {
     object HAS_TRAPPED extends PipelineData(Bool())
     object TRAP_IS_INTERRUPT extends PipelineData(Bool())
@@ -29,7 +29,7 @@ class TrapHandler(trapStage: Stage)
 
   private val stageSignals = mutable.Map[Stage, StageTrapSignals]()
 
-  override def setup(pipeline: Pipeline): Unit = {
+  override def setup(pipeline: StaticPipeline): Unit = {
     pipeline.getService[DecoderService].configure(pipeline) {decoder =>
       decoder.addDefault(Map(
         Data.HAS_TRAPPED -> False,
@@ -45,7 +45,7 @@ class TrapHandler(trapStage: Stage)
     }
   }
 
-  override def build(pipeline: Pipeline): Unit = {
+  override def build(pipeline: StaticPipeline): Unit = {
     // To ensure interrupts have priority over exceptions (section 3.1.9, RISC-V
     // Privileged Architecture), we keep track of two sets of trap-related
     // signals: one for exceptions (exceptionSignals) and one for interrupts
@@ -125,6 +125,8 @@ class TrapHandler(trapStage: Stage)
       trapArea.mepc <> csrService.getCsr(pipeline, 0x341)
       trapArea.mtval <> csrService.getCsr(pipeline, 0x343)
 
+      // FIXME Only this part is dependent on a StaticPipeline, the rest should
+      // be part of a Pipeline plugin.
       for (stage <- pipeline.stages.init) {
         // Make isValid False whenever there is a later stage that has a trapped
         // instruction. This basically ensures the whole pipeline behind a

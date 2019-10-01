@@ -54,8 +54,8 @@ private class Mie(implicit config: Config) extends Csr {
   }
 }
 
-class Interrupts(interruptStage: Stage)
-                (implicit config: Config) extends Plugin with InterruptService {
+class Interrupts(interruptStage: Stage)(implicit config: Config)
+  extends Plugin[Pipeline] with InterruptService {
   private var mtimer: MachineTimerIo = null
 
   override def getMachineTimerIo: MachineTimerIo = {

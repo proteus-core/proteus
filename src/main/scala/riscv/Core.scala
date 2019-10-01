@@ -14,11 +14,11 @@ import spinal.lib.bus.amba4.axi._
 import spinal.lib.com.uart._
 
 object createStaticPipeline {
-  def apply(disablePipelining: Boolean = false, extraPlugins: Seq[Plugin] = Seq())
+  def apply(disablePipelining: Boolean = false, extraPlugins: Seq[Plugin[Pipeline]] = Seq())
            (implicit config: Config): Pipeline = {
     import riscv.plugins.scheduling.static._
 
-    val pipeline = new Pipeline(config)
+    val pipeline = new StaticPipeline(config)
 
     if (disablePipelining) {
       pipeline.addPlugin(new NoPipeliningScheduler)

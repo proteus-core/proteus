@@ -37,7 +37,7 @@ private class CsrComponent(implicit config: Config) extends Component {
 }
 
 class CsrFile(csrStage: Stage)
-             (implicit config: Config) extends Plugin with CsrService {
+             (implicit config: Config) extends Plugin[Pipeline] with CsrService {
   object CsrOp extends SpinalEnum {
     val NONE, RW, RS, RC = newElement()
   }

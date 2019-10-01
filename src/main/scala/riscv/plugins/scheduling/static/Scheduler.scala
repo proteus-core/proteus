@@ -4,8 +4,8 @@ import riscv._
 
 import spinal.core._
 
-class Scheduler(implicit config: Config) extends Plugin {
-  override def build(pipeline: Pipeline): Unit = {
+class Scheduler(implicit config: Config) extends Plugin[StaticPipeline] {
+  override def build(pipeline: StaticPipeline): Unit = {
     pipeline plug new Area {
       import pipeline._
 

@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class Timers(implicit config: Config) extends Plugin {
+class Timers(implicit config: Config) extends Plugin[Pipeline] {
   override def setup(pipeline: Pipeline): Unit = {
     val csr = pipeline.getService[CsrService]
 
@@ -42,7 +42,7 @@ class Timers(implicit config: Config) extends Plugin {
     })
 
     pipeline plug new Area {
-      instretCsr.incInstret := pipeline.stages.last.arbitration.isDone
+      instretCsr.incInstret := pipeline.retirementStage.arbitration.isDone
     }
 
     if (config.xlen == 32) {
