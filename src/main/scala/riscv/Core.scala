@@ -34,7 +34,7 @@ object createStaticPipeline {
       new Shifter(pipeline.execute),
       new Lsu(pipeline.memory),
       new BranchUnit(pipeline.execute),
-      new JumpResolver,
+      new PcManager,
       new CsrFile(pipeline.writeback),
       new Timers,
       new MachineMode(pipeline.execute),

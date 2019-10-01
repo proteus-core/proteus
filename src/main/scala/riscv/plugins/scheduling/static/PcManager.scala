@@ -6,7 +6,7 @@ import spinal.core._
 
 import scala.collection.mutable
 
-class JumpResolver(implicit config: Config) extends Plugin[StaticPipeline] with JumpService {
+class PcManager(implicit config: Config) extends Plugin[StaticPipeline] with JumpService {
   private val jumpStages = mutable.Set[Stage]()
 
   override def jump(pipeline: Pipeline, stage: Stage,
