@@ -18,7 +18,15 @@ object createStaticPipeline {
            (implicit config: Config): Pipeline = {
     import riscv.plugins.scheduling.static._
 
-    val pipeline = new StaticPipeline(config)
+    val pipeline = new StaticPipeline(config) {
+      val fetch = new Stage("IF")
+      val decode = new Stage("ID")
+      val execute = new Stage("EX")
+      val memory = new Stage("MEM")
+      val writeback = new Stage("WB")
+
+      override def stages = Seq(fetch, decode, execute, memory, writeback)
+    }
 
     if (disablePipelining) {
       pipeline.addPlugin(new NoPipeliningScheduler)

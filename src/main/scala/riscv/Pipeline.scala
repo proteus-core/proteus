@@ -12,7 +12,7 @@ abstract class Pipeline(val config: Config) extends Component {
 
   val data = new StandardPipelineData(config)
 
-  val retirementStage: Stage
+  def retirementStage: Stage
 
   def addPlugin(plugin: Plugin[this.type]): Unit = {
     plugins += plugin
@@ -23,6 +23,10 @@ abstract class Pipeline(val config: Config) extends Component {
   }
 
   def build() {
+    rework {
+      init()
+    }
+
     plugins.foreach(_.setup(this))
     plugins.foreach(_.build(this))
 
@@ -33,6 +37,7 @@ abstract class Pipeline(val config: Config) extends Component {
     plugins.foreach(_.finish(this))
   }
 
+  protected def init(): Unit
   protected def connectStages(): Unit
 
   def getService[T](implicit tag: ClassTag[T]): T = {

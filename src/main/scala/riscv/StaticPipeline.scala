@@ -23,20 +23,25 @@ private class PipelineDataInfo {
   def isUsedAsInput = lastInputStageId >= 0
 }
 
-class StaticPipeline(config: Config) extends Pipeline(config) {
-  val fetch = new Stage("IF")
-  val decode = new Stage("ID")
-  val execute = new Stage("EX")
-  val memory = new Stage("MEM")
-  val writeback = new Stage("WB")
-  val stages = Seq(fetch, decode, execute, memory, writeback)
-  val pipelineRegs = stages.init.map(stage => {
-    val regs = new PipelineRegs(stage)
-    regs.setName(s"pipelineRegs_${stage.stageName}")
-    stage -> regs
-  }).toMap
+abstract class StaticPipeline(config: Config) extends Pipeline(config) {
+  def stages: Seq[Stage]
 
-  override val retirementStage: Stage = writeback
+  private var pipelineRegsMap: Map[Stage, PipelineRegs] = null
+
+  def pipelineRegs: Map[Stage, PipelineRegs] = {
+    assert(pipelineRegsMap != null)
+    pipelineRegsMap
+  }
+
+  override def retirementStage: Stage = stages.last
+
+  override protected def init(): Unit = {
+    pipelineRegsMap = stages.init.map(stage => {
+      val regs = new PipelineRegs(stage)
+      regs.setName(s"pipelineRegs_${stage.stageName}")
+      stage -> regs
+    }).toMap
+  }
 
   override def connectStages() {
     // Debugging signals to ensure that PC and IR are passed through the whole
