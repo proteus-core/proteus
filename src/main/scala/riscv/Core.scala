@@ -23,7 +23,10 @@ object createStaticPipeline {
     if (disablePipelining) {
       pipeline.addPlugin(new NoPipeliningScheduler)
     } else {
-      pipeline.addPlugins(Seq(new Scheduler, new DataHazardResolver))
+      pipeline.addPlugins(Seq(
+        new Scheduler,
+        new DataHazardResolver(firstRsReadStage = pipeline.execute)
+      ))
     }
 
     pipeline.addPlugins(Seq(

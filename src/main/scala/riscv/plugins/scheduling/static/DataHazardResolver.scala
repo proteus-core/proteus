@@ -4,7 +4,10 @@ import riscv._
 
 import spinal.core._
 
-class DataHazardResolver(implicit config: Config) extends Plugin[StaticPipeline] {
+// FIXME firstRsReadStage could be automatically deduced by registering which
+// plugins write to arbitration.rsXNeeded.
+class DataHazardResolver(firstRsReadStage: Stage)(implicit config: Config)
+  extends Plugin[StaticPipeline] {
   override def build(pipeline: StaticPipeline): Unit = {
     pipeline plug new Area {
       import pipeline._
@@ -60,7 +63,7 @@ class DataHazardResolver(implicit config: Config) extends Plugin[StaticPipeline]
         lastWrittenRd.data := stages.last.output(pipeline.data.RD_DATA)
       }
 
-      for (stage <- stages.dropWhile(_ != execute)) {
+      for (stage <- stages.dropWhile(_ != firstRsReadStage)) {
         case class ResolveInfo(forwarded: Bool, value: UInt)
 
         def resolveRs(rsNeeded: Bool, rs: PipelineData[UInt],
