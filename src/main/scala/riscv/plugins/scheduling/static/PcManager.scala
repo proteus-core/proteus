@@ -34,12 +34,13 @@ class PcManager(implicit config: Config) extends Plugin[StaticPipeline] with Jum
   override def finish(pipeline: StaticPipeline): Unit = {
     pipeline plug new Area {
       val nextPc = Reg(UInt(config.xlen bits)).init(0)
+      val fetchStage = pipeline.stages.head
 
-      when (pipeline.fetch.arbitration.isDone) {
-        nextPc := pipeline.fetch.output(pipeline.data.NEXT_PC)
+      when (fetchStage.arbitration.isDone) {
+        nextPc := fetchStage.output(pipeline.data.NEXT_PC)
       }
 
-      pipeline.fetch.input(pipeline.data.NEXT_PC) := nextPc
+      fetchStage.input(pipeline.data.NEXT_PC) := nextPc
 
       for (stage <- jumpStages) {
         when (stage.arbitration.isDone && stage.arbitration.jumpRequested) {
