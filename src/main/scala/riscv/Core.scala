@@ -18,7 +18,9 @@ object createStaticPipeline {
            (implicit config: Config): Pipeline = {
     import riscv.plugins.scheduling.static._
 
-    val pipeline = new StaticPipeline(config) {
+    val pipeline = new StaticPipelineComponent {
+      setDefinitionName("Pipeline")
+
       val fetch = new Stage("IF")
       val decode = new Stage("ID")
       val execute = new Stage("EX")

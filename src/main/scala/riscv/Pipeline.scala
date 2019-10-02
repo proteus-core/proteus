@@ -5,13 +5,15 @@ import spinal.core._
 import scala.collection.mutable
 import scala.reflect.ClassTag
 
-abstract class Pipeline(val config: Config) extends Component {
-  setDefinitionName("Pipeline")
-
+trait Pipeline {
   private val plugins = mutable.ArrayBuffer[Plugin[this.type]]()
 
+  val config: Config
   val data = new StandardPipelineData(config)
 
+  // NOTE This is deliberately not just called "component" because that causes a
+  // (silent) name-clash with one of the traits implemented by Component.
+  def pipelineComponent: Component
   def retirementStage: Stage
 
   def addPlugin(plugin: Plugin[this.type]): Unit = {
@@ -23,14 +25,14 @@ abstract class Pipeline(val config: Config) extends Component {
   }
 
   def build() {
-    rework {
+    pipelineComponent.rework {
       init()
     }
 
     plugins.foreach(_.setup(this))
     plugins.foreach(_.build(this))
 
-    rework {
+    pipelineComponent.rework {
       connectStages()
     }
 

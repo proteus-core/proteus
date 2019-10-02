@@ -23,7 +23,7 @@ private class PipelineDataInfo {
   def isUsedAsInput = lastInputStageId >= 0
 }
 
-abstract class StaticPipeline(config: Config) extends Pipeline(config) {
+trait StaticPipeline extends Pipeline {
   def stages: Seq[Stage]
 
   private var pipelineRegsMap: Map[Stage, PipelineRegs] = null
@@ -103,4 +103,9 @@ abstract class StaticPipeline(config: Config) extends Pipeline(config) {
       stage.connectLastValues()
     }
   }
+}
+
+abstract class StaticPipelineComponent(implicit val config: Config)
+  extends Component with StaticPipeline {
+  override def pipelineComponent = this
 }

@@ -8,7 +8,7 @@ abstract class Plugin[-PipelineT <: Pipeline](implicit val config: Config) {
   def build(pipeline: PipelineT): Unit = ()
   def finish(pipeline: PipelineT): Unit = ()
 
-  implicit class Plug(component: Component) {
+  implicit class PlugComponent(component: Component) {
     def plug[T](logic: => T): T = component.rework {
       val result = logic
 
@@ -20,6 +20,10 @@ abstract class Plugin[-PipelineT <: Pipeline](implicit val config: Config) {
 
       result
     }
+  }
+
+  implicit class PlugPipeline(pipeline: Pipeline) {
+    def plug[T](logic: => T): T = pipeline.pipelineComponent plug logic
   }
 
   def getImplementedExtensions: Seq[Extension] = Seq()
