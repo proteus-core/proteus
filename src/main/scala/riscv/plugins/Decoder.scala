@@ -113,9 +113,11 @@ class Decoder(decodeStage: Stage)
           }
         }
         default {
-          val trapHandler = pipeline.getService[TrapService]
-          trapHandler.trap(pipeline, decodeStage,
-                           TrapCause.IllegalInstruction(ir))
+          if (pipeline.hasService[TrapService]) {
+            val trapHandler = pipeline.getService[TrapService]
+            trapHandler.trap(pipeline, decodeStage,
+              TrapCause.IllegalInstruction(ir))
+          }
         }
       }
     }
