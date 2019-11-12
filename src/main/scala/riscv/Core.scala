@@ -15,10 +15,10 @@ import spinal.lib.com.uart._
 
 object createStaticPipeline {
   def apply(disablePipelining: Boolean = false, extraPlugins: Seq[Plugin[Pipeline]] = Seq())
-           (implicit config: Config): Pipeline = {
+           (implicit conf: Config): Pipeline = {
     import riscv.plugins.scheduling.static._
 
-    val pipeline = new StaticPipelineComponent {
+    val pipeline = new Component with StaticPipeline {
       setDefinitionName("Pipeline")
 
       val fetch = new Stage("IF")
@@ -27,7 +27,10 @@ object createStaticPipeline {
       val memory = new Stage("MEM")
       val writeback = new Stage("WB")
 
-      override def stages = Seq(fetch, decode, execute, memory, writeback)
+      override val stages = Seq(fetch, decode, execute, memory, writeback)
+      override val config: Config = conf
+      override val data: StandardPipelineData = new StandardPipelineData(conf)
+      override val pipelineComponent: Component = this
     }
 
     if (disablePipelining) {

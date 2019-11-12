@@ -8,8 +8,8 @@ import scala.reflect.ClassTag
 trait Pipeline {
   private val plugins = mutable.ArrayBuffer[Plugin[this.type]]()
 
-  val config: Config
-  val data = new StandardPipelineData(config)
+  def config: Config
+  def data: StandardPipelineData
 
   // NOTE This is deliberately not just called "component" because that causes a
   // (silent) name-clash with one of the traits implemented by Component.

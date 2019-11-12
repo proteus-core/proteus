@@ -104,8 +104,3 @@ trait StaticPipeline extends Pipeline {
     }
   }
 }
-
-abstract class StaticPipelineComponent(implicit val config: Config)
-  extends Component with StaticPipeline {
-  override def pipelineComponent = this
-}
