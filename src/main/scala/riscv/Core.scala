@@ -336,3 +336,102 @@ object CoreAxi4Sim {
     }
   }
 }
+
+object createDynamicPipeline {
+  def apply(extraPlugins: Seq[Plugin[Pipeline]] = Seq())
+           (implicit conf: Config): Pipeline = {
+    val pipeline = new Component with DynamicPipeline {
+      setDefinitionName("Pipeline")
+
+      override val config = conf
+      override val data = new StandardPipelineData(conf)
+      override val pipelineComponent = this
+
+      val dynamicPipeline: DynamicPipeline = this
+
+      override val issuePipeline = new StaticPipeline {
+        val fetch = new Stage("IF").setName("fetch")
+        val decode = new Stage("ID").setName("decode")
+        val issue = new Stage("II").setName("issue")
+
+        override val stages = Seq(fetch, decode, issue)
+        override val config = dynamicPipeline.config
+        override val data = dynamicPipeline.data
+        override val pipelineComponent = dynamicPipeline.pipelineComponent
+      }
+    }
+
+    pipeline.issuePipeline.addPlugins(Seq(
+      new scheduling.static.Scheduler,
+      new scheduling.static.PcManager,
+      new Fetcher(pipeline.issuePipeline.fetch),
+      new Decoder(pipeline.issuePipeline.decode)
+    ))
+
+    // Temporary hack to make Soc work (which needs a dbus).
+    pipeline.addPlugin(new Plugin with DBusService {
+      val dbus = new MemBus(config.dbusConfig)
+      dbus.assignDontCare()
+      override def getDBus: MemBus = dbus
+    })
+
+    pipeline.build()
+    pipeline
+  }
+}
+
+class CoreDynamic(imemHexPath: String, formal: Boolean = false) extends Component {
+  setDefinitionName("Core")
+  implicit val config = new Config(BaseIsa.RV32I)
+  val pipeline = createDynamicPipeline()
+
+  val charDev = new CharDev
+  val charOut = master(Flow(UInt(8 bits)))
+  charOut << charDev.io
+
+  val soc = new Soc(
+    pipeline,
+    Seq(
+      MemSegment(0x0, 1 MiB).init(imemHexPath),
+      MmioSegment(0xf0002000L, charDev)
+    )
+  )
+}
+
+object CoreDynamic {
+  def main(args: Array[String]) {
+    SpinalVerilog(new Core(args(0)))
+  }
+}
+
+object CoreDynamicSim {
+  def main(args: Array[String]) {
+    SimConfig.withWave.compile(new CoreDynamic(args(0))).doSim {dut =>
+      dut.clockDomain.forkStimulus(10)
+
+      var done = false
+      var i = 0
+
+      while (!done) {
+        dut.clockDomain.waitSampling()
+
+        if (dut.charOut.valid.toBoolean) {
+          val char = dut.charOut.payload.toInt.toChar
+
+          if (char == 4) {
+            println("Simulation halted by software")
+            done = true
+          } else {
+            print(char)
+          }
+        }
+
+        i += 1
+
+        if (i == 100) {
+          done = true
+        }
+      }
+    }
+  }
+}
