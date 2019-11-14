@@ -14,12 +14,12 @@ private object Data {
   object REM extends PipelineData(Bool())
 }
 
-class MulDiv(exeStage: Stage)(implicit config: Config) extends Plugin[Pipeline] {
+class MulDiv(exeStage: Stage) extends Plugin[Pipeline] {
 
   override def getImplementedExtensions = Seq('M')
 
-  override def setup(pipeline: Pipeline): Unit = {
-    pipeline.getService[DecoderService].configure(pipeline) {decoder =>
+  override def setup(): Unit = {
+    pipeline.getService[DecoderService].configure {decoder =>
       decoder.addDefault(Map(
         Data.MUL -> False,
         Data.MUL_HIGH -> False,
@@ -65,7 +65,7 @@ class MulDiv(exeStage: Stage)(implicit config: Config) extends Plugin[Pipeline] 
     }
   }
 
-  override def build(pipeline: Pipeline): Unit = {
+  override def build(): Unit = {
     val mulStage = exeStage
 
     mulStage plug new Area {

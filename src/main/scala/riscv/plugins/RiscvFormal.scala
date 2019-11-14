@@ -4,8 +4,7 @@ import riscv._
 import spinal.core._
 import spinal.lib.Counter
 
-class RiscvFormal(altops: Boolean = false)(implicit config: Config)
-  extends Plugin[Pipeline] with FormalService {
+class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalService {
   class Data(config: Config) {
     private val xlen = config.xlen
 
@@ -74,7 +73,7 @@ class RiscvFormal(altops: Boolean = false)(implicit config: Config)
     stage.output(data.FORMAL_MISALIGNED) := True
   }
 
-  override def build(pipeline: Pipeline): Unit = {
+  override def build(): Unit = {
     val stage = pipeline.retirementStage
     val trapService = pipeline.getService[TrapService]
 
@@ -92,7 +91,7 @@ class RiscvFormal(altops: Boolean = false)(implicit config: Config)
       currentRvfi.valid := stage.arbitration.isDone
       currentRvfi.order.assignDontCare()
       currentRvfi.insn := stage.output(pipeline.data.IR)
-      currentRvfi.trap := trapService.hasException(pipeline, stage)
+      currentRvfi.trap := trapService.hasException(stage)
       currentRvfi.halt := False
       currentRvfi.mode := 3
       currentRvfi.ixl := 1
@@ -113,7 +112,7 @@ class RiscvFormal(altops: Boolean = false)(implicit config: Config)
       currentRvfi.mem_wmask := stage.output(data.FORMAL_MEM_WMASK)
       currentRvfi.mem_rdata := stage.output(data.FORMAL_MEM_RDATA)
       currentRvfi.mem_wdata := stage.output(data.FORMAL_MEM_WDATA)
-      currentRvfi.hasTrapped := trapService.hasTrapped(pipeline, stage)
+      currentRvfi.hasTrapped := trapService.hasTrapped(stage)
 
       if (altops) {
         implementAltops(currentRvfi)

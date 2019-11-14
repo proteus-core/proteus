@@ -6,15 +6,13 @@ import spinal.core._
 
 // FIXME firstRsReadStage could be automatically deduced by registering which
 // plugins write to arbitration.rsXNeeded.
-class DataHazardResolver(firstRsReadStage: Stage)(implicit config: Config)
-  extends Plugin[StaticPipeline] {
-  override def build(pipeline: StaticPipeline): Unit = {
+class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline] {
+  override def build(): Unit = {
     pipeline plug new Area {
-      import pipeline._
-
       // Make sure RS* and RD* are passed through the whole pipeline because we
       // need it to resolve RS inputs.
-      val lastStage = stages.last
+      val lastStage = pipeline.stages.last
+      val data = pipeline.data
       lastStage.output(data.RS1)
       lastStage.output(data.RS2)
       lastStage.output(data.RD_VALID)
@@ -23,10 +21,8 @@ class DataHazardResolver(firstRsReadStage: Stage)(implicit config: Config)
     }
   }
 
-  override def finish(pipeline: StaticPipeline): Unit = {
+  override def finish(): Unit = {
     pipeline plug new Area {
-      import pipeline._
-
       val trapHandler = pipeline.getService[TrapService]
 
       // RS forwarding logic:
@@ -56,8 +52,10 @@ class DataHazardResolver(firstRsReadStage: Stage)(implicit config: Config)
         val data = Reg(pipeline.data.RD_DATA.dataType())
       }
 
+      val stages = pipeline.stages
+
       when (stages.last.arbitration.isDone &&
-            !trapHandler.hasTrapped(pipeline, stages.last)) {
+            !trapHandler.hasTrapped(stages.last)) {
         lastWrittenRd.id := stages.last.output(pipeline.data.RD)
         lastWrittenRd.valid := stages.last.output(pipeline.data.RD_VALID)
         lastWrittenRd.data := stages.last.output(pipeline.data.RD_DATA)
@@ -83,7 +81,7 @@ class DataHazardResolver(firstRsReadStage: Stage)(implicit config: Config)
 
                 for (nextStage <- nextStages) {
                   when (nextStage.arbitration.isValid &&
-                        !trapHandler.hasTrapped(pipeline, nextStage) &&
+                        !trapHandler.hasTrapped(nextStage) &&
                         nextStage.input(pipeline.data.WRITE_RD) &&
                         nextStage.input(pipeline.data.RD) === neededRs) {
                     when (nextStage.input(pipeline.data.RD_VALID)) {
@@ -108,13 +106,14 @@ class DataHazardResolver(firstRsReadStage: Stage)(implicit config: Config)
           }
         }
 
+        val data = pipeline.data
         val rs1Info = resolveRs(stage.arbitration.rs1Needed, data.RS1, data.RS1_DATA)
         val rs2Info = resolveRs(stage.arbitration.rs2Needed, data.RS2, data.RS2_DATA)
 
         if (rs1Info != null || rs2Info != null) {
           when(stage.arbitration.isStalled || !stage.arbitration.isReady) {
             val prevStage = stages.takeWhile(_ != stage).last
-            val prevStageRegs = pipelineRegs(prevStage)
+            val prevStageRegs = pipeline.pipelineRegs(prevStage)
 
             if (rs1Info != null) {
               when (rs1Info.forwarded) {

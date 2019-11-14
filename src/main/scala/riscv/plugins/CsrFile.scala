@@ -36,8 +36,7 @@ private class CsrComponent(implicit config: Config) extends Component {
   val io = master(new CsrFileIo)
 }
 
-class CsrFile(csrStage: Stage)
-             (implicit config: Config) extends Plugin[Pipeline] with CsrService {
+class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
   object CsrOp extends SpinalEnum {
     val NONE, RW, RS, RC = newElement()
   }
@@ -47,32 +46,25 @@ class CsrFile(csrStage: Stage)
     object CSR_USE_IMM extends PipelineData(Bool())
   }
 
-  private var component: CsrComponent = null
+  // lazy because pipeline is null at the time of construction.
+  private lazy val component = pipeline plug new CsrComponent
   private val registers = mutable.Map[Int, Csr]()
-
-  private def component(pipeline: Pipeline): CsrComponent = {
-    if (component == null) {
-      component = pipeline plug new CsrComponent
-    }
-
-    component
-  }
 
   private def isReadOnly(csrId: Int) = (csrId & 0xC00) == 0xC00
 
-  override def registerCsr[T <: Csr](pipeline: Pipeline, id: Int, reg: => T): T = {
+  override def registerCsr[T <: Csr](id: Int, reg: => T): T = {
     assert(id >= 0 && id < 4096, "Illegal CSR id")
     assert(!registers.contains(id), s"Multiple CSRs with id $id")
 
-    val pluggedReg = component(pipeline).plug(reg)
+    val pluggedReg = component.plug(reg)
     registers(id) = pluggedReg
     pluggedReg
   }
 
-  override def getCsr(pipeline: Pipeline, id: Int): CsrIo = {
+  override def getCsr(id: Int): CsrIo = {
     assert(registers.contains(id))
 
-    val area = component(pipeline) plug new Area {
+    val area = component plug new Area {
       val csrIo = master(new CsrIo())
       csrIo.setName(s"io_$id")
       val reg = registers(id)
@@ -87,10 +79,10 @@ class CsrFile(csrStage: Stage)
     area.csrIo
   }
 
-  override def setup(pipeline: Pipeline): Unit = {
+  override def setup(): Unit = {
     val decoder = pipeline.getService[DecoderService]
 
-    decoder.configure(pipeline) {config =>
+    decoder.configure {config =>
       config.addDefault(Map(
         Data.CSR_OP -> CsrOp.NONE,
         Data.CSR_USE_IMM -> False
@@ -115,8 +107,8 @@ class CsrFile(csrStage: Stage)
     }
   }
 
-  override def build(pipeline: Pipeline): Unit = {
-    val csrComponent = component(pipeline)
+  override def build(): Unit = {
+    val csrComponent = component
 
     csrComponent plug new Area {
       import csrComponent._
@@ -215,9 +207,7 @@ class CsrFile(csrStage: Stage)
 
         when (csrIo.error) {
           val trapHandler = pipeline.getService[TrapService]
-          trapHandler.trap(
-            pipeline, csrStage,
-            TrapCause.IllegalInstruction(value(pipeline.data.IR)))
+          trapHandler.trap(csrStage, TrapCause.IllegalInstruction(value(pipeline.data.IR)))
         }
       }
     }

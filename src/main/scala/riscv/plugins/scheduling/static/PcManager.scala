@@ -6,11 +6,10 @@ import spinal.core._
 
 import scala.collection.mutable
 
-class PcManager(implicit config: Config) extends Plugin[StaticPipeline] with JumpService {
+class PcManager extends Plugin[StaticPipeline] with JumpService {
   private val jumpStages = mutable.Set[Stage]()
 
-  override def jump(pipeline: Pipeline, stage: Stage,
-                    target: UInt, isTrap: Boolean): Unit = {
+  override def jump(stage: Stage, target: UInt, isTrap: Boolean): Unit = {
     jumpStages += stage
 
     def doJump() = {
@@ -23,15 +22,14 @@ class PcManager(implicit config: Config) extends Plugin[StaticPipeline] with Jum
     } else {
       when (target(1 downto 0) =/= 0) {
         val trapHandler = pipeline.getService[TrapService]
-        trapHandler.trap(pipeline, stage,
-                         TrapCause.InstructionAddressMisaligned(target))
+        trapHandler.trap(stage, TrapCause.InstructionAddressMisaligned(target))
       }.otherwise {
         doJump()
       }
     }
   }
 
-  override def finish(pipeline: StaticPipeline): Unit = {
+  override def finish(): Unit = {
     pipeline plug new Area {
       val nextPc = Reg(UInt(config.xlen bits)).init(0)
       val fetchStage = pipeline.stages.head

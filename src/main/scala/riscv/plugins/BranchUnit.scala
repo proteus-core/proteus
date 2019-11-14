@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class BranchUnit(branchStage: Stage)(implicit config: Config) extends Plugin[Pipeline] {
+class BranchUnit(branchStage: Stage) extends Plugin[Pipeline] {
   object BranchCondition extends SpinalEnum {
     val NONE, EQ, NE, LT, GE, LTU, GEU = newElement()
   }
@@ -16,10 +16,10 @@ class BranchUnit(branchStage: Stage)(implicit config: Config) extends Plugin[Pip
     object BU_CONDITION extends PipelineData(BranchCondition())
   }
 
-  override def setup(pipeline: Pipeline): Unit = {
+  override def setup(): Unit = {
     val alu = pipeline.getService[IntAluService]
 
-    pipeline.getService[DecoderService].configure(pipeline) {config =>
+    pipeline.getService[DecoderService].configure {config =>
       config.addDefault(Map(
         Data.BU_IS_BRANCH -> False,
         Data.BU_WRITE_RET_ADDR_TO_RD -> False,
@@ -33,8 +33,8 @@ class BranchUnit(branchStage: Stage)(implicit config: Config) extends Plugin[Pip
         pipeline.data.WRITE_RD -> True
       ))
 
-      alu.addOperation(pipeline, Opcodes.JAL,
-                       alu.AluOp.ADD, alu.Src1Select.PC, alu.Src2Select.IMM)
+      alu.addOperation(Opcodes.JAL, alu.AluOp.ADD,
+                       alu.Src1Select.PC, alu.Src2Select.IMM)
 
       config.addDecoding(Opcodes.JALR, InstructionType.I, Map(
         Data.BU_IS_BRANCH -> True,
@@ -43,8 +43,8 @@ class BranchUnit(branchStage: Stage)(implicit config: Config) extends Plugin[Pip
         pipeline.data.WRITE_RD -> True
       ))
 
-      alu.addOperation(pipeline, Opcodes.JALR,
-                       alu.AluOp.ADD, alu.Src1Select.RS1, alu.Src2Select.IMM)
+      alu.addOperation(Opcodes.JALR, alu.AluOp.ADD,
+                       alu.Src1Select.RS1, alu.Src2Select.IMM)
 
       val branchConditions = Map(
         Opcodes.BEQ  -> BranchCondition.EQ,
@@ -61,13 +61,13 @@ class BranchUnit(branchStage: Stage)(implicit config: Config) extends Plugin[Pip
           Data.BU_CONDITION -> condition
         ))
 
-        alu.addOperation(pipeline, opcode,
-                         alu.AluOp.ADD, alu.Src1Select.PC, alu.Src2Select.IMM)
+        alu.addOperation(opcode, alu.AluOp.ADD,
+                         alu.Src1Select.PC, alu.Src2Select.IMM)
       }
     }
   }
 
-  override def build(pipeline: Pipeline): Unit = {
+  override def build(): Unit = {
     branchStage plug new Area {
       import branchStage._
 
@@ -113,7 +113,7 @@ class BranchUnit(branchStage: Stage)(implicit config: Config) extends Plugin[Pip
         }
 
         when (branchTaken && !arbitration.isStalled) {
-          jumpService.jump(pipeline, branchStage, target)
+          jumpService.jump(branchStage, target)
 
           when (value(Data.BU_WRITE_RET_ADDR_TO_RD)) {
             output(pipeline.data.RD_DATA) := input(pipeline.data.NEXT_PC)

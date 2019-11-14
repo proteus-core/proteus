@@ -1,6 +1,5 @@
 package riscv
 
-import riscv._
 import spinal.core._
 import spinal.lib._
 
@@ -25,10 +24,10 @@ trait DecoderService {
   }
 
   protected val decoderConfig: DecoderConfig
-  protected def stage(pipeline: Pipeline): Stage
+  protected def stage: Stage
 
-  def configure(pipeline: Pipeline)(f: DecoderConfig => Unit): Unit = {
-    stage(pipeline).rework(f(decoderConfig))
+  def configure(f: DecoderConfig => Unit): Unit = {
+    stage.rework(f(decoderConfig))
   }
 }
 
@@ -45,7 +44,7 @@ trait IntAluService {
     val RS2, IMM = newElement()
   }
 
-  def addOperation(pipeline: Pipeline, opcode: MaskedLiteral,
+  def addOperation(opcode: MaskedLiteral,
                    op: SpinalEnumElement[AluOp.type],
                    src1: SpinalEnumElement[Src1Select.type],
                    src2: SpinalEnumElement[Src2Select.type]): Unit
@@ -54,15 +53,14 @@ trait IntAluService {
 }
 
 trait JumpService {
-  def jump(pipeline: Pipeline, stage: Stage,
-           target: UInt, isTrap: Boolean = false): Unit
+  def jump(stage: Stage, target: UInt, isTrap: Boolean = false): Unit
 }
 
 trait TrapService {
-  def trap(pipeline: Pipeline, stage: Stage, cause: TrapCause): Unit
-  def hasTrapped(pipeline: Pipeline, stage: Stage): Bool
-  def hasException(pipeline: Pipeline, stage: Stage): Bool
-  def hasInterrupt(pipeline: Pipeline, stage: Stage): Bool
+  def trap(stage: Stage, cause: TrapCause): Unit
+  def hasTrapped(stage: Stage): Bool
+  def hasException(stage: Stage): Bool
+  def hasInterrupt(stage: Stage): Bool
 }
 
 trait Csr extends Area {
@@ -106,8 +104,8 @@ class CsrIo(implicit config: Config) extends Bundle with IMasterSlave {
 }
 
 trait CsrService {
-  def registerCsr[T <: Csr](pipeline: Pipeline, id: Int, reg: => T): T
-  def getCsr(pipeline: Pipeline, id: Int): CsrIo
+  def registerCsr[T <: Csr](id: Int, reg: => T): T
+  def getCsr(id: Int): CsrIo
 }
 
 class MachineTimerIo extends Bundle with IMasterSlave {

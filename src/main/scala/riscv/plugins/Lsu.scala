@@ -4,8 +4,7 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class Lsu(lsuStage: Stage)(implicit config: Config)
-  extends Plugin[Pipeline] with DBusService {
+class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with DBusService {
   object LsuAccessWidth extends SpinalEnum {
     val B, H, W = newElement()
   }
@@ -33,20 +32,19 @@ class Lsu(lsuStage: Stage)(implicit config: Config)
     dbus
   }
 
-  override def setup(pipeline: Pipeline): Unit = {
+  override def setup(): Unit = {
     val intAlu = pipeline.getService[IntAluService]
 
     val allOpcodes = Seq(Opcodes.LB, Opcodes.LH, Opcodes.LW, Opcodes.LBU,
       Opcodes.LHU, Opcodes.SB, Opcodes.SH, Opcodes.SW)
 
     for (opcode <- allOpcodes) {
-      intAlu.addOperation(pipeline, opcode, intAlu.AluOp.ADD,
-        intAlu.Src1Select.RS1, intAlu.Src2Select.IMM)
+      intAlu.addOperation(opcode, intAlu.AluOp.ADD, intAlu.Src1Select.RS1, intAlu.Src2Select.IMM)
     }
 
     val decoder = pipeline.getService[DecoderService]
 
-    decoder.configure(pipeline) {config =>
+    decoder.configure {config =>
       config.addDefault(Map(
         Data.LSU_IS_LOAD -> False,
         Data.LSU_IS_STORE -> False,
@@ -84,7 +82,7 @@ class Lsu(lsuStage: Stage)(implicit config: Config)
     }
   }
 
-  override def build(pipeline: Pipeline): Unit = {
+  override def build(): Unit = {
     val lsuArea = lsuStage plug new Area {
       import lsuStage._
 
@@ -131,7 +129,7 @@ class Lsu(lsuStage: Stage)(implicit config: Config)
         val trapHandler = pipeline.getService[TrapService]
 
         def trap(cause: TrapCause) = {
-          trapHandler.trap(pipeline, lsuStage, cause)
+          trapHandler.trap(lsuStage, cause)
         }
 
         when (isLoad) {

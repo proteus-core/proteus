@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class Shifter(exeStage: Stage)(implicit config: Config) extends Plugin[Pipeline] {
+class Shifter(exeStage: Stage) extends Plugin[Pipeline] {
   object ShiftOp extends SpinalEnum {
     val NONE, SLL, SRL, SRA = newElement()
   }
@@ -14,8 +14,8 @@ class Shifter(exeStage: Stage)(implicit config: Config) extends Plugin[Pipeline]
     object SHIFT_USE_IMM extends PipelineData(Bool())
   }
 
-  override def setup(pipeline: Pipeline): Unit = {
-    pipeline.getService[DecoderService].configure(pipeline) {config =>
+  override def setup(): Unit = {
+    pipeline.getService[DecoderService].configure {config =>
       config.addDefault(Map(
         Data.SHIFT_OP -> ShiftOp.NONE,
         Data.SHIFT_USE_IMM -> False
@@ -42,7 +42,7 @@ class Shifter(exeStage: Stage)(implicit config: Config) extends Plugin[Pipeline]
     }
   }
 
-  override def build(pipeline: Pipeline): Unit = {
+  override def build(): Unit = {
     exeStage plug new Area {
       import exeStage._
 

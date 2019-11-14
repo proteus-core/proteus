@@ -4,23 +4,22 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class RegisterFile(readStage: Stage, writeStage: Stage)
-                  (implicit config: Config) extends Plugin[Pipeline] {
+class RegisterFile(readStage: Stage, writeStage: Stage) extends Plugin[Pipeline] {
   private val registerNames = Seq(
     "zero", "ra", "sp", "gp", "tp", "t0", "t1", "t2", "s0_fp", "s1", "a0", "a1",
     "a2", "a3", "a4", "a5", "a6", "a7", "s2", "s3", "s4", "s5", "s6", "s7",
     "s8", "s9", "s10", "s11", "t3", "t4", "t5", "t6"
   )
 
-  override def setup(pipeline: Pipeline): Unit = {
+  override def setup(): Unit = {
     val decoder = pipeline.getService[DecoderService]
 
-    decoder.configure(pipeline) {config =>
+    decoder.configure {config =>
       config.addDefault(pipeline.data.WRITE_RD, False)
     }
   }
 
-  override def build(pipeline: Pipeline): Unit = {
+  override def build(): Unit = {
     case class ReadIo() extends Bundle with IMasterSlave {
       val rs1 = UInt(5 bits)
       val rs2 = UInt(5 bits)
@@ -97,7 +96,7 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
       regFileIo.data := value(pipeline.data.RD_DATA)
 
       val trapHandler = pipeline.getService[TrapService]
-      val hasTrapped = trapHandler.hasTrapped(pipeline, writeStage)
+      val hasTrapped = trapHandler.hasTrapped(writeStage)
       regFileIo.write :=
         value(pipeline.data.WRITE_RD) &&
         arbitration.isDone &&

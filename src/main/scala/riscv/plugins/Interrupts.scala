@@ -54,8 +54,7 @@ private class Mie(implicit config: Config) extends Csr {
   }
 }
 
-class Interrupts(interruptStage: Stage)(implicit config: Config)
-  extends Plugin[Pipeline] with InterruptService {
+class Interrupts(interruptStage: Stage) extends Plugin[Pipeline] with InterruptService {
   private var mtimer: MachineTimerIo = null
 
   override def getMachineTimerIo: MachineTimerIo = {
@@ -63,14 +62,14 @@ class Interrupts(interruptStage: Stage)(implicit config: Config)
     mtimer
   }
 
-  override def setup(pipeline: Pipeline): Unit = {
+  override def setup(): Unit = {
     val csr = pipeline.getService[CsrService]
 
-    csr.registerCsr(pipeline, 0x304, new Mie)
-    csr.registerCsr(pipeline, 0x344, new Mip)
+    csr.registerCsr(0x304, new Mie)
+    csr.registerCsr(0x344, new Mip)
   }
 
-  override def build(pipeline: Pipeline): Unit = {
+  override def build(): Unit = {
     val interruptArea = interruptStage plug new Area {
       val trapHandler = pipeline.getService[TrapService]
 
@@ -92,8 +91,7 @@ class Interrupts(interruptStage: Stage)(implicit config: Config)
 
       when (gie) {
         when (mtie && mtip) {
-          trapHandler.trap(pipeline, interruptStage,
-                           TrapCause.MachineTimerInterrupt)
+          trapHandler.trap(interruptStage, TrapCause.MachineTimerInterrupt)
         }
       }
     }
@@ -103,9 +101,9 @@ class Interrupts(interruptStage: Stage)(implicit config: Config)
       mtimer <> interruptArea.mtimer
 
       val csr = pipeline.getService[CsrService]
-      interruptArea.mstatus <> csr.getCsr(pipeline, 0x300)
-      interruptArea.mie <> csr.getCsr(pipeline, 0x304)
-      interruptArea.mip <> csr.getCsr(pipeline, 0x344)
+      interruptArea.mstatus <> csr.getCsr(0x300)
+      interruptArea.mie <> csr.getCsr(0x304)
+      interruptArea.mip <> csr.getCsr(0x344)
     }
 
     pipelineArea.setName("")

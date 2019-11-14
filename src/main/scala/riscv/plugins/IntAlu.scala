@@ -4,8 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class IntAlu(aluStage: Stage)(implicit config: Config)
-  extends Plugin[Pipeline] with IntAluService {
+class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
   object Data {
     object ALU_OP extends PipelineData(AluOp())
     object ALU_SRC1 extends PipelineData(Src1Select())
@@ -14,12 +13,11 @@ class IntAlu(aluStage: Stage)(implicit config: Config)
     object ALU_RESULT extends PipelineData(UInt(config.xlen bits))
   }
 
-  override def addOperation(pipeline: Pipeline,
-                            opcode: MaskedLiteral,
+  override def addOperation(opcode: MaskedLiteral,
                             op: SpinalEnumElement[AluOp.type],
                             src1: SpinalEnumElement[Src1Select.type],
                             src2: SpinalEnumElement[Src2Select.type]): Unit = {
-    pipeline.getService[DecoderService].configure(pipeline) {config =>
+    pipeline.getService[DecoderService].configure {config =>
       config.addDecoding(opcode, Map(
         Data.ALU_OP -> op,
         Data.ALU_SRC1 -> src1,
@@ -30,11 +28,11 @@ class IntAlu(aluStage: Stage)(implicit config: Config)
 
   override def resultData: PipelineData[UInt] = Data.ALU_RESULT
 
-  override def setup(pipeline: Pipeline): Unit = {
+  override def setup(): Unit = {
 
     val decoder = pipeline.getService[DecoderService]
 
-    decoder.configure(pipeline) {config =>
+    decoder.configure {config =>
       config.addDefault(Map(
         Data.ALU_SRC1 -> Src1Select.RS1,
         Data.ALU_COMMIT_RESULT -> False
@@ -94,7 +92,7 @@ class IntAlu(aluStage: Stage)(implicit config: Config)
     }
   }
 
-  override def build(pipeline: Pipeline): Unit = {
+  override def build(): Unit = {
     aluStage plug new Area {
       import aluStage._
 

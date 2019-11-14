@@ -140,31 +140,30 @@ private class Mhartid(implicit config: Config) extends Csr {
   override def read(): UInt = U(0, config.xlen bits)
 }
 
-class MachineMode(ecallStage: Stage)(implicit config: Config)
-  extends Plugin[Pipeline] {
+class MachineMode(ecallStage: Stage) extends Plugin[Pipeline] {
   object Data {
     object ECALL  extends PipelineData(Bool())
     object EBREAK extends PipelineData(Bool())
   }
 
-  override def setup(pipeline: Pipeline): Unit = {
+  override def setup(): Unit = {
     val csr = pipeline.getService[CsrService]
 
-    csr.registerCsr(pipeline, 0xF11, new Mvendorid)
-    csr.registerCsr(pipeline, 0xF12, new Marchid)
-    csr.registerCsr(pipeline, 0xF13, new Mimpid)
-    csr.registerCsr(pipeline, 0xF14, new Mhartid)
+    csr.registerCsr(0xF11, new Mvendorid)
+    csr.registerCsr(0xF12, new Marchid)
+    csr.registerCsr(0xF13, new Mimpid)
+    csr.registerCsr(0xF14, new Mhartid)
 
-    csr.registerCsr(pipeline, 0x300, new Mstatus)
-    csr.registerCsr(pipeline, 0x301, new Misa(pipeline))
-    csr.registerCsr(pipeline, 0x305, new Mtvec)
+    csr.registerCsr(0x300, new Mstatus)
+    csr.registerCsr(0x301, new Misa(pipeline))
+    csr.registerCsr(0x305, new Mtvec)
 
-    csr.registerCsr(pipeline, 0x340, new Mscratch)
-    csr.registerCsr(pipeline, 0x341, new Mepc)
-    csr.registerCsr(pipeline, 0x342, new Mcause)
-    csr.registerCsr(pipeline, 0x343, new Mtval)
+    csr.registerCsr(0x340, new Mscratch)
+    csr.registerCsr(0x341, new Mepc)
+    csr.registerCsr(0x342, new Mcause)
+    csr.registerCsr(0x343, new Mtval)
 
-    pipeline.getService[DecoderService].configure(pipeline) {config =>
+    pipeline.getService[DecoderService].configure {config =>
       config.addDefault(Map(
         Data.ECALL  -> False,
         Data.EBREAK -> False
@@ -177,13 +176,13 @@ class MachineMode(ecallStage: Stage)(implicit config: Config)
     }
   }
 
-  override def build(pipeline: Pipeline): Unit = {
+  override def build(): Unit = {
     val ecallArea = ecallStage plug new Area {
       import ecallStage._
 
       def trap(cause: TrapCause) = {
         val trapHandler = pipeline.getService[TrapService]
-        trapHandler.trap(pipeline, ecallStage, cause)
+        trapHandler.trap(ecallStage, cause)
       }
 
       when (arbitration.isValid) {

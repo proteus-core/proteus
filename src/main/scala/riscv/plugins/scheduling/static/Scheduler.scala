@@ -4,10 +4,10 @@ import riscv._
 
 import spinal.core._
 
-class Scheduler(implicit config: Config) extends Plugin[StaticPipeline] {
-  override def build(pipeline: StaticPipeline): Unit = {
+class Scheduler extends Plugin[StaticPipeline] {
+  override def build(): Unit = {
     pipeline plug new Area {
-      import pipeline._
+      val stages = pipeline.stages
 
       for (stage <- stages) {
         stage plug new Area {
@@ -37,7 +37,7 @@ class Scheduler(implicit config: Config) extends Plugin[StaticPipeline] {
         }
       }
 
-      for ((stage, regs) <- pipelineRegs) {
+      for ((stage, regs) <- pipeline.pipelineRegs) {
         regs.shift := stage.arbitration.isDone
       }
     }

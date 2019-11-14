@@ -29,8 +29,8 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
 
   private val stageSignals = mutable.Map[Stage, StageTrapSignals]()
 
-  override def setup(pipeline: StaticPipeline): Unit = {
-    pipeline.getService[DecoderService].configure(pipeline) {decoder =>
+  override def setup(): Unit = {
+    pipeline.getService[DecoderService].configure {decoder =>
       decoder.addDefault(Map(
         Data.HAS_TRAPPED -> False,
         Data.MRET -> False
@@ -45,7 +45,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
     }
   }
 
-  override def build(pipeline: StaticPipeline): Unit = {
+  override def build(): Unit = {
     // To ensure interrupts have priority over exceptions (section 3.1.9, RISC-V
     // Privileged Architecture), we keep track of two sets of trap-related
     // signals: one for exceptions (exceptionSignals) and one for interrupts
@@ -103,7 +103,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
         mtval.write(value(Data.TRAP_VAL))
 
         val vecBase = mtvec.read()(config.xlen - 1 downto 2) << 2
-        jumpService.jump(pipeline, trapStage, vecBase, isTrap = true)
+        jumpService.jump(trapStage, vecBase, isTrap = true)
       }
 
       when (arbitration.isValid && value(Data.MRET)) {
@@ -114,16 +114,16 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
         mstatusNew(7) := True // mpie = 1
         mstatus.write(mstatusNew)
 
-        jumpService.jump(pipeline, trapStage, mepc.read())
+        jumpService.jump(trapStage, mepc.read())
       }
     }
 
     pipeline plug new Area {
-      trapArea.mstatus <> csrService.getCsr(pipeline, 0x300)
-      trapArea.mtvec <> csrService.getCsr(pipeline, 0x305)
-      trapArea.mcause <> csrService.getCsr(pipeline, 0x342)
-      trapArea.mepc <> csrService.getCsr(pipeline, 0x341)
-      trapArea.mtval <> csrService.getCsr(pipeline, 0x343)
+      trapArea.mstatus <> csrService.getCsr(0x300)
+      trapArea.mtvec <> csrService.getCsr(0x305)
+      trapArea.mcause <> csrService.getCsr(0x342)
+      trapArea.mepc <> csrService.getCsr(0x341)
+      trapArea.mtval <> csrService.getCsr(0x343)
 
       // FIXME Only this part is dependent on a StaticPipeline, the rest should
       // be part of a Pipeline plugin.
@@ -152,7 +152,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
     }
   }
 
-  override def trap(pipeline: Pipeline, stage: Stage, cause: TrapCause): Unit = {
+  override def trap(stage: Stage, cause: TrapCause): Unit = {
     val stageTrapSignals = stageSignals(stage)
     val trapSignals = if (cause.isInterrupt) {
       stageTrapSignals.interruptSignals
@@ -165,15 +165,15 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
     trapSignals.trapVal := (if (cause.mtval == null) U(0).resized else cause.mtval)
   }
 
-  override def hasTrapped(pipeline: Pipeline, stage: Stage): Bool = {
+  override def hasTrapped(stage: Stage): Bool = {
     stage.output(Data.HAS_TRAPPED)
   }
 
-  override def hasException(pipeline: Pipeline, stage: Stage): Bool = {
-    hasTrapped(pipeline, stage) && !stage.output(Data.TRAP_IS_INTERRUPT)
+  override def hasException(stage: Stage): Bool = {
+    hasTrapped(stage) && !stage.output(Data.TRAP_IS_INTERRUPT)
   }
 
-  override def hasInterrupt(pipeline: Pipeline, stage: Stage): Bool = {
-    hasTrapped(pipeline, stage) && stage.output(Data.TRAP_IS_INTERRUPT)
+  override def hasInterrupt(stage: Stage): Bool = {
+    hasTrapped(stage) && stage.output(Data.TRAP_IS_INTERRUPT)
   }
 }

@@ -29,14 +29,15 @@ trait Pipeline {
       init()
     }
 
-    plugins.foreach(_.setup(this))
-    plugins.foreach(_.build(this))
+    plugins.foreach(_.setPipeline(this))
+    plugins.foreach(_.setup())
+    plugins.foreach(_.build())
 
     pipelineComponent.rework {
       connectStages()
     }
 
-    plugins.foreach(_.finish(this))
+    plugins.foreach(_.finish())
   }
 
   protected def init(): Unit
