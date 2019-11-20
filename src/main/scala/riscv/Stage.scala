@@ -32,6 +32,8 @@ class Arbitration extends Bundle {
   rs1Needed := False
   rs2Needed := False
   jumpRequested := False
+
+  isDone := isValid && isReady && !isStalled
 }
 
 class Stage(val stageName: String) extends Component {

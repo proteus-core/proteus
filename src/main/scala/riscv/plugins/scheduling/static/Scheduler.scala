@@ -8,15 +8,6 @@ class Scheduler extends Plugin[StaticPipeline] {
   override def build(): Unit = {
     pipeline plug new Area {
       val stages = pipeline.stages
-
-      for (stage <- stages) {
-        stage plug new Area {
-          stage.arbitration.isDone := stage.arbitration.isValid &&
-                                      stage.arbitration.isReady &&
-                                      !stage.arbitration.isStalled
-        }
-      }
-
       stages.head.arbitration.isValid := True
       stages.head.arbitration.isValid.allowOverride
 
