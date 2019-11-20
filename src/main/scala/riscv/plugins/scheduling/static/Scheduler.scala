@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class Scheduler extends Plugin[StaticPipeline] {
+class Scheduler(canStallExternally: Boolean = false) extends Plugin[StaticPipeline] {
   override def build(): Unit = {
     pipeline plug new Area {
       val stages = pipeline.stages
@@ -17,7 +17,9 @@ class Scheduler extends Plugin[StaticPipeline] {
           (nextStage.arbitration.isValid && !nextStage.arbitration.isReady)
       }
 
-      stages.last.arbitration.isStalled := False
+      if (!canStallExternally) {
+        stages.last.arbitration.isStalled := False
+      }
 
       for ((prevStage, stage) <- stages.zip(stages.tail)) {
         val isValidReg = Reg(Bool()).init(False)
