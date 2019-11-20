@@ -127,4 +127,8 @@ class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
       out := value
     }
   }
+
+  override def getSupportedOpcodes: Iterable[MaskedLiteral] = {
+    decodings.keys
+  }
 }

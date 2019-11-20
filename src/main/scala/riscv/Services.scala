@@ -29,6 +29,8 @@ trait DecoderService {
   def configure(f: DecoderConfig => Unit): Unit = {
     stage.rework(f(decoderConfig))
   }
+
+  def getSupportedOpcodes: Iterable[MaskedLiteral]
 }
 
 trait IntAluService {
