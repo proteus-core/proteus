@@ -21,6 +21,7 @@ class PipelineRegs(stage: Stage) extends Component {
 
     input.setName(s"in_${data.name}")
     output.setName(s"out_${data.name}")
+    reg.setName(s"reg_${data.name}")
     regShift.setName(s"shift_${data.name}")
 
     regs(data.asInstanceOf[PipelineData[Data]]) =
