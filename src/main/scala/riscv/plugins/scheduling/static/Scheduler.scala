@@ -4,7 +4,8 @@ import riscv._
 
 import spinal.core._
 
-class Scheduler(canStallExternally: Boolean = false) extends Plugin[StaticPipeline] {
+class Scheduler(canStallExternally: Boolean = false)
+  extends Plugin[StaticPipeline] with IssueService {
   override def build(): Unit = {
     pipeline plug new Area {
       val stages = pipeline.stages
@@ -34,5 +35,9 @@ class Scheduler(canStallExternally: Boolean = false) extends Plugin[StaticPipeli
         regs.shift := stage.arbitration.isDone
       }
     }
+  }
+
+  override def setDestinations(opcode: MaskedLiteral, stages: Set[Stage]): Unit = {
+    // Dummy implementation of IssueService
   }
 }

@@ -19,6 +19,8 @@ class MulDiv(exeStage: Stage) extends Plugin[Pipeline] {
   override def getImplementedExtensions = Seq('M')
 
   override def setup(): Unit = {
+    val issueService = pipeline.getService[IssueService]
+
     pipeline.getService[DecoderService].configure {decoder =>
       decoder.addDefault(Map(
         Data.MUL -> False,
@@ -44,6 +46,8 @@ class MulDiv(exeStage: Stage) extends Plugin[Pipeline] {
           Data.MULDIV_RS2_SIGNED -> rs2Signed,
           pipeline.data.WRITE_RD -> True
         ))
+
+        issueService.setDestination(opcode, exeStage)
       }
 
       val divDecodings = Seq(
@@ -61,6 +65,8 @@ class MulDiv(exeStage: Stage) extends Plugin[Pipeline] {
           Data.MULDIV_RS2_SIGNED -> signed,
           pipeline.data.WRITE_RD -> True
         ))
+
+        issueService.setDestination(opcode, exeStage)
       }
     }
   }

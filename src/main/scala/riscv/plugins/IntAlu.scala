@@ -29,8 +29,8 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
   override def resultData: PipelineData[UInt] = Data.ALU_RESULT
 
   override def setup(): Unit = {
-
     val decoder = pipeline.getService[DecoderService]
+    val issuer = pipeline.getService[IssueService]
 
     decoder.configure {config =>
       config.addDefault(Map(
@@ -55,6 +55,8 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
           Data.ALU_COMMIT_RESULT -> True,
           pipeline.data.WRITE_RD -> True
         ))
+
+        issuer.setDestination(opcode, aluStage)
       }
 
       val regImmOpcodes = Map(
@@ -73,6 +75,8 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
           Data.ALU_COMMIT_RESULT -> True,
           pipeline.data.WRITE_RD -> True
         ))
+
+        issuer.setDestination(opcode, aluStage)
       }
 
       config.addDecoding(Opcodes.LUI, InstructionType.U, Map(
@@ -82,6 +86,8 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
         pipeline.data.WRITE_RD -> True
       ))
 
+      issuer.setDestination(Opcodes.LUI, aluStage)
+
       config.addDecoding(Opcodes.AUIPC, InstructionType.U, Map(
         Data.ALU_OP -> AluOp.ADD,
         Data.ALU_SRC1 -> Src1Select.PC,
@@ -89,6 +95,8 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
         Data.ALU_COMMIT_RESULT -> True,
         pipeline.data.WRITE_RD -> True
       ))
+
+      issuer.setDestination(Opcodes.AUIPC, aluStage)
     }
   }
 

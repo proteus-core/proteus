@@ -27,6 +27,9 @@ class Arbitration extends Bundle {
     */
   def isRunning: Bool = !isIdle
 
+  val isAvailable = out Bool()
+  isAvailable := !isValid || isDone
+
   isReady := True
   isReady.allowOverride
   rs1Needed := False

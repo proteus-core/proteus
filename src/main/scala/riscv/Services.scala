@@ -33,6 +33,14 @@ trait DecoderService {
   def getSupportedOpcodes: Iterable[MaskedLiteral]
 }
 
+trait IssueService {
+  def setDestination(opcode: MaskedLiteral, stage: Stage): Unit = {
+    setDestinations(opcode, Set(stage))
+  }
+
+  def setDestinations(opcode: MaskedLiteral, stages: Set[Stage]): Unit
+}
+
 trait IntAluService {
   object AluOp extends SpinalEnum {
     val ADD, SUB, SLT, SLTU, XOR, OR, AND, SRC2 = newElement()

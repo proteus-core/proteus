@@ -352,25 +352,34 @@ object createDynamicPipeline {
       override val issuePipeline = new StaticPipeline {
         val fetch = new Stage("IF").setName("fetch")
         val decode = new Stage("ID").setName("decode")
-        val issue = new Stage("II").setName("issue")
 
-        override val stages = Seq(fetch, decode, issue)
+        override val stages = Seq(fetch, decode)
         override val config = dynamicPipeline.config
         override val data = dynamicPipeline.data
         override val pipelineComponent = dynamicPipeline.pipelineComponent
       }
+
+      val intAlu = new Stage("EX_ALU")
+      val intMul = new Stage("EX_MUL")
+      override val exeStages: Seq[Stage] = Seq(intAlu, intMul)
     }
 
     pipeline.issuePipeline.addPlugins(Seq(
-      new scheduling.static.Scheduler,
+      new scheduling.static.Scheduler(canStallExternally = true),
       new scheduling.static.PcManager,
       new Fetcher(pipeline.issuePipeline.fetch),
       new Decoder(pipeline.issuePipeline.decode)
     ))
 
+    pipeline.addPlugins(Seq(
+      new scheduling.dynamic.Scheduler,
+      new IntAlu(pipeline.intAlu),
+      new MulDiv(pipeline.intMul)
+    ))
+
     // Temporary hack to make Soc work (which needs a dbus).
     pipeline.addPlugin(new Plugin with DBusService {
-      val dbus = new MemBus(config.dbusConfig)
+      val dbus = new MemBus(conf.dbusConfig)
       dbus.assignDontCare()
       override def getDBus: MemBus = dbus
     })
