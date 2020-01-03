@@ -5,7 +5,7 @@ import spinal.core._
 import spinal.lib.Counter
 
 class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalService {
-  class Data(config: Config) {
+  private object Data {
     private val xlen = config.xlen
 
     object FORMAL_MEM_ADDR extends PipelineData(UInt(xlen bits))
@@ -44,33 +44,31 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
     val hasTrapped = Bool()
   }
 
-  private val data = new Data(config)
-
   override def lsuDefault(stage: Stage): Unit = {
-    stage.output(data.FORMAL_MEM_ADDR) := 0
-    stage.output(data.FORMAL_MEM_RMASK) := 0
-    stage.output(data.FORMAL_MEM_WMASK) := 0
-    stage.output(data.FORMAL_MEM_RDATA) := 0
-    stage.output(data.FORMAL_MEM_WDATA) := 0
-    stage.output(data.FORMAL_MISALIGNED) := False
+    stage.output(Data.FORMAL_MEM_ADDR) := 0
+    stage.output(Data.FORMAL_MEM_RMASK) := 0
+    stage.output(Data.FORMAL_MEM_WMASK) := 0
+    stage.output(Data.FORMAL_MEM_RDATA) := 0
+    stage.output(Data.FORMAL_MEM_WDATA) := 0
+    stage.output(Data.FORMAL_MISALIGNED) := False
   }
 
   override def lsuOnLoad(stage: Stage, addr: UInt,
                          rmask: Bits, rdata: UInt): Unit = {
-    stage.output(data.FORMAL_MEM_ADDR) := addr
-    stage.output(data.FORMAL_MEM_RMASK) := rmask
-    stage.output(data.FORMAL_MEM_RDATA) := rdata
+    stage.output(Data.FORMAL_MEM_ADDR) := addr
+    stage.output(Data.FORMAL_MEM_RMASK) := rmask
+    stage.output(Data.FORMAL_MEM_RDATA) := rdata
   }
 
   override def lsuOnStore(stage: Stage, addr: UInt,
                           wmask: Bits, wdata: UInt): Unit = {
-    stage.output(data.FORMAL_MEM_ADDR) := addr
-    stage.output(data.FORMAL_MEM_WDATA) := wdata
-    stage.output(data.FORMAL_MEM_WMASK) := wmask
+    stage.output(Data.FORMAL_MEM_ADDR) := addr
+    stage.output(Data.FORMAL_MEM_WDATA) := wdata
+    stage.output(Data.FORMAL_MEM_WMASK) := wmask
   }
 
   override def lsuOnMisaligned(stage: Stage): Unit = {
-    stage.output(data.FORMAL_MISALIGNED) := True
+    stage.output(Data.FORMAL_MISALIGNED) := True
   }
 
   override def build(): Unit = {
@@ -107,11 +105,11 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
       currentRvfi.rd_wdata := (currentRvfi.rd_addr === 0) ?
                        U(0) | stage.output(pipeline.data.RD_DATA)
       currentRvfi.pc_rdata := stage.output(pipeline.data.PC)
-      currentRvfi.mem_addr := stage.output(data.FORMAL_MEM_ADDR)
-      currentRvfi.mem_rmask := stage.output(data.FORMAL_MEM_RMASK)
-      currentRvfi.mem_wmask := stage.output(data.FORMAL_MEM_WMASK)
-      currentRvfi.mem_rdata := stage.output(data.FORMAL_MEM_RDATA)
-      currentRvfi.mem_wdata := stage.output(data.FORMAL_MEM_WDATA)
+      currentRvfi.mem_addr := stage.output(Data.FORMAL_MEM_ADDR)
+      currentRvfi.mem_rmask := stage.output(Data.FORMAL_MEM_RMASK)
+      currentRvfi.mem_wmask := stage.output(Data.FORMAL_MEM_WMASK)
+      currentRvfi.mem_rdata := stage.output(Data.FORMAL_MEM_RDATA)
+      currentRvfi.mem_wdata := stage.output(Data.FORMAL_MEM_WDATA)
       currentRvfi.hasTrapped := trapService.hasTrapped(stage)
 
       if (altops) {
