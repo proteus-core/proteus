@@ -6,6 +6,6 @@ scalaVersion := "2.11.12"
 fork := true
 
 libraryDependencies ++= Seq(
-  "com.github.spinalhdl" % "spinalhdl-core_2.11" % "1.3.6",
-  "com.github.spinalhdl" % "spinalhdl-lib_2.11" % "1.3.6"
+  "com.github.spinalhdl" % "spinalhdl-core_2.11" % "1.3.8",
+  "com.github.spinalhdl" % "spinalhdl-lib_2.11" % "1.3.8"
 )
