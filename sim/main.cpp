@@ -11,6 +11,9 @@
 #include <cstdint>
 #include <cassert>
 
+#include <sys/select.h>
+#include <sys/time.h>
+
 const double TIMESCALE       = 1e-9;
 const int    CLOCK_FREQUENCY = 100*1e6;
 const int    CLOCK_PERIOD    = 1/(CLOCK_FREQUENCY*TIMESCALE);
@@ -191,6 +194,71 @@ private:
     int result_;
 };
 
+class ByteDev
+{
+public:
+
+    ByteDev(VCore& top) : top_{top}
+    {
+    }
+
+    bool eval()
+    {
+        if (top_.reset)
+            return false;
+
+        top_.byteIo_rdata_valid = false;
+
+        if (top_.byteIo_wdata_valid)
+        {
+            auto charOut = char(top_.byteIo_wdata_payload);
+            std::cout << charOut;
+        }
+
+        if (!hasStdinByte && stdinAvailable())
+        {
+            currentStdinByte = std::cin.get();
+            hasStdinByte = !std::cin.eof();
+        }
+
+        if (hasStdinByte)
+        {
+            top_.byteIo_rdata_valid = true;
+            top_.byteIo_rdata_payload = currentStdinByte;
+
+            if (top_.byteIo_rdata_ready)
+                hasStdinByte = false;
+
+            return true;
+        }
+
+        return false;
+    }
+
+private:
+
+    bool stdinAvailable() const
+    {
+        if (std::cin.eof())
+            return false;
+
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(STDIN_FILENO, &rfds);
+
+        timeval tv;
+        tv.tv_sec = 0;
+        tv.tv_usec = 0;
+
+        int result = select(1, &rfds, nullptr, nullptr, &tv);
+        return result == 1;
+    }
+
+    VCore& top_;
+    char currentStdinByte;
+    bool hasStdinByte = false;
+};
+
 int main(int argc, char** argv)
 {
     assert(argc >= 2 && "No memory file name given");
@@ -205,6 +273,7 @@ int main(int argc, char** argv)
     auto memory = Memory{*top, memoryFile};
     auto charDev = CharDev{*top};
     auto testDev = TestDev{*top};
+    auto byteDev = ByteDev{*top};
 
     Verilated::traceEverOn(true);
     auto tracer = std::unique_ptr<VerilatedVcdC>{new VerilatedVcdC};
@@ -250,6 +319,9 @@ int main(int argc, char** argv)
                 else
                     std::cout << "All tests passed\n";
             }
+
+            if (byteDev.eval())
+                top->eval();
 
             if (mainTime >= MAX_CYCLES*CLOCK_PERIOD)
             {

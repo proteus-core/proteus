@@ -8,7 +8,6 @@ import spinal.core._
 import spinal.core.sim._
 import spinal.lib._
 import spinal.lib.misc.HexTools
-
 import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.amba4.axi._
 import spinal.lib.com.uart._
@@ -72,12 +71,18 @@ class Core(imemHexPath: String, formal: Boolean = false) extends Component {
   val charOut = master(Flow(UInt(8 bits)))
   charOut << charDev.io
 
+  val byteDev = new ByteDev
+  val byteIo = master(new ByteDevIo)
+  byteIo <> byteDev.io
+  byteDev.irq <> pipeline.getService[InterruptService].getExternalIrqIo
+
   val soc = new Soc(
     pipeline,
     Seq(
       MemSegment(0x0, 1 MiB).init(imemHexPath),
       MmioSegment(0xf0001000L, new MachineTimers(pipeline)),
-      MmioSegment(0xf0002000L, charDev)
+      MmioSegment(0xf0002000L, charDev),
+      MmioSegment(0xf0004000L, byteDev)
     )
   )
 }
@@ -92,6 +97,8 @@ object CoreSim {
   def main(args: Array[String]) {
     SimConfig.withWave.compile(new Core(args(0))).doSim {dut =>
       dut.clockDomain.forkStimulus(10)
+
+      val byteDevSim = new sim.StdioByteDev(dut.byteIo)
 
       var done = false
 
@@ -108,6 +115,8 @@ object CoreSim {
             print(char)
           }
         }
+
+        byteDevSim.eval()
       }
     }
   }
@@ -136,7 +145,7 @@ class CoreTest(memHexPath: String) extends Component {
   val testOut = master(Flow(UInt(config.xlen bits)))
   testOut << testDev.io
 
-  val dummyTimerIo = pipeline.getService[InterruptService].getMachineTimerIo
+  val dummyTimerIo = pipeline.getService[InterruptService].getMachineTimerIrqIo
   dummyTimerIo.update := False
   dummyTimerIo.interruptPending.assignDontCare()
 
@@ -197,13 +206,19 @@ class CoreExtMem extends Component {
   val testOut = master(Flow(UInt(config.xlen bits)))
   testOut << testDev.io
 
+  val byteDev = new ByteDev
+  val byteIo = master(new ByteDevIo)
+  byteIo <> byteDev.io
+  byteDev.irq <> pipeline.getService[InterruptService].getExternalIrqIo
+
   val soc = new Soc(
     pipeline,
     Seq(
       MemBusSegment(0x0, 1 MiB, dbus, ibus),
       MmioSegment(0xf0001000L, new MachineTimers(pipeline)),
       MmioSegment(0xf0002000L, charDev),
-      MmioSegment(0xf0003000L, testDev)
+      MmioSegment(0xf0003000L, testDev),
+      MmioSegment(0xf0004000L, byteDev)
     )
   )
 }
