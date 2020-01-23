@@ -12,12 +12,12 @@ class MachineTimers(pipeline: Pipeline)(implicit config: Config) extends MmioDev
 
   private val mtimecmp = Reg(UInt(64 bits)).init(0)
 
-  val mtimerIo = master(new MachineTimerIo)
+  val mtimerIo = master(new IrqIo)
   mtimerIo.setName("mtimer")
   mtimerIo.init()
 
   parent rework {
-    pipeline.getService[InterruptService].getMachineTimerIo <> mtimerIo
+    pipeline.getService[InterruptService].getMachineTimerIrqIo <> mtimerIo
   }
 
   // It is important that this comes before the call to build() to ensure that

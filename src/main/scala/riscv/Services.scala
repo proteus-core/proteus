@@ -118,7 +118,7 @@ trait CsrService {
   def getCsr(id: Int): CsrIo
 }
 
-class MachineTimerIo extends Bundle with IMasterSlave {
+class IrqIo extends Bundle with IMasterSlave {
   val update = Bool()
   val interruptPending = Bool()
 
@@ -149,7 +149,8 @@ class MachineTimerIo extends Bundle with IMasterSlave {
 }
 
 trait InterruptService {
-  def getMachineTimerIo: MachineTimerIo
+  def getMachineTimerIrqIo: IrqIo
+  def getExternalIrqIo: IrqIo
 }
 
 trait FormalService {
