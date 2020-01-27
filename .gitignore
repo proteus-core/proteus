@@ -11,3 +11,5 @@
 *~
 *.swp
 *.vcd
+.kdev4/
+*.kdev4
