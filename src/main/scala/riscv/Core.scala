@@ -79,7 +79,7 @@ class Core(imemHexPath: String, formal: Boolean = false) extends Component {
   val soc = new Soc(
     pipeline,
     Seq(
-      MemSegment(0x0, 1 MiB).init(imemHexPath),
+      MemSegment(0x0, 10 MiB).init(imemHexPath),
       MmioSegment(0xf0001000L, new MachineTimers(pipeline)),
       MmioSegment(0xf0002000L, charDev),
       MmioSegment(0xf0004000L, byteDev)
@@ -214,7 +214,7 @@ class CoreExtMem extends Component {
   val soc = new Soc(
     pipeline,
     Seq(
-      MemBusSegment(0x0, 1 MiB, dbus, ibus),
+      MemBusSegment(0x0, 10 MiB, dbus, ibus),
       MmioSegment(0xf0001000L, new MachineTimers(pipeline)),
       MmioSegment(0xf0002000L, charDev),
       MmioSegment(0xf0003000L, testDev),
