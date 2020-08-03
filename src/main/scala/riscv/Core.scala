@@ -14,7 +14,7 @@ import spinal.lib.com.uart._
 
 object createStaticPipeline {
   def apply(disablePipelining: Boolean = false, extraPlugins: Seq[Plugin[Pipeline]] = Seq())
-           (implicit conf: Config): Pipeline = {
+           (implicit conf: Config): StaticPipeline = {
     import riscv.plugins.scheduling.static._
 
     val pipeline = new Component with StaticPipeline {
@@ -356,7 +356,7 @@ object CoreAxi4Sim {
 
 object createDynamicPipeline {
   def apply(extraPlugins: Seq[Plugin[Pipeline]] = Seq())
-           (implicit conf: Config): Pipeline = {
+           (implicit conf: Config): DynamicPipeline = {
     val pipeline = new Component with DynamicPipeline {
       setDefinitionName("Pipeline")
 
