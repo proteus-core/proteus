@@ -13,7 +13,9 @@ import spinal.lib.bus.amba4.axi._
 import spinal.lib.com.uart._
 
 object createStaticPipeline {
-  def apply(disablePipelining: Boolean = false, extraPlugins: Seq[Plugin[Pipeline]] = Seq())
+  def apply(disablePipelining: Boolean = false,
+            extraPlugins: Seq[Plugin[Pipeline]] = Seq(),
+            build: Boolean = true)
            (implicit conf: Config): StaticPipeline = {
     import riscv.plugins.scheduling.static._
 
@@ -59,7 +61,10 @@ object createStaticPipeline {
       new MulDiv(pipeline.execute)
     ) ++ extraPlugins)
 
-    pipeline.build()
+    if (build) {
+      pipeline.build()
+    }
+
     pipeline
   }
 }
@@ -355,7 +360,7 @@ object CoreAxi4Sim {
 }
 
 object createDynamicPipeline {
-  def apply(extraPlugins: Seq[Plugin[Pipeline]] = Seq())
+  def apply(extraPlugins: Seq[Plugin[Pipeline]] = Seq(), build: Boolean = true)
            (implicit conf: Config): DynamicPipeline = {
     val pipeline = new Component with DynamicPipeline {
       setDefinitionName("Pipeline")
@@ -394,7 +399,10 @@ object createDynamicPipeline {
       new MulDiv(pipeline.intMul)
     ))
 
-    pipeline.build()
+    if (build) {
+      pipeline.build()
+    }
+
     pipeline
   }
 }
