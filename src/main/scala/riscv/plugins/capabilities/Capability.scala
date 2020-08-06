@@ -11,6 +11,9 @@ case class Capability(implicit context: Context) extends Bundle {
   val length = UInt(xlen bits)
 
   val perms = Bits(16 bits)
+
+  def address = base + offset
+  def top = base + length
 }
 
 object Capability {
