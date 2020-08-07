@@ -68,7 +68,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           // TODO cs1Needed
           val cap = value(context.data.CS1_DATA)
           val rd = value(Data.CFIELD).mux(
-            FieldSelect.PERM   -> cap.perms.asUInt.resized,
+            FieldSelect.PERM   -> cap.perms.asBits.asUInt.resized,
             FieldSelect.BASE   -> cap.base,
             FieldSelect.LEN    -> cap.length,
             FieldSelect.TAG    -> cap.tag.asUInt.resized,
