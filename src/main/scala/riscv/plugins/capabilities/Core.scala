@@ -16,7 +16,8 @@ class Core(imemHexPath: String) extends Component {
   implicit val context = Context(pipeline)
   pipeline.addPlugins(Seq(
     new RegisterFile(pipeline.stages(1), pipeline.stages.last),
-    new Access(pipeline.stages(2))
+    new Access(pipeline.stages(2)),
+    new ScrFile(pipeline.stages.last)
   ))
 
   pipeline.build()

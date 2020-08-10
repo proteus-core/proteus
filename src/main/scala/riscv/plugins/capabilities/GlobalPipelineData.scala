@@ -5,6 +5,8 @@ import riscv._
 import spinal.core._
 
 class GlobalPipelineData(pipeline: Pipeline)(implicit context: Context) {
+  object PCC extends PipelineData(NonPointerCapability())
+
   // CS1, CS2, and CD are in the same position in the encodings as RS1, RS2, and
   // RD, respectively. Therefore, we just reuse those PipelineData objects to
   // 1) save pipeline registers and 2) simplify decoding.
