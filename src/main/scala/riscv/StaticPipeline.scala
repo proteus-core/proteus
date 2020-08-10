@@ -33,6 +33,8 @@ trait StaticPipeline extends Pipeline {
     pipelineRegsMap
   }
 
+
+  override def fetchStage: Stage = stages.head
   override def retirementStage: Stage = stages.last
 
   override protected def init(): Unit = {

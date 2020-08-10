@@ -10,6 +10,8 @@ trait DynamicPipeline extends Pipeline {
 
   var pipelineRegs: Map[Stage, PipelineRegs] = null
 
+
+  override def fetchStage: Stage = null
   override val retirementStage: Stage = null
 
   override def build(): Unit = {
