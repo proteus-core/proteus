@@ -76,6 +76,9 @@ trait StaticPipeline extends Pipeline {
 
     for ((data, info) <- pipelineDataInfoMap) {
       if (info.isUsedAsInput && info.firstInputStageId > 0) {
+        assert(info.firstOutputStageId != Int.MaxValue,
+          s"Pipeline register ${data.name} used as input in stage " +
+            s"${stages(info.firstInputStageId).stageName} but is never output")
         assert(
           info.firstOutputStageId <= info.firstInputStageId,
           s"Pipeline register ${data.name} used as input in stage " +
