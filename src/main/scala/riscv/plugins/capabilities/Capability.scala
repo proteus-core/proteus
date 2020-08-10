@@ -59,4 +59,14 @@ object Capability {
     cap.perms.allowNone()
     cap
   }
+
+  def Root(implicit context: Context): Capability = {
+    val cap = Capability()
+    cap.tag := True
+    cap.base := 0
+    cap.offset := 0
+    cap.length := U"32'hffffffff"
+    cap.perms.allowAll()
+    cap
+  }
 }
