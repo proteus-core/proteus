@@ -89,26 +89,20 @@ class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
 
             val instructionType = instructionTypes(key)
 
-            val imm = instructionType match {
-              case InstructionType.I => immDecoder.i
-              case InstructionType.S => immDecoder.s
-              case InstructionType.B => immDecoder.b
-              case InstructionType.U => immDecoder.u
-              case InstructionType.J => immDecoder.j
-              case InstructionType.R => U(0)
+            val imm = instructionType.format match {
+              case InstructionFormat.I => immDecoder.i
+              case InstructionFormat.S => immDecoder.s
+              case InstructionFormat.B => immDecoder.b
+              case InstructionFormat.U => immDecoder.u
+              case InstructionFormat.J => immDecoder.j
+              case InstructionFormat.R => U(0)
             }
 
             output(pipeline.data.IMM) := imm
 
-            if (!instructionType.rs1Used) {
-              output(pipeline.data.RS1) := U(0)
-            }
-            if (!instructionType.rs2Used) {
-              output(pipeline.data.RS2) := U(0)
-            }
-            if (!instructionType.rdUsed) {
-              output(pipeline.data.RD) := U(0)
-            }
+            output(pipeline.data.RS1_TYPE) := instructionType.rs1Type
+            output(pipeline.data.RS2_TYPE) := instructionType.rs2Type
+            output(pipeline.data.RD_TYPE) := instructionType.rdType
           }
         }
         default {

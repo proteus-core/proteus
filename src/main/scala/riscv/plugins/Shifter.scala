@@ -35,8 +35,7 @@ class Shifter(exeStage: Stage) extends Plugin[Pipeline] {
 
         config.addDecoding(opcode, itype, Map(
           Data.SHIFT_OP -> op,
-          Data.SHIFT_USE_IMM -> Bool(useImm),
-          pipeline.data.WRITE_RD -> True
+          Data.SHIFT_USE_IMM -> Bool(useImm)
         ))
       }
     }

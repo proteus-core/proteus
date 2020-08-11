@@ -43,8 +43,7 @@ class MulDiv(exeStage: Stage) extends Plugin[Pipeline] {
           Data.MUL -> True,
           Data.MUL_HIGH -> high,
           Data.MULDIV_RS1_SIGNED -> rs1Signed,
-          Data.MULDIV_RS2_SIGNED -> rs2Signed,
-          pipeline.data.WRITE_RD -> True
+          Data.MULDIV_RS2_SIGNED -> rs2Signed
         ))
 
         issueService.setDestination(opcode, exeStage)
@@ -62,8 +61,7 @@ class MulDiv(exeStage: Stage) extends Plugin[Pipeline] {
           Data.DIV -> True,
           Data.REM -> rem,
           Data.MULDIV_RS1_SIGNED -> signed,
-          Data.MULDIV_RS2_SIGNED -> signed,
-          pipeline.data.WRITE_RD -> True
+          Data.MULDIV_RS2_SIGNED -> signed
         ))
 
         issueService.setDestination(opcode, exeStage)

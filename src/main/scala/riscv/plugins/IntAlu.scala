@@ -52,8 +52,7 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
         config.addDecoding(opcode, InstructionType.R, Map(
           Data.ALU_OP -> op,
           Data.ALU_SRC2 -> Src2Select.RS2,
-          Data.ALU_COMMIT_RESULT -> True,
-          pipeline.data.WRITE_RD -> True
+          Data.ALU_COMMIT_RESULT -> True
         ))
 
         issuer.setDestination(opcode, aluStage)
@@ -72,8 +71,7 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
         config.addDecoding(opcode, InstructionType.I, Map(
           Data.ALU_OP -> op,
           Data.ALU_SRC2 -> Src2Select.IMM,
-          Data.ALU_COMMIT_RESULT -> True,
-          pipeline.data.WRITE_RD -> True
+          Data.ALU_COMMIT_RESULT -> True
         ))
 
         issuer.setDestination(opcode, aluStage)
@@ -82,8 +80,7 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
       config.addDecoding(Opcodes.LUI, InstructionType.U, Map(
         Data.ALU_OP -> AluOp.SRC2,
         Data.ALU_SRC2 -> Src2Select.IMM,
-        Data.ALU_COMMIT_RESULT -> True,
-        pipeline.data.WRITE_RD -> True
+        Data.ALU_COMMIT_RESULT -> True
       ))
 
       issuer.setDestination(Opcodes.LUI, aluStage)
@@ -92,8 +89,7 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
         Data.ALU_OP -> AluOp.ADD,
         Data.ALU_SRC1 -> Src1Select.PC,
         Data.ALU_SRC2 -> Src2Select.IMM,
-        Data.ALU_COMMIT_RESULT -> True,
-        pipeline.data.WRITE_RD -> True
+        Data.ALU_COMMIT_RESULT -> True
       ))
 
       issuer.setDestination(Opcodes.AUIPC, aluStage)

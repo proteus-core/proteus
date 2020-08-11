@@ -201,6 +201,16 @@ trait InterruptService {
   def getExternalIrqIo: IrqIo
 }
 
+case class DataHazardInfo[T <: Data](registerType: SpinalEnumElement[RegisterType.type],
+                                     rs1Data: PipelineData[T],
+                                     rs2Data: PipelineData[T],
+                                     rdData: PipelineData[T]
+                                    )
+
+trait DataHazardService {
+  def addHazard[T <: Data](info: DataHazardInfo[T]): Unit
+}
+
 trait FormalService {
   def lsuDefault(stage: Stage)
   def lsuOnLoad(stage: Stage, addr: UInt, rmask: Bits, rdata: UInt)

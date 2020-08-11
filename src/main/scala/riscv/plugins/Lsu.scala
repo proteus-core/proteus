@@ -50,8 +50,7 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] {
         config.addDecoding(opcode, InstructionType.I, Map(
           Data.LSU_IS_LOAD -> True,
           Data.LSU_ACCESS_WIDTH -> width,
-          Data.LSU_IS_UNSIGNED -> unsigned,
-          pipeline.data.WRITE_RD -> True
+          Data.LSU_IS_UNSIGNED -> unsigned
         ))
       }
 

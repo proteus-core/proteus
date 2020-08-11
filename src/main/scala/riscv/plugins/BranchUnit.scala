@@ -29,8 +29,7 @@ class BranchUnit(branchStage: Stage) extends Plugin[Pipeline] {
 
       config.addDecoding(Opcodes.JAL, InstructionType.J, Map(
         Data.BU_IS_BRANCH -> True,
-        Data.BU_WRITE_RET_ADDR_TO_RD -> True,
-        pipeline.data.WRITE_RD -> True
+        Data.BU_WRITE_RET_ADDR_TO_RD -> True
       ))
 
       alu.addOperation(Opcodes.JAL, alu.AluOp.ADD,
@@ -39,8 +38,7 @@ class BranchUnit(branchStage: Stage) extends Plugin[Pipeline] {
       config.addDecoding(Opcodes.JALR, InstructionType.I, Map(
         Data.BU_IS_BRANCH -> True,
         Data.BU_WRITE_RET_ADDR_TO_RD -> True,
-        Data.BU_IGNORE_TARGET_LSB -> True,
-        pipeline.data.WRITE_RD -> True
+        Data.BU_IGNORE_TARGET_LSB -> True
       ))
 
       alu.addOperation(Opcodes.JALR, alu.AluOp.ADD,

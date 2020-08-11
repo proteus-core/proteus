@@ -76,17 +76,49 @@ object Extension {
   })
 }
 
-sealed abstract class InstructionType(val rs1Used: Boolean,
-                                      val rs2Used: Boolean,
-                                      val rdUsed: Boolean)
+/**
+ * The InstructionFormat is the format as specified in the RISC-V specs. This is
+ * only used by the decoder to decide how to decode the immediate (since RSx and
+ * RD are always in the same position, they can be decoded unconditionally).
+ */
+sealed trait InstructionFormat
+
+object InstructionFormat {
+  case object R extends InstructionFormat
+  case object I extends InstructionFormat
+  case object S extends InstructionFormat
+  case object B extends InstructionFormat
+  case object U extends InstructionFormat
+  case object J extends InstructionFormat
+}
+
+/**
+ * Enum to specify the type of registers in InstructionType. New types can be
+ * added by calling newElement(String) on the RegisterType object.
+ */
+object RegisterType extends SpinalEnum {
+  val NONE, GPR = newElement()
+}
+
+/**
+ * The InstructionType is a combination of an InstructionFormat and a
+ * specification of the type of each register. The type of register is mainly
+ * used to resolve data hazards correctly. E.g., we don't want to forward FP
+ * register values to GPR registers (this could happen since the RSx and RD
+ * pipeline registers are used for all register types).
+ */
+abstract class InstructionType(val format: InstructionFormat,
+                               val rs1Type: SpinalEnumElement[RegisterType.type],
+                               val rs2Type: SpinalEnumElement[RegisterType.type],
+                               val rdType:  SpinalEnumElement[RegisterType.type])
 
 object InstructionType {
-  case object R extends InstructionType(true,  true,  true)
-  case object I extends InstructionType(true,  false, true)
-  case object S extends InstructionType(true,  true,  false)
-  case object B extends InstructionType(true,  true,  false)
-  case object U extends InstructionType(false, false, true)
-  case object J extends InstructionType(false, false, true)
+  case object R extends InstructionType(InstructionFormat.R, RegisterType.GPR,  RegisterType.GPR,  RegisterType.GPR)
+  case object I extends InstructionType(InstructionFormat.I, RegisterType.GPR,  RegisterType.NONE, RegisterType.GPR)
+  case object S extends InstructionType(InstructionFormat.S, RegisterType.GPR,  RegisterType.GPR,  RegisterType.NONE)
+  case object B extends InstructionType(InstructionFormat.B, RegisterType.GPR,  RegisterType.GPR,  RegisterType.NONE)
+  case object U extends InstructionType(InstructionFormat.U, RegisterType.NONE, RegisterType.NONE, RegisterType.GPR)
+  case object J extends InstructionType(InstructionFormat.J, RegisterType.NONE, RegisterType.NONE, RegisterType.GPR)
 }
 
 sealed abstract class TrapCause(val isInterrupt: Boolean, val code: Int, val mtval: UInt = null)

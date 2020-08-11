@@ -4,24 +4,39 @@ import riscv._
 
 import spinal.core._
 
+import scala.collection.mutable
+
 // FIXME firstRsReadStage could be automatically deduced by registering which
 // plugins write to arbitration.rsXNeeded.
-class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline] {
+class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline] with DataHazardService {
+  private val hazardInfos = mutable.ArrayBuffer[DataHazardInfo[Data]]()
+
+  override def addHazard[T <: Data](info: DataHazardInfo[T]): Unit = {
+    hazardInfos += info.asInstanceOf[DataHazardInfo[Data]]
+  }
+
   override def build(): Unit = {
     pipeline plug new Area {
       // Make sure RS* and RD* are passed through the whole pipeline because we
       // need it to resolve RS inputs.
       val lastStage = pipeline.stages.last
-      val data = pipeline.data
-      lastStage.output(data.RS1)
-      lastStage.output(data.RS2)
-      lastStage.output(data.RD_VALID)
-      lastStage.output(data.RD_DATA)
-      lastStage.output(data.RD)
+      lastStage.output(pipeline.data.RS1)
+      lastStage.output(pipeline.data.RS1_TYPE)
+      lastStage.output(pipeline.data.RS2)
+      lastStage.output(pipeline.data.RS2_TYPE)
+      lastStage.output(pipeline.data.RD_VALID)
+      lastStage.output(pipeline.data.RD)
+      lastStage.output(pipeline.data.RD_TYPE)
     }
   }
 
   override def finish(): Unit = {
+    for (info <- hazardInfos) {
+      resolveHazard(info)
+    }
+  }
+
+  def resolveHazard[T <: Data](hazardInfo: DataHazardInfo[T]) {
     pipeline plug new Area {
       val trapHandler = pipeline.getService[TrapService]
 
@@ -49,7 +64,7 @@ class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline]
       val lastWrittenRd = new Bundle {
         val id = Reg(pipeline.data.RD.dataType())
         val valid = Reg(pipeline.data.RD_VALID.dataType())
-        val data = Reg(pipeline.data.RD_DATA.dataType())
+        val data = Reg(hazardInfo.rdData.dataType())
       }
 
       val stages = pipeline.stages
@@ -58,20 +73,21 @@ class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline]
             !trapHandler.hasTrapped(stages.last)) {
         lastWrittenRd.id := stages.last.output(pipeline.data.RD)
         lastWrittenRd.valid := stages.last.output(pipeline.data.RD_VALID)
-        lastWrittenRd.data := stages.last.output(pipeline.data.RD_DATA)
+        lastWrittenRd.data := stages.last.output(hazardInfo.rdData)
       }
 
       for (stage <- stages.dropWhile(_ != firstRsReadStage)) {
-        case class ResolveInfo(forwarded: Bool, value: UInt)
+        case class ResolveInfo(forwarded: Bool, value: T)
 
         def resolveRs(rsNeeded: Bool, rs: PipelineData[UInt],
-                      rsData: PipelineData[UInt]): ResolveInfo = {
+                      rsType: PipelineData[SpinalEnumCraft[RegisterType.type]],
+                      rsData: PipelineData[T]): ResolveInfo = {
           if (stage.hasInput(rsData)) {
-            val info = ResolveInfo(False, 0)
+            val info = ResolveInfo(False, hazardInfo.rdData.dataType().assignDontCare())
             val neededRs = stage.input(rs)
 
             when (stage.arbitration.isValid) {
-              when (neededRs =/= 0) {
+              when (neededRs =/= 0 && stage.input(rsType) === hazardInfo.registerType) {
                 when (lastWrittenRd.valid && lastWrittenRd.id === neededRs) {
                   info.forwarded := True
                   info.value := lastWrittenRd.data
@@ -82,11 +98,11 @@ class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline]
                 for (nextStage <- nextStages) {
                   when (nextStage.arbitration.isValid &&
                         !trapHandler.hasTrapped(nextStage) &&
-                        nextStage.input(pipeline.data.WRITE_RD) &&
+                        nextStage.input(pipeline.data.RD_TYPE) === hazardInfo.registerType &&
                         nextStage.input(pipeline.data.RD) === neededRs) {
                     when (nextStage.input(pipeline.data.RD_VALID)) {
                       info.forwarded := True
-                      info.value := nextStage.input(pipeline.data.RD_DATA)
+                      info.value := nextStage.input(hazardInfo.rdData)
                     } elsewhen (rsNeeded) {
                       info.forwarded := False
                       stage.arbitration.isStalled := True
@@ -106,9 +122,8 @@ class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline]
           }
         }
 
-        val data = pipeline.data
-        val rs1Info = resolveRs(stage.arbitration.rs1Needed, data.RS1, data.RS1_DATA)
-        val rs2Info = resolveRs(stage.arbitration.rs2Needed, data.RS2, data.RS2_DATA)
+        val rs1Info = resolveRs(stage.arbitration.rs1Needed, pipeline.data.RS1, pipeline.data.RS1_TYPE, hazardInfo.rs1Data)
+        val rs2Info = resolveRs(stage.arbitration.rs2Needed, pipeline.data.RS2, pipeline.data.RS2_TYPE, hazardInfo.rs2Data)
 
         if (rs1Info != null || rs2Info != null) {
           when(stage.arbitration.isStalled || !stage.arbitration.isReady) {
@@ -117,12 +132,12 @@ class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline]
 
             if (rs1Info != null) {
               when (rs1Info.forwarded) {
-                prevStageRegs.setReg(data.RS1_DATA, rs1Info.value)
+                prevStageRegs.setReg(hazardInfo.rs1Data, rs1Info.value)
               }
             }
             if (rs2Info != null) {
               when (rs2Info.forwarded) {
-                prevStageRegs.setReg(data.RS2_DATA, rs2Info.value)
+                prevStageRegs.setReg(hazardInfo.rs2Data, rs2Info.value)
               }
             }
           }

@@ -100,8 +100,7 @@ class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
       for ((opcode, op, useImm) <- ops) {
         config.addDecoding(opcode, InstructionType.I, Map(
           Data.CSR_OP -> op,
-          Data.CSR_USE_IMM -> useImm,
-          pipeline.data.WRITE_RD -> True
+          Data.CSR_USE_IMM -> useImm
         ))
       }
     }
