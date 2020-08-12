@@ -31,9 +31,9 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
         pipeline.fetchStage.input(context.data.PCC) := Capability.Root
       }
 
-      val scrId = value(context.data.CS2)
-      val ignoreRead = value(context.data.CD) === 0
-      val ignoreWrite = value(context.data.CS1) === 0
+      val scrId = value(pipeline.data.RS2)
+      val ignoreRead = value(pipeline.data.RD) === 0
+      val ignoreWrite = value(pipeline.data.RS1) === 0
       val illegalScrId = False
       val pcc = value(context.data.PCC)
       val hasAsr = pcc.perms.accessSystemRegisters

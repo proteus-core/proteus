@@ -75,8 +75,8 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
 
       val regFileIo = slave(ReadIo())
 
-      regFileIo.cs1 := value(context.data.CS1)
-      regFileIo.cs2 := value(context.data.CS2)
+      regFileIo.cs1 := value(pipeline.data.RS1)
+      regFileIo.cs2 := value(pipeline.data.RS2)
       output(context.data.CS1_DATA) := regFileIo.cs1Data
       output(context.data.CS2_DATA) := regFileIo.cs2Data
     }
@@ -86,7 +86,7 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
 
       val regFileIo = slave(WriteIo())
 
-      regFileIo.cd := value(context.data.CD)
+      regFileIo.cd := value(pipeline.data.RD)
       regFileIo.data := value(context.data.CD_DATA)
 
       val trapHandler = pipeline.getService[TrapService]
