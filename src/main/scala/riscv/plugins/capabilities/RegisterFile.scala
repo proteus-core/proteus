@@ -10,9 +10,17 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
     val decoder = pipeline.getService[DecoderService]
 
     decoder.configure {config =>
-      config.addDefault(context.data.WRITE_CD, False)
       config.addDefault(context.data.CD_DATA, Capability.Null)
     }
+
+    val hazardInfo = DataHazardInfo(
+      RegisterType.CAP,
+      context.data.CS1_DATA,
+      context.data.CS2_DATA,
+      context.data.CD_DATA
+    )
+
+    pipeline.getService[DataHazardService].addHazard(hazardInfo)
   }
 
   override def build(): Unit = {
@@ -84,7 +92,7 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
       val trapHandler = pipeline.getService[TrapService]
       val hasTrapped = trapHandler.hasTrapped(writeStage)
       regFileIo.write :=
-        value(context.data.WRITE_CD) &&
+        (value(pipeline.data.RD_TYPE) === RegisterType.CAP) &&
         arbitration.isDone &&
         !hasTrapped
     }

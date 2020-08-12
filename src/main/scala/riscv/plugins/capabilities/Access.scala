@@ -37,10 +37,9 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
       )
 
       for ((opcode, selector) <- getters) {
-        config.addDecoding(opcode, InstructionType.R, Map(
+        config.addDecoding(opcode, InstructionType.R_CxR, Map(
           Data.CGET -> True,
-          Data.CFIELD -> selector,
-          pipeline.data.WRITE_RD -> True
+          Data.CFIELD -> selector
         ))
       }
 
@@ -50,10 +49,9 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
       )
 
       for ((opcode, modification) <- modifiers) {
-        config.addDecoding(opcode, InstructionType.R, Map(
+        config.addDecoding(opcode, InstructionType.R_CRC, Map(
           Data.CMODIFY -> True,
-          Data.CMODIFICATION -> modification,
-          context.data.WRITE_CD -> True
+          Data.CMODIFICATION -> modification
         ))
       }
     }
@@ -106,6 +104,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           }
 
           output(context.data.CD_DATA) := cd
+          output(pipeline.data.RD_VALID) := True
         }
       }
     }

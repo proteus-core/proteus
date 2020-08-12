@@ -16,9 +16,8 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
         Data.SCR_RW -> False
       ))
 
-      config.addDecoding(Opcodes.CSpecialRW, InstructionType.R, Map(
-        Data.SCR_RW -> True,
-        context.data.WRITE_CD -> True
+      config.addDecoding(Opcodes.CSpecialRW, InstructionType.R_CxC, Map(
+        Data.SCR_RW -> True
       ))
     }
   }
@@ -73,6 +72,7 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
           // TODO: AccessSystemRegsViolation
         } elsewhen (!ignoreRead) {
           output(context.data.CD_DATA) := cd
+          output(pipeline.data.RD_VALID) := True
         }
       }
     }

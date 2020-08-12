@@ -1,5 +1,7 @@
 package riscv.plugins.capabilities
 
+import riscv._
+
 import spinal.core._
 
 object Opcodes {
@@ -14,6 +16,18 @@ object Opcodes {
   val CSetBoundsExact = M"0001001----------000-----1011011"
 
   val CSpecialRW      = M"0000001----------000-----1011011"
+}
+
+object RegisterType {
+  val CAP = riscv.RegisterType.newElement("CAP")
+}
+
+object InstructionType {
+  // Naming scheme: <FORMAT>_<RS1_TYPE><RS2_TYPE><RD_TYPE>
+  // Where register type can be R (GPR), C (CAP), or x (NONE)
+  case object R_CxR extends InstructionType(InstructionFormat.R, RegisterType.CAP, riscv.RegisterType.NONE, riscv.RegisterType.GPR)
+  case object R_CRC extends InstructionType(InstructionFormat.R, RegisterType.CAP, riscv.RegisterType.GPR,  RegisterType.CAP)
+  case object R_CxC extends InstructionType(InstructionFormat.R, RegisterType.CAP, riscv.RegisterType.NONE, RegisterType.CAP)
 }
 
 object ScrIndex {

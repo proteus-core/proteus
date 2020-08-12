@@ -16,5 +16,4 @@ class GlobalPipelineData(pipeline: Pipeline)(implicit context: Context) {
   object CS2_DATA extends PipelineData(Capability())
   val CD = pipeline.data.RD
   object CD_DATA extends PipelineData(Capability())
-  object WRITE_CD extends PipelineData(Bool())
 }
