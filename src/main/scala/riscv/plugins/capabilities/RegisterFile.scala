@@ -58,7 +58,7 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
       readIo.cs2Data := readReg(readIo.cs2)
 
       when (writeIo.write && writeIo.cd =/= 0) {
-        regs(writeIo.cd) := writeIo.data
+        regs.write(writeIo.cd, writeIo.data)
       }
     }
 
