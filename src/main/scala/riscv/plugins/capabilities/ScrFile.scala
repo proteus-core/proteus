@@ -2,10 +2,33 @@ package riscv.plugins.capabilities
 
 import riscv._
 import spinal.core._
+import spinal.lib._
 
-class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
+class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipeline] with ScrService {
+  private var ddc: Capability = _
+  private var writingDdc: Bool = _
+
   object Data {
     object SCR_RW extends PipelineData(Bool())
+  }
+
+  override def getPcc(stage: Stage): Capability = {
+    val pcc = Capability()
+    pcc.assignFrom(stage.value(context.data.PCC), stage.value(pipeline.data.PC))
+    pcc
+  }
+
+  override def getDdc(stage: Stage): Capability = {
+    if (stage == scrStage) {
+      ddc
+    } else {
+      val area = stage plug new Area {
+        val ddc = in(Capability())
+      }
+
+      area.ddc := ddc
+      area.ddc
+    }
   }
 
   override def setup(): Unit = {
@@ -31,11 +54,18 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
         pipeline.fetchStage.input(context.data.PCC) := Capability.Root
       }
 
+      val ddc = out(Reg(Capability()).init(Capability.Root))
+      ScrFile.this.ddc = ddc
+
+      val writingDdc = out(False)
+      ScrFile.this.writingDdc = writingDdc
+
       val scrId = value(pipeline.data.RS2)
       val ignoreRead = value(pipeline.data.RD) === 0
       val ignoreWrite = value(pipeline.data.RS1) === 0
       val illegalScrId = False
       val pcc = value(context.data.PCC)
+      val cs1 = value(context.data.CS1_DATA)
       val hasAsr = pcc.perms.accessSystemRegisters
       val needAsr = True
       val cd = Capability.Null
@@ -44,7 +74,11 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
         when(!ignoreRead) {
           switch (scrId) {
             is (ScrIndex.PCC) {
-              cd.assignFrom(pcc, value(pipeline.data.PC))
+              cd := getPcc(scrStage)
+              needAsr := False
+            }
+            is (ScrIndex.DDC) {
+              cd := getDdc(scrStage)
               needAsr := False
             }
             default {
@@ -57,6 +91,10 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
           switch (scrId) {
             is (ScrIndex.PCC) {
               needAsr := False
+            }
+            is (ScrIndex.DDC) {
+              ddc := cs1
+              writingDdc := True
             }
             default {
               illegalScrId := True
@@ -76,5 +114,33 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
         }
       }
     }
+  }
+
+  override def finish(): Unit = {
+    def writesDdc(stage: Stage) = {
+      if (stage == scrStage) {
+        writingDdc
+      } else {
+        stage.arbitration.isValid &&
+          stage.input(Data.SCR_RW) &&
+          stage.input(pipeline.data.RS2) === ScrIndex.DDC &&
+          stage.input(pipeline.data.RS1) =/= 0
+      }
+    }
+
+    val dbusStages = pipeline.getService[MemoryService].getDBusStages
+
+    // To resolve hazards on DDC, we make an simplifying assumption that all
+    // stages that access DBUS always need DDC. They will be stalled whenever
+    // a later stage will write to DDC. This is an overestimation but since DDC
+    // will not often be written to, this will probably not have a large
+    // performance impact in practice.
+    pipeline.getService[DataHazardService].resolveHazard({ (stage, nextStages) =>
+      if (!dbusStages.contains(stage)) {
+        False
+      } else {
+        nextStages.map(writesDdc).orR
+      }
+    })
   }
 }
