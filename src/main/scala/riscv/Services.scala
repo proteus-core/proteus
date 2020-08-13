@@ -24,6 +24,12 @@ trait MemoryService {
     */
   def createInternalDBus(stage: Stage): MemBus
 
+  /**
+   * Return all stages that have an internal DBUS. I.e., the stages that are
+   * able to put requests on the DBUS.
+   */
+  def getDBusStages: Seq[Stage]
+
   type MemBusFilter = (Stage, MemBus, MemBus) => Unit
 
   /**

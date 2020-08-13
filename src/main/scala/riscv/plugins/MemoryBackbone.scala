@@ -62,6 +62,14 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
     internalDBus
   }
 
+  override def getDBusStages: Seq[Stage] = {
+    if (internalDBus == null) {
+      Seq()
+    } else {
+      Seq(internalDBusStage)
+    }
+  }
+
   override def filterDBus(filter: MemBusFilter): Unit = {
     assert(dbusFilter.isEmpty)
     dbusFilter = Some(filter)
