@@ -145,4 +145,18 @@ class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline]
       }
     }
   }
+
+  override def resolveHazard(conflicts: (Stage, Seq[Stage]) => Bool): Unit = {
+    pipeline plug new Area {
+      val stages = pipeline.stages
+
+      for (stage <- stages) {
+        val nextStages = stages.dropWhile(_ != stage).tail
+
+        when (conflicts(stage, nextStages)) {
+          stage.arbitration.isStalled := True
+        }
+      }
+    }
+  }
 }

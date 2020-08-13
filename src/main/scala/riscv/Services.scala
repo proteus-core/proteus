@@ -215,6 +215,18 @@ case class DataHazardInfo[T <: Data](registerType: SpinalEnumElement[RegisterTyp
 
 trait DataHazardService {
   def addHazard[T <: Data](info: DataHazardInfo[T]): Unit
+
+  /**
+   * Stalls pipeline stages until the given hazard is resolved. More
+   * specifically, conflicts() is called for each stage. Its first argument
+   * is the stage itself, the second one is a sequence of all stages holding
+   * non-retired earlier instructions. When there is a potential conflict (e.g.,
+   * the stage reads a register that will be written by one of the later stages)
+   * conflicts() should return True and the stage will be stalled.
+   *
+   * Note: this function should be called from Plugin.finish().
+   */
+  def resolveHazard(conflicts: (Stage, Seq[Stage]) => Bool)
 }
 
 trait FormalService {
