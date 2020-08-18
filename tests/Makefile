@@ -35,5 +35,5 @@ $(SIM_EXE): FORCE
 .PHONY: FORCE
 
 %.pass: %.bin $(SIM_EXE)
-	$(SIM_EXE) $<
+	cd $(BASE_DIR); $(SIM_EXE) $<
 	touch $@
