@@ -7,7 +7,8 @@ SIM_DIR = $(BASE_DIR)/sim
 SIM_EXE = $(SIM_DIR)/build/sim
 
 RISCV_PREFIX = riscv32-unknown-elf
-CC = $(RISCV_PREFIX)-gcc
+CC ?= $(RISCV_PREFIX)-gcc
+LD = $(RISCV_PREFIX)-gcc
 OBJCOPY = $(RISCV_PREFIX)-objcopy
 
 TEST_DIRS = $(ISA_TESTS_DIR)/rv32ui $(ISA_TESTS_DIR)/rv32mi $(ISA_TESTS_DIR)/rv32um
@@ -22,9 +23,12 @@ all: $(ALL_TARGETS)
 
 VPATH = $(TEST_DIRS)
 
-$(BUILD_DIR)/%.elf: %.S
+$(BUILD_DIR)/%.o: %.S
 	mkdir -p $(@D)
-	$(CC) -ffreestanding -nostdlib -T tests.ld -I$(TESTS_DIR) -I$(ISA_TESTS_DIR)/macros/scalar -o $@ $^
+	$(CC) -I$(TESTS_DIR) -I$(ISA_TESTS_DIR)/macros/scalar -c -o $@ $^
+
+%.elf: %.o
+	$(LD) -ffreestanding -nostdlib -T tests.ld -o $@ $^
 
 %.bin: %.elf
 	$(OBJCOPY) -O binary $^ $@
