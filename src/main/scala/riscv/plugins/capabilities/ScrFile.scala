@@ -5,8 +5,19 @@ import spinal.core._
 import spinal.lib._
 
 class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipeline] with ScrService {
-  private var ddc: Capability = _
+  private var ddcVar: Capability = _
   private var writingDdc: Bool = _
+
+  private def ddc = {
+    if (ddcVar == null) {
+      scrStage plug new Area {
+        val ddc = out(Reg(Capability()).init(Capability.Root))
+        ddcVar = ddc
+      }
+    }
+
+    ddcVar
+  }
 
   object Data {
     object SCR_RW extends PipelineData(Bool())
@@ -26,7 +37,10 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
         val ddc = in(Capability())
       }
 
-      area.ddc := ddc
+      pipeline plug {
+        area.ddc := ddc
+      }
+
       area.ddc
     }
   }
@@ -53,9 +67,6 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
         // FIXME: This should probably be done by a "PccManager" plugin
         pipeline.fetchStage.input(context.data.PCC) := Capability.Root
       }
-
-      val ddc = out(Reg(Capability()).init(Capability.Root))
-      ScrFile.this.ddc = ddc
 
       val writingDdc = out(False)
       ScrFile.this.writingDdc = writingDdc
