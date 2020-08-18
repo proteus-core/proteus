@@ -49,3 +49,36 @@ object ScrIndex {
   val MScratchC = 30
   val MEPCC = 31
 }
+
+object TrapCause {
+  case object CheriException extends riscv.ExceptionCause(10) // FIXME: 32
+}
+
+sealed abstract class ExceptionCause(val code: Int)
+
+object ExceptionCause {
+  case object None                                extends ExceptionCause(0x00)
+  case object LengthViolation                     extends ExceptionCause(0x01)
+  case object TagViolation                        extends ExceptionCause(0x02)
+  case object SealViolation                       extends ExceptionCause(0x03)
+  case object TypeViolation                       extends ExceptionCause(0x04)
+  case object CallTrap                            extends ExceptionCause(0x05)
+  case object ReturnTrap                          extends ExceptionCause(0x06)
+  case object TrustedSystemStackOverflow          extends ExceptionCause(0x07)
+  case object SoftwareDefinedPermissionViolation  extends ExceptionCause(0x08)
+  case object MmuProhibitsStoreCapability         extends ExceptionCause(0x09)
+  case object BoundsCannotBeRepresentedExactly    extends ExceptionCause(0x0a)
+  case object GlobalViolation                     extends ExceptionCause(0x10)
+  case object PermitExecuteViolation              extends ExceptionCause(0x11)
+  case object PermitLoadViolation                 extends ExceptionCause(0x12)
+  case object PermitStoreViolation                extends ExceptionCause(0x13)
+  case object PermitLoadCapabilityViolation       extends ExceptionCause(0x14)
+  case object PermitStoreCapabilityViolation      extends ExceptionCause(0x15)
+  case object PermitStoreLocalCapabilityViolation extends ExceptionCause(0x16)
+  case object PermitSealViolation                 extends ExceptionCause(0x17)
+  case object AccessSystemRegistersViolation      extends ExceptionCause(0x18)
+  case object PermitCCallViolation                extends ExceptionCause(0x19)
+  case object AccessCCallIdcViolation             extends ExceptionCause(0x1a)
+  case object PermitUnsealViolation               extends ExceptionCause(0x1b)
+  case object PermitSetCidViolation               extends ExceptionCause(0x1c)
+}

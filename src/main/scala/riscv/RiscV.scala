@@ -121,9 +121,9 @@ object InstructionType {
   case object J extends InstructionType(InstructionFormat.J, RegisterType.NONE, RegisterType.NONE, RegisterType.GPR)
 }
 
-sealed abstract class TrapCause(val isInterrupt: Boolean, val code: Int, val mtval: UInt = null)
-sealed abstract class InterruptCause(code: Int) extends TrapCause(true, code)
-sealed abstract class ExceptionCause(code: Int, mtval: UInt = null) extends TrapCause(false, code, mtval)
+abstract class TrapCause(val isInterrupt: Boolean, val code: Int, val mtval: UInt = null)
+abstract class InterruptCause(code: Int) extends TrapCause(true, code)
+abstract class ExceptionCause(code: Int, mtval: UInt = null) extends TrapCause(false, code, mtval)
 
 object TrapCause {
   case object UserSoftwareInterrupt        extends InterruptCause(0)
