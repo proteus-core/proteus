@@ -4,14 +4,20 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class Lsu(lsuStage: Stage) extends Plugin[Pipeline] {
-  object LsuAccessWidth extends SpinalEnum {
-    val B, H, W = newElement()
+class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
+  private var addressTranslator = new LsuAddressTranslator {
+    override def translate(stage: Stage,
+                           address: UInt,
+                           operation: SpinalEnumCraft[LsuOperationType.type],
+                           width: SpinalEnumCraft[LsuAccessWidth.type]): UInt = {
+      address
+    }
   }
 
+  private var addressTranslatorChanged = false
+
   object Data {
-    object LSU_IS_LOAD extends PipelineData(Bool())
-    object LSU_IS_STORE extends PipelineData(Bool())
+    object LSU_OPERATION_TYPE extends PipelineData(LsuOperationType())
     object LSU_ACCESS_WIDTH extends PipelineData(LsuAccessWidth())
     object LSU_IS_UNSIGNED extends PipelineData(Bool())
   }
@@ -39,8 +45,7 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] {
 
     decoder.configure {config =>
       config.addDefault(Map(
-        Data.LSU_IS_LOAD -> False,
-        Data.LSU_IS_STORE -> False,
+        Data.LSU_OPERATION_TYPE -> LsuOperationType.NONE,
         Data.LSU_IS_UNSIGNED -> False
       ))
 
@@ -48,7 +53,7 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] {
                   width: SpinalEnumElement[LsuAccessWidth.type],
                   unsigned: Bool) = {
         config.addDecoding(opcode, InstructionType.I, Map(
-          Data.LSU_IS_LOAD -> True,
+          Data.LSU_OPERATION_TYPE -> LsuOperationType.LOAD,
           Data.LSU_ACCESS_WIDTH -> width,
           Data.LSU_IS_UNSIGNED -> unsigned
         ))
@@ -63,7 +68,7 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] {
       def addStore(opcode: MaskedLiteral,
                    width: SpinalEnumElement[LsuAccessWidth.type]) = {
         config.addDecoding(opcode, InstructionType.S, Map(
-          Data.LSU_IS_STORE -> True,
+          Data.LSU_OPERATION_TYPE -> LsuOperationType.STORE,
           Data.LSU_ACCESS_WIDTH -> width
         ))
       }
@@ -81,18 +86,22 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] {
       val dbus = pipeline.getService[MemoryService].createInternalDBus(lsuStage)
       val dbusCtrl = new MemBusControl(dbus)
 
-      val address = UInt(config.xlen bits)
-      address := input(pipeline.getService[IntAluService].resultData)
+      val operation = value(Data.LSU_OPERATION_TYPE)
+      val accessWidth = value(Data.LSU_ACCESS_WIDTH)
+      val inputAddress = input(pipeline.getService[IntAluService].resultData)
+      val address = addressTranslator.translate(
+        lsuStage, inputAddress, operation, accessWidth
+      )
       val busAddress = address & U(0xfffffffcL)
 
-      val isLoad = value(Data.LSU_IS_LOAD)
-      val isStore = value(Data.LSU_IS_STORE)
+      val isLoad = operation === LsuOperationType.LOAD
+      val isStore = operation === LsuOperationType.STORE
       val isActive = isLoad || isStore
 
       val misaligned = Bool()
       val baseMask = Bits(config.xlen / 8 bits)
 
-      switch (value(Data.LSU_ACCESS_WIDTH)) {
+      switch (accessWidth) {
         is (LsuAccessWidth.B) {
           misaligned := False
           baseMask := B"0001"
@@ -212,5 +221,12 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] {
         }
       }
     }
+  }
+
+  override def setAddressTranslator(translator: LsuAddressTranslator): Unit = {
+    assert(!addressTranslatorChanged, "LsuAddressTranslator can only be set once")
+
+    addressTranslator = translator
+    addressTranslatorChanged = true
   }
 }
