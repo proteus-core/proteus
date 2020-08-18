@@ -1,3 +1,5 @@
+CORE ?= riscv.CoreExtMem
+
 BASE_DIR = ..
 BUILD_DIR = build
 TOPLEVEL_MODULE = Core
@@ -20,7 +22,7 @@ $(VERILOG_INPUT): $(BASE_DIR)/$(VERILOG_FILE_NAME)
 	cp $< $@
 
 $(BASE_DIR)/$(VERILOG_FILE_NAME): FORCE
-	cd $(BASE_DIR); sbt "runMain riscv.CoreExtMem"
+	cd $(BASE_DIR); sbt "runMain $(CORE)"
 
 FORCE:
 
