@@ -1,0 +1,3 @@
+CORE = riscv.plugins.capabilities.CoreExtMem
+CC = clang
+CFLAGS = -target riscv32 -march=rv32imxcheri -Dmbadaddr=mtval -Dsptbr=satp
