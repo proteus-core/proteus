@@ -72,7 +72,9 @@ class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline]
       when (stages.last.arbitration.isDone &&
             !trapHandler.hasTrapped(stages.last)) {
         lastWrittenRd.id := stages.last.output(pipeline.data.RD)
-        lastWrittenRd.valid := stages.last.output(pipeline.data.RD_VALID)
+        lastWrittenRd.valid :=
+          stages.last.output(pipeline.data.RD_VALID) &&
+          stages.last.output(pipeline.data.RD_TYPE) === hazardInfo.registerType
         lastWrittenRd.data := stages.last.output(hazardInfo.rdData)
       }
 
