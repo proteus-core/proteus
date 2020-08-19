@@ -63,7 +63,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
 
       when (arbitration.isValid) {
         when (value(Data.CGET)) {
-          // TODO cs1Needed
+          stage.arbitration.rs1Needed := True
           val cap = value(context.data.CS1_DATA)
           val rd = value(Data.CFIELD).mux(
             FieldSelect.PERM   -> cap.perms.asIsaBits.asUInt.resized,
