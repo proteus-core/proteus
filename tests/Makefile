@@ -25,7 +25,7 @@ VPATH = $(TEST_DIRS)
 
 $(BUILD_DIR)/%.o: %.S
 	mkdir -p $(@D)
-	$(CC) -I$(TESTS_DIR) -I$(ISA_TESTS_DIR)/macros/scalar -c -o $@ $^
+	$(CC) $(CFLAGS) -I$(TESTS_DIR) -I$(ISA_TESTS_DIR)/macros/scalar -c -o $@ $^
 
 %.elf: %.o
 	$(LD) -ffreestanding -nostdlib -T tests.ld -o $@ $^
