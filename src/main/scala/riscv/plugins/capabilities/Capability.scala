@@ -18,6 +18,11 @@ case class Permissions() extends Bundle {
       element := value
     }
   }
+
+  def asIsaBits: Bits = {
+    B"0" ## accessSystemRegisters ## B"0000" ## storeCapability ##
+      loadCapability ## store ## load ## execute ## B"0"
+  }
 }
 
 class BaseCapability(implicit context: Context) extends Bundle {
