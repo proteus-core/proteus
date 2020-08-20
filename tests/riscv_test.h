@@ -22,6 +22,7 @@
 #define RVTEST_CODE_BEGIN                                               \
     .text;                                                              \
     .weak mtvec_handler;                                                \
+    .weak fail;                                                         \
     .globl _start;                                                      \
 _start:                                                                 \
     la tp, trap_vector;                                                 \
@@ -29,6 +30,9 @@ _start:                                                                 \
     j start_tests;                                                      \
 trap_vector:                                                            \
     la tp, mtvec_handler;                                               \
+    beqz tp, 1f;                                                        \
+    jr tp;                                                              \
+    la tp, fail;                                                        \
     beqz tp, 1f;                                                        \
     jr tp;                                                              \
 1:  mret;                                                               \
