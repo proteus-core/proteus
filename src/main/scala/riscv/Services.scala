@@ -152,6 +152,15 @@ trait TrapService {
   def hasTrapped(stage: Stage): Bool
   def hasException(stage: Stage): Bool
   def hasInterrupt(stage: Stage): Bool
+
+  type TrapCommitCallback = (Stage, Bool, UInt) => Unit
+
+  /**
+   * The given callback will be called at the point where the logic to commit
+   * traps is created. It is called during the build() phase which means the
+   * callback should be registered during the setup() phase.
+   */
+  def onTrapCommit(cb: TrapCommitCallback)
 }
 
 trait Csr extends Area {

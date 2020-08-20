@@ -28,6 +28,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
   }
 
   private val stageSignals = mutable.Map[Stage, StageTrapSignals]()
+  private val trapCommitCallbacks = mutable.ArrayBuffer[TrapCommitCallback]()
 
   override def setup(): Unit = {
     pipeline.getService[DecoderService].configure {decoder =>
@@ -107,6 +108,10 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
 
         val vecBase = mtvec.read()(config.xlen - 1 downto 2) << 2
         jumpService.jump(trapStage, vecBase, isTrap = true)
+
+        trapCommitCallbacks.foreach {
+          _(trapStage, value(Data.TRAP_IS_INTERRUPT), value(Data.TRAP_CAUSE))
+        }
       }
 
       when (arbitration.isValid && value(Data.MRET)) {
@@ -178,5 +183,9 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
 
   override def hasInterrupt(stage: Stage): Bool = {
     hasTrapped(stage) && stage.output(Data.TRAP_IS_INTERRUPT)
+  }
+
+  override def onTrapCommit(cb: TrapCommitCallback): Unit = {
+    trapCommitCallbacks += cb
   }
 }
