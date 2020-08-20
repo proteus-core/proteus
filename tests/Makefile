@@ -5,6 +5,7 @@ ISA_TESTS_DIR = $(RISCV_TESTS_DIR)/isa
 BUILD_DIR = $(TESTS_DIR)/build
 SIM_DIR = $(BASE_DIR)/sim
 SIM_EXE = $(SIM_DIR)/build/sim
+CORE = riscv.CoreExtMem
 
 RISCV_PREFIX = riscv32-unknown-elf
 CC = $(RISCV_PREFIX)-gcc
@@ -36,7 +37,7 @@ $(BUILD_DIR)/%.o: %.S
 	$(OBJCOPY) -O binary $^ $@
 
 $(SIM_EXE): FORCE
-	make -C $(SIM_DIR)
+	make -C $(SIM_DIR) CORE=$(CORE)
 
 .PHONY: FORCE
 
