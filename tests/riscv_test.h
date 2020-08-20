@@ -24,13 +24,13 @@
     .weak mtvec_handler;                                                \
     .globl _start;                                                      \
 _start:                                                                 \
-    la t0, trap_vector;                                                 \
-    csrw mtvec, t0;                                                     \
+    la tp, trap_vector;                                                 \
+    csrw mtvec, tp;                                                     \
     j start_tests;                                                      \
 trap_vector:                                                            \
-    la t5, mtvec_handler;                                               \
-    beqz t5, 1f;                                                        \
-    jr t5;                                                              \
+    la tp, mtvec_handler;                                               \
+    beqz tp, 1f;                                                        \
+    jr tp;                                                              \
 1:  mret;                                                               \
 start_tests:
 
@@ -46,11 +46,11 @@ start_tests:
 #define TESTDEV 0xf0003000
 
 #define RVTEST_FAIL                                                     \
-    li x1, TESTDEV;                                                     \
-    sw TESTNUM, 0(x1);
+    li tp, TESTDEV;                                                     \
+    sw TESTNUM, 0(tp);
 
 #define RVTEST_PASS                                                     \
-    li x1, TESTDEV;                                                     \
-    sw zero, 0(x1);
+    li tp, TESTDEV;                                                     \
+    sw zero, 0(tp);
 
 #endif
