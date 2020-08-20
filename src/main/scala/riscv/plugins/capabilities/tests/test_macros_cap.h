@@ -94,4 +94,42 @@ test_ ## testnum: \
     li  TESTNUM, testnum; \
     CHECK_CAP_EQ(cd, cs)
 
+#define TEST_CASE_START(testnum) \
+test_ ## testnum: \
+    li TESTNUM, testnum; \
+
+#define TEST_CASE_FREE(testnum, code...) \
+    TEST_CASE_START(testnum) \
+    code;
+
+#define ROOT c31
+
+#define INIT_ROOT_CAP CSpecialR ROOT, ddc
+
+#define RESTORE_SAFE_STATE \
+    CSpecialW ddc, ROOT; \
+    la tp, trap_vector; \
+    csrw mtvec, tp
+
+#define EXPECT_EXCEPTION(cause, capidx, code...) \
+    la tp, 1f; \
+    csrw mtvec, tp; \
+    code; \
+    RESTORE_SAFE_STATE; \
+    j fail; \
+1: \
+    RESTORE_SAFE_STATE; \
+    csrr tp, mcause; \
+    li t6, 10; \
+    bne tp, t6, fail; \
+    csrr tp, mccsr; \
+    li t6, 0x0000ffe0; \
+    and tp, tp, t6; \
+    li t6, ((capidx << 10) | (cause << 5)); \
+    bne tp, t6, fail;
+
+
+#define TEST_EXPECT_EXCEPTION(testnum, cause, code...) \
+    TEST_CASE_FREE(testnum, EXPECT_EXCEPTION(cause, code))
+
 #endif
