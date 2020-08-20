@@ -19,7 +19,8 @@ object createCheriPipeline {
       new Access(pipeline.stages(2)),
       new ScrFile(pipeline.stages.last),
       new Lsu,
-      new ExceptionHandler
+      new ExceptionHandler,
+      new Ccsr
     ))
 
     pipeline

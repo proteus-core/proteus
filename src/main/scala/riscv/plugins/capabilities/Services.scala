@@ -20,7 +20,7 @@ trait ExceptionService {
   def except(stage:Stage, cause: ExceptionCause, scr: Int): Unit = {
     val reg = Bits(6 bits)
     reg.msb := True
-    reg(5 downto 0) := scr
+    reg(4 downto 0) := scr
     handleException(stage, cause, reg.asUInt)
   }
 }
