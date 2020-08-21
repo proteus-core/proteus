@@ -43,13 +43,14 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
         ))
       }
 
-      val modifiers = Map(
-        Opcodes.CSetBounds      -> Modification.SET_BOUNDS,
-        Opcodes.CSetBoundsExact -> Modification.SET_BOUNDS
+      val modifiers = Seq(
+        (Opcodes.CSetBounds,      Modification.SET_BOUNDS, InstructionType.R_CRC),
+        (Opcodes.CSetBoundsExact, Modification.SET_BOUNDS, InstructionType.R_CRC),
+        (Opcodes.CSetBoundsImm,   Modification.SET_BOUNDS, InstructionType.I_CxC)
       )
 
-      for ((opcode, modification) <- modifiers) {
-        config.addDecoding(opcode, InstructionType.R_CRC, Map(
+      for ((opcode, modification, itype) <- modifiers) {
+        config.addDecoding(opcode, itype, Map(
           Data.CMODIFY -> True,
           Data.CMODIFICATION -> modification
         ))
@@ -85,8 +86,17 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           arbitration.rs1Needed := True
           val cs = value(context.data.CS1_DATA)
 
-          arbitration.rs2Needed := True
-          val bounds = value(pipeline.data.RS2_DATA)
+          val bounds = UInt(config.xlen bits)
+
+          when (value(pipeline.data.IMM_USED)) {
+            // Since the decoder sign-extends the immediate in the I-format but
+            // the CHERI modification instructions use an unsigned immediate, we
+            // slice the original immediate out of the sign-extended one.
+            bounds := value(pipeline.data.IMM)(11 downto 0).resized
+          } otherwise {
+            arbitration.rs2Needed := True
+            bounds := value(pipeline.data.RS2_DATA)
+          }
 
           val cd = Capability()
           cd := cs

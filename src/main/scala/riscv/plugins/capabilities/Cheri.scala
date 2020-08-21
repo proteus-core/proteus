@@ -14,6 +14,7 @@ object Opcodes {
 
   val CSetBounds      = M"0001000----------000-----1011011"
   val CSetBoundsExact = M"0001001----------000-----1011011"
+  val CSetBoundsImm   = M"-----------------010-----1011011"
 
   val CSpecialRW      = M"0000001----------000-----1011011"
 }
@@ -28,6 +29,7 @@ object InstructionType {
   case object R_CxR extends InstructionType(InstructionFormat.R, RegisterType.CAP, riscv.RegisterType.NONE, riscv.RegisterType.GPR)
   case object R_CRC extends InstructionType(InstructionFormat.R, RegisterType.CAP, riscv.RegisterType.GPR,  RegisterType.CAP)
   case object R_CxC extends InstructionType(InstructionFormat.R, RegisterType.CAP, riscv.RegisterType.NONE, RegisterType.CAP)
+  case object I_CxC extends InstructionType(InstructionFormat.I, RegisterType.CAP, riscv.RegisterType.NONE, RegisterType.CAP)
 }
 
 object ScrIndex {
