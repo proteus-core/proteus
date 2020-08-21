@@ -99,6 +99,8 @@ class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
             }
 
             output(pipeline.data.IMM) := imm
+            output(pipeline.data.IMM_USED) :=
+              Bool(instructionType.format != InstructionFormat.R)
 
             output(pipeline.data.RS1_TYPE) := instructionType.rs1Type
             output(pipeline.data.RS2_TYPE) := instructionType.rs2Type

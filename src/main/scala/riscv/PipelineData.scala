@@ -23,4 +23,5 @@ class StandardPipelineData(config: Config) {
   object RD_TYPE extends PipelineData(RegisterType())
   object RD_VALID extends PipelineData(Bool())
   object IMM extends PipelineData(UInt(32 bits))
+  object IMM_USED extends PipelineData(Bool())
 }
