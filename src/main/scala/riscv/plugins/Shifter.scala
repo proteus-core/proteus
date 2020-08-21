@@ -11,31 +11,26 @@ class Shifter(exeStage: Stage) extends Plugin[Pipeline] {
 
   object Data {
     object SHIFT_OP extends PipelineData(ShiftOp())
-    object SHIFT_USE_IMM extends PipelineData(Bool())
   }
 
   override def setup(): Unit = {
     pipeline.getService[DecoderService].configure {config =>
       config.addDefault(Map(
-        Data.SHIFT_OP -> ShiftOp.NONE,
-        Data.SHIFT_USE_IMM -> False
+        Data.SHIFT_OP -> ShiftOp.NONE
       ))
 
       val ops = Seq(
-        (Opcodes.SLLI, ShiftOp.SLL, true),
-        (Opcodes.SRLI, ShiftOp.SRL, true),
-        (Opcodes.SRAI, ShiftOp.SRA, true),
-        (Opcodes.SLL,  ShiftOp.SLL, false),
-        (Opcodes.SRL,  ShiftOp.SRL, false),
-        (Opcodes.SRA,  ShiftOp.SRA, false)
+        (Opcodes.SLLI, ShiftOp.SLL, InstructionType.I),
+        (Opcodes.SRLI, ShiftOp.SRL, InstructionType.I),
+        (Opcodes.SRAI, ShiftOp.SRA, InstructionType.I),
+        (Opcodes.SLL,  ShiftOp.SLL, InstructionType.R),
+        (Opcodes.SRL,  ShiftOp.SRL, InstructionType.R),
+        (Opcodes.SRA,  ShiftOp.SRA, InstructionType.R)
       )
 
-      for ((opcode, op, useImm) <- ops) {
-        val itype = if (useImm) InstructionType.I else InstructionType.R
-
+      for ((opcode, op, itype) <- ops) {
         config.addDecoding(opcode, itype, Map(
-          Data.SHIFT_OP -> op,
-          Data.SHIFT_USE_IMM -> Bool(useImm)
+          Data.SHIFT_OP -> op
         ))
       }
     }
@@ -48,7 +43,7 @@ class Shifter(exeStage: Stage) extends Plugin[Pipeline] {
       val src = UInt(config.xlen bits)
       src := value(pipeline.data.RS1_DATA)
       val shamt = UInt(5 bits)
-      val useImm = value(Data.SHIFT_USE_IMM)
+      val useImm = value(pipeline.data.IMM_USED)
 
       when (useImm) {
         shamt := value(pipeline.data.IMM)(4 downto 0)
