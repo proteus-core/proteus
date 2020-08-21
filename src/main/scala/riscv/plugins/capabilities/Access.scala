@@ -104,14 +104,20 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           when (!arbitration.isStalled) {
             switch(value(Data.CMODIFICATION)) {
               is(Modification.SET_BOUNDS) {
+                val exceptionHandler = pipeline.getService[ExceptionService]
+
+                def except(cause: ExceptionCause) = {
+                  exceptionHandler.except(stage, cause, value(pipeline.data.RS1))
+                }
+
                 val newTop = cs.address + bounds
 
                 when(!cs.tag) {
-                  // TODO: tag violation
+                  except(ExceptionCause.TagViolation)
                 } elsewhen (cs.address < cs.base) {
-                  // TODO: length violation
+                  except(ExceptionCause.LengthViolation)
                 } elsewhen (newTop > cs.top) {
-                  // TODO: length violation
+                  except(ExceptionCause.LengthViolation)
                 } otherwise {
                   cd.base := cs.address
                   cd.length := bounds

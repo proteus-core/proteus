@@ -1,6 +1,7 @@
 #include "riscv_test.h"
 
 #include "test_macros_cap.h"
+#include "exceptions.h"
 
 #define SET_BOUNDS(cs, rs_val) \
     li x1, rs_val; \
@@ -20,6 +21,12 @@ RVTEST_CODE_BEGIN
 
     TEST_CSetBounds_NO_CHANGE(1, c1, -1)
     TEST_CSetBounds_NEW_BOUNDS_OFFSET(2, c1, 4, 0, 4, 0)
+
+    TEST_EXPECT_EXCEPTION(3, CAUSE_TAG_VIOLATION, 0, CSetBounds c0, c0, zero)
+
+    TEST_CASE_FREE(4)
+        CSetBounds c2, c1, zero
+        EXPECT_EXCEPTION(CAUSE_LENGTH_VIOLATION, 2, CSetBounds c0, c2, 1)
 
     TEST_PASSFAIL
 

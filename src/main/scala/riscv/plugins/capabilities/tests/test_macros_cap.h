@@ -129,8 +129,8 @@ test_ ## testnum: \
     bne tp, t6, fail;
 
 
-#define TEST_EXPECT_EXCEPTION(testnum, cause, code...) \
-    TEST_CASE_FREE(testnum, EXPECT_EXCEPTION(cause, code))
+#define TEST_EXPECT_EXCEPTION(testnum, cause, capidx, code...) \
+    TEST_CASE_FREE(testnum, EXPECT_EXCEPTION(cause, capidx, code))
 
 #define EXPECT_NO_EXCEPTION(code...) \
     la tp, 1f; \
