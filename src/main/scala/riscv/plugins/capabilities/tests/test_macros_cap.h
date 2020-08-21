@@ -132,4 +132,15 @@ test_ ## testnum: \
 #define TEST_EXPECT_EXCEPTION(testnum, cause, code...) \
     TEST_CASE_FREE(testnum, EXPECT_EXCEPTION(cause, code))
 
+#define EXPECT_NO_EXCEPTION(code...) \
+    la tp, 1f; \
+    csrw mtvec, tp; \
+    code; \
+    RESTORE_SAFE_STATE; \
+    j 2f; \
+1: \
+    RESTORE_SAFE_STATE; \
+    j fail; \
+2:
+
 #endif
