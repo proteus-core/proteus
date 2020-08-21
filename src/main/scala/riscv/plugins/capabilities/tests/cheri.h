@@ -1,5 +1,5 @@
-#ifndef EXCEPTIONS_H
-#define EXCEPTIONS_H
+#ifndef CHERI_H
+#define CHERI_H
 
 #define CAUSE_NONE 0x0
 #define CAUSE_LENGTH_VIOLATION 0x1

@@ -1,7 +1,7 @@
 #include "riscv_test.h"
 
 #include "test_macros_cap.h"
-#include "exceptions.h"
+#include "cheri.h"
 
 #define SET_BOUNDS(cs, rs_val) \
     li x1, rs_val; \
