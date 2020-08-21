@@ -79,25 +79,24 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
         }
 
         when (value(Data.CMODIFY)) {
-          val cs1 = value(context.data.CS1_DATA)
-          val cs2 = value(context.data.CS2_DATA)
-          val rs2 = value(pipeline.data.RS2_DATA)
+          val cs = value(context.data.CS1_DATA)
+          val bounds = value(pipeline.data.RS2_DATA)
           val cd = Capability()
-          cd := cs1
+          cd := cs
 
           switch (value(Data.CMODIFICATION)) {
             is (Modification.SET_BOUNDS) {
-              val newTop = cs1.address + rs2
+              val newTop = cs.address + bounds
 
-              when (!cs1.tag) {
+              when (!cs.tag) {
                 // TODO: tag violation
-              } elsewhen (cs1.address < cs1.base) {
+              } elsewhen (cs.address < cs.base) {
                 // TODO: length violation
-              } elsewhen (newTop > cs1.top) {
+              } elsewhen (newTop > cs.top) {
                 // TODO: length violation
               } otherwise {
-                cd.base := cs1.address
-                cd.length := rs2
+                cd.base := cs.address
+                cd.length := bounds
                 cd.offset := 0
               }
             }
