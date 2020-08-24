@@ -17,6 +17,21 @@
     SET_BOUNDS_DCC(bounds); \
     EXPECT_NO_EXCEPTION(code)
 
+#define AND_PERM_DCC(perm) \
+    li t0, perm; \
+    CAndPerm c1, ROOT, t0; \
+    CSpecialW ddc, c1
+
+#define TEST_CASE_DCC_AND_PERM_EXCEPTION(testnum, perm, cause, code...) \
+    TEST_CASE_START(testnum); \
+    AND_PERM_DCC(perm); \
+    EXPECT_EXCEPTION(cause, CAP_IDX_DDC, code)
+
+#define TEST_CASE_DCC_AND_PERM_NO_EXCEPTION(testnum, perm, code...) \
+    TEST_CASE_START(testnum); \
+    AND_PERM_DCC(perm); \
+    EXPECT_NO_EXCEPTION(code)
+
 RVTEST_RV32U
 RVTEST_CODE_BEGIN
 
@@ -35,6 +50,12 @@ RVTEST_CODE_BEGIN
     TEST_CASE_DCC_BOUNDS_NO_EXCEPTION(10, 1, lb zero, (zero))
     TEST_CASE_DCC_BOUNDS_NO_EXCEPTION(11, 2, lh zero, (zero))
     TEST_CASE_DCC_BOUNDS_NO_EXCEPTION(12, 4, lw zero, (zero))
+
+    TEST_CASE_DCC_AND_PERM_EXCEPTION(13, ~(1 << PERM_PERMIT_STORE), CAUSE_PERMIT_STORE_VIOLATION, sb zero, (zero))
+    TEST_CASE_DCC_AND_PERM_EXCEPTION(14, ~(1 << PERM_PERMIT_LOAD),  CAUSE_PERMIT_LOAD_VIOLATION,  lb zero, (zero))
+
+    TEST_CASE_DCC_AND_PERM_NO_EXCEPTION(15, ~(1 << PERM_PERMIT_STORE), lb zero, (zero))
+    TEST_CASE_DCC_AND_PERM_NO_EXCEPTION(16, ~(1 << PERM_PERMIT_LOAD),  sb zero, (zero))
 
     TEST_PASSFAIL
 
