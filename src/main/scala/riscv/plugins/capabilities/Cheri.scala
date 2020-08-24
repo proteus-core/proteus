@@ -16,6 +16,7 @@ object Opcodes {
   val CSetBounds      = M"0001000----------000-----1011011"
   val CSetBoundsExact = M"0001001----------000-----1011011"
   val CSetBoundsImm   = M"-----------------010-----1011011"
+  val CClearTag       = M"111111101011-----000-----1011011"
 
   val CSpecialRW      = M"0000001----------000-----1011011"
 }

@@ -47,7 +47,8 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
         (Opcodes.CAndPerm,        Modification.AND_PERM,   InstructionType.R_CRC),
         (Opcodes.CSetBounds,      Modification.SET_BOUNDS, InstructionType.R_CRC),
         (Opcodes.CSetBoundsExact, Modification.SET_BOUNDS, InstructionType.R_CRC),
-        (Opcodes.CSetBoundsImm,   Modification.SET_BOUNDS, InstructionType.I_CxC)
+        (Opcodes.CSetBoundsImm,   Modification.SET_BOUNDS, InstructionType.I_CxC),
+        (Opcodes.CClearTag,       Modification.CLEAR_TAG,  InstructionType.R_CxC)
       )
 
       for ((opcode, modification, itype) <- modifiers) {
@@ -132,6 +133,9 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
                   cd.length := rhs
                   cd.offset := 0
                 }
+              }
+              is (Modification.CLEAR_TAG) {
+                cd.tag := False
               }
             }
 
