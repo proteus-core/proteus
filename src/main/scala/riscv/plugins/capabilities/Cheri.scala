@@ -12,6 +12,7 @@ object Opcodes {
   val CGetOffset      = M"111111100110-----000-----1011011"
   val CGetAddr        = M"111111101111-----000-----1011011"
 
+  val CAndPerm        = M"0001101----------000-----1011011"
   val CSetBounds      = M"0001000----------000-----1011011"
   val CSetBoundsExact = M"0001001----------000-----1011011"
   val CSetBoundsImm   = M"-----------------010-----1011011"

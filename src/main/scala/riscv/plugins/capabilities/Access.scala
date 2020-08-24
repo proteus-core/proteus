@@ -10,7 +10,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
   }
 
   object Modification extends SpinalEnum {
-    val SET_BOUNDS, CLEAR_TAG = newElement()
+    val AND_PERM, SET_BOUNDS, CLEAR_TAG = newElement()
   }
 
   object Data {
@@ -44,6 +44,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
       }
 
       val modifiers = Seq(
+        (Opcodes.CAndPerm,        Modification.AND_PERM,   InstructionType.R_CRC),
         (Opcodes.CSetBounds,      Modification.SET_BOUNDS, InstructionType.R_CRC),
         (Opcodes.CSetBoundsExact, Modification.SET_BOUNDS, InstructionType.R_CRC),
         (Opcodes.CSetBoundsImm,   Modification.SET_BOUNDS, InstructionType.I_CxC)
@@ -86,31 +87,39 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           arbitration.rs1Needed := True
           val cs = value(context.data.CS1_DATA)
 
-          val bounds = UInt(config.xlen bits)
+          val rhs = UInt(config.xlen bits)
 
           when (value(pipeline.data.IMM_USED)) {
             // Since the decoder sign-extends the immediate in the I-format but
             // the CHERI modification instructions use an unsigned immediate, we
             // slice the original immediate out of the sign-extended one.
-            bounds := value(pipeline.data.IMM)(11 downto 0).resized
+            rhs := value(pipeline.data.IMM)(11 downto 0).resized
           } otherwise {
             arbitration.rs2Needed := True
-            bounds := value(pipeline.data.RS2_DATA)
+            rhs := value(pipeline.data.RS2_DATA)
           }
 
           val cd = Capability()
           cd := cs
 
+          val exceptionHandler = pipeline.getService[ExceptionService]
+
+          def except(cause: ExceptionCause) = {
+            exceptionHandler.except(stage, cause, value(pipeline.data.RS1))
+          }
+
           when (!arbitration.isStalled) {
             switch(value(Data.CMODIFICATION)) {
-              is(Modification.SET_BOUNDS) {
-                val exceptionHandler = pipeline.getService[ExceptionService]
-
-                def except(cause: ExceptionCause) = {
-                  exceptionHandler.except(stage, cause, value(pipeline.data.RS1))
+              is (Modification.AND_PERM) {
+                when (!cs.tag) {
+                  except(ExceptionCause.TagViolation)
+                } otherwise {
+                  val newPerms = cs.perms.asIsaBits & rhs.asBits
+                  cd.perms.assignFromIsaBits(newPerms)
                 }
-
-                val newTop = cs.address + bounds
+              }
+              is(Modification.SET_BOUNDS) {
+                val newTop = cs.address + rhs
 
                 when(!cs.tag) {
                   except(ExceptionCause.TagViolation)
@@ -120,7 +129,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
                   except(ExceptionCause.LengthViolation)
                 } otherwise {
                   cd.base := cs.address
-                  cd.length := bounds
+                  cd.length := rhs
                   cd.offset := 0
                 }
               }

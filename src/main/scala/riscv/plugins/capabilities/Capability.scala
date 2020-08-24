@@ -21,7 +21,16 @@ case class Permissions() extends Bundle {
 
   def asIsaBits: Bits = {
     B"0" ## accessSystemRegisters ## B"0000" ## storeCapability ##
-      loadCapability ## store ## load ## execute ## B"0"
+      loadCapability ## store ## load ## execute ## B"0" resized
+  }
+
+  def assignFromIsaBits(bits: Bits): Unit = {
+    execute := bits(1)
+    load := bits(2)
+    store := bits(3)
+    loadCapability := bits(4)
+    storeCapability := bits(5)
+    accessSystemRegisters := bits(10)
   }
 }
 
