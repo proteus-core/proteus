@@ -10,7 +10,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
   }
 
   object Modification extends SpinalEnum {
-    val AND_PERM, SET_OFFSET, SET_BOUNDS, CLEAR_TAG = newElement()
+    val AND_PERM, SET_OFFSET, INC_OFFSET, SET_BOUNDS, CLEAR_TAG = newElement()
   }
 
   object Data {
@@ -18,13 +18,15 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
     object CFIELD extends PipelineData(FieldSelect())
     object CMODIFY extends PipelineData(Bool())
     object CMODIFICATION extends PipelineData(Modification())
+    object IMM_IS_UNSIGNED extends PipelineData(Bool())
   }
 
   override def setup(): Unit = {
     pipeline.getService[DecoderService].configure {config =>
       config.addDefault(Map(
         Data.CGET -> False,
-        Data.CMODIFY -> False
+        Data.CMODIFY -> False,
+        Data.IMM_IS_UNSIGNED -> False
       ))
 
       val getters = Map(
@@ -46,6 +48,8 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
       val modifiers = Seq(
         (Opcodes.CAndPerm,        Modification.AND_PERM,   InstructionType.R_CRC),
         (Opcodes.CSetOffset,      Modification.SET_OFFSET, InstructionType.R_CRC),
+        (Opcodes.CIncOffset,      Modification.INC_OFFSET, InstructionType.R_CRC),
+        (Opcodes.CIncOffsetImm,   Modification.INC_OFFSET, InstructionType.I_CxC),
         (Opcodes.CSetBounds,      Modification.SET_BOUNDS, InstructionType.R_CRC),
         (Opcodes.CSetBoundsExact, Modification.SET_BOUNDS, InstructionType.R_CRC),
         (Opcodes.CSetBoundsImm,   Modification.SET_BOUNDS, InstructionType.I_CxC),
@@ -58,6 +62,10 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           Data.CMODIFICATION -> modification
         ))
       }
+
+      config.addDecoding(Opcodes.CSetBoundsImm, Map(
+        Data.IMM_IS_UNSIGNED -> True
+      ))
     }
   }
 
@@ -92,10 +100,11 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           val rhs = UInt(config.xlen bits)
 
           when (value(pipeline.data.IMM_USED)) {
-            // Since the decoder sign-extends the immediate in the I-format but
-            // the CHERI modification instructions use an unsigned immediate, we
-            // slice the original immediate out of the sign-extended one.
-            rhs := value(pipeline.data.IMM)(11 downto 0).resized
+            when (value(Data.IMM_IS_UNSIGNED)) {
+              rhs := value(pipeline.data.IMM)(11 downto 0).resized
+            } otherwise {
+              rhs := value(pipeline.data.IMM)
+            }
           } otherwise {
             arbitration.rs2Needed := True
             rhs := value(pipeline.data.RS2_DATA)
@@ -122,6 +131,9 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
               }
               is (Modification.SET_OFFSET) {
                 cd.offset := rhs
+              }
+              is (Modification.INC_OFFSET) {
+                cd.offset := cs.offset + rhs // TODO use IntAlu?
               }
               is(Modification.SET_BOUNDS) {
                 val newTop = cs.address + rhs

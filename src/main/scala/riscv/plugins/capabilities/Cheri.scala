@@ -14,6 +14,8 @@ object Opcodes {
 
   val CAndPerm        = M"0001101----------000-----1011011"
   val CSetOffset      = M"0001111----------000-----1011011"
+  val CIncOffset      = M"0010001----------000-----1011011"
+  val CIncOffsetImm   = M"-----------------001-----1011011"
   val CSetBounds      = M"0001000----------000-----1011011"
   val CSetBoundsExact = M"0001001----------000-----1011011"
   val CSetBoundsImm   = M"-----------------010-----1011011"
