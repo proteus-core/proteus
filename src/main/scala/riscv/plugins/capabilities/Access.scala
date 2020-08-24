@@ -10,7 +10,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
   }
 
   object Modification extends SpinalEnum {
-    val AND_PERM, SET_BOUNDS, CLEAR_TAG = newElement()
+    val AND_PERM, SET_OFFSET, SET_BOUNDS, CLEAR_TAG = newElement()
   }
 
   object Data {
@@ -45,6 +45,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
 
       val modifiers = Seq(
         (Opcodes.CAndPerm,        Modification.AND_PERM,   InstructionType.R_CRC),
+        (Opcodes.CSetOffset,      Modification.SET_OFFSET, InstructionType.R_CRC),
         (Opcodes.CSetBounds,      Modification.SET_BOUNDS, InstructionType.R_CRC),
         (Opcodes.CSetBoundsExact, Modification.SET_BOUNDS, InstructionType.R_CRC),
         (Opcodes.CSetBoundsImm,   Modification.SET_BOUNDS, InstructionType.I_CxC),
@@ -118,6 +119,9 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
                   val newPerms = cs.perms.asIsaBits & rhs.asBits
                   cd.perms.assignFromIsaBits(newPerms)
                 }
+              }
+              is (Modification.SET_OFFSET) {
+                cd.offset := rhs
               }
               is(Modification.SET_BOUNDS) {
                 val newTop = cs.address + rhs
