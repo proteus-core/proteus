@@ -34,53 +34,108 @@ case class Permissions() extends Bundle {
   }
 }
 
-class BaseCapability(implicit context: Context) extends Bundle {
-  val tag = Bool
+trait Capability {
+  def tag: Bool
+  def base: UInt
+  def length: UInt
+  def offset: UInt
+  def perms: Permissions
 
+  def hasOffset: Boolean = true
+
+  def top: UInt = base + length
+  def address: UInt = base + offset
+
+  def assignFrom(other: Capability): this.type = {
+    tag := other.tag
+    base := other.base
+    length := other.length
+    perms := other.perms
+
+    if (hasOffset && other.hasOffset) {
+      offset := other.offset
+    }
+
+    this
+  }
+
+  def assignRoot(): this.type = {
+    tag := True
+    base := 0
+    length := U"32'hffffffff"
+    perms.allowAll()
+
+    if (hasOffset) {
+      offset := 0
+    }
+
+    this
+  }
+
+  def assignNull(): this.type = {
+    tag := False
+    base := 0
+    length := 0
+    perms.allowNone()
+
+    if (hasOffset) {
+      offset := 0
+    }
+
+    this
+  }
+}
+
+class PackedCapabilityFields(hasOffset: Boolean = true)
+                            (implicit context: Context) extends Bundle {
   private val xlen = context.config.xlen
   val base = UInt(xlen bits)
   val length = UInt(xlen bits)
-
+  val offset = if (hasOffset) UInt(xlen bits) else null
   val perms = Permissions()
+}
 
-  def top = base + length
-
-  def :=(other: Capability): Unit = {
-    assignAllByName(other)
+object PackedCapabilityFields {
+  def getBitsWidth(hasOffset: Boolean = true)(implicit context: Context): Int = {
+    val fields = new PackedCapabilityFields(hasOffset)
+    fields.getBitsWidth
   }
 }
 
-case class NonPointerCapability(implicit context: Context) extends BaseCapability
+case class PackedCapability(override val hasOffset: Boolean = true)
+                           (implicit context: Context)
+  extends PackedCapabilityFields(hasOffset) with Capability {
+  override val tag = Bool()
+}
 
-case class Capability(implicit context: Context) extends BaseCapability {
-  val offset = UInt(context.config.xlen bits)
+object PackedCapability {
+  def Root(hasOffset: Boolean = true)(implicit context: Context): PackedCapability = {
+    PackedCapability(hasOffset).assignRoot()
+  }
 
-  def address = base + offset
-
-  def assignFrom(base: BaseCapability, offset: UInt) = {
-    assignSomeByName(base)
-    this.offset := offset
+  def Null(hasOffset: Boolean = true)(implicit context: Context): PackedCapability = {
+    PackedCapability(hasOffset).assignNull()
   }
 }
 
-object Capability {
-  def Null(implicit context: Context): Capability = {
-    val cap = Capability()
-    cap.tag := False
-    cap.base := 0
-    cap.offset := 0
-    cap.length := 0
-    cap.perms.allowNone()
+case class RegCapability(implicit context: Context)
+  extends PackedCapabilityFields with Capability {
+  private val padding = Bits(context.clen - PackedCapabilityFields.getBitsWidth() bits)
+  override val tag = Bool()
+
+  assert(getBitsWidth == context.clen + 1)
+}
+
+object RegCapability {
+  def Null(implicit context: Context): RegCapability = {
+    val cap = RegCapability().assignNull()
+    cap.padding := 0
     cap
   }
 
-  def Root(implicit context: Context): Capability = {
-    val cap = Capability()
-    cap.tag := True
-    cap.base := 0
-    cap.offset := 0
-    cap.length := U"32'hffffffff"
-    cap.perms.allowAll()
+  def Root(implicit context: Context): RegCapability = {
+    val cap = RegCapability().assignRoot()
+    cap.padding := 0
     cap
   }
 }

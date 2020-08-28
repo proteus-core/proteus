@@ -5,13 +5,13 @@ import spinal.core._
 import spinal.lib._
 
 class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipeline] with ScrService {
-  private var ddcVar: Capability = _
+  private var ddcVar: RegCapability = _
   private var writingDdc: Bool = _
 
   private def ddc = {
     if (ddcVar == null) {
       scrStage plug new Area {
-        val ddc = out(Reg(Capability()).init(Capability.Root))
+        val ddc = out(Reg(RegCapability()).init(RegCapability.Root))
         ddcVar = ddc
       }
     }
@@ -24,8 +24,9 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
   }
 
   override def getPcc(stage: Stage): Capability = {
-    val pcc = Capability()
-    pcc.assignFrom(stage.value(context.data.PCC), stage.value(pipeline.data.PC))
+    val pcc = PackedCapability()
+    pcc.assignFrom(stage.value(context.data.PCC))
+    pcc.offset := stage.value(pipeline.data.PC)
     pcc
   }
 
@@ -34,7 +35,7 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
       ddc
     } else {
       val area = stage plug new Area {
-        val ddc = in(Capability())
+        val ddc = in(RegCapability())
       }
 
       pipeline plug {
@@ -65,7 +66,7 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
 
       pipeline plug {
         // FIXME: This should probably be done by a "PccManager" plugin
-        pipeline.fetchStage.input(context.data.PCC) := Capability.Root
+        pipeline.fetchStage.input(context.data.PCC) := PackedCapability.Root(hasOffset = false)
       }
 
       val writingDdc = out(False)
@@ -79,17 +80,17 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
       val cs1 = value(context.data.CS1_DATA)
       val hasAsr = pcc.perms.accessSystemRegisters
       val needAsr = True
-      val cd = Capability.Null
+      val cd = RegCapability.Null
 
       when (arbitration.isValid && value(Data.SCR_RW)) {
         when(!ignoreRead) {
           switch (scrId) {
             is (ScrIndex.PCC) {
-              cd := getPcc(scrStage)
+              cd.assignFrom(getPcc(scrStage))
               needAsr := False
             }
             is (ScrIndex.DDC) {
-              cd := getDdc(scrStage)
+              cd.assignFrom(getDdc(scrStage))
               needAsr := False
             }
             default {

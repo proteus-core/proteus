@@ -10,7 +10,7 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
     val decoder = pipeline.getService[DecoderService]
 
     decoder.configure {config =>
-      config.addDefault(context.data.CD_DATA, Capability.Null)
+      config.addDefault(context.data.CD_DATA, RegCapability.Null)
     }
 
     val hazardInfo = DataHazardInfo(
@@ -27,8 +27,8 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
     case class ReadIo() extends Bundle with IMasterSlave {
       val cs1 = UInt(5 bits)
       val cs2 = UInt(5 bits)
-      val cs1Data = Capability()
-      val cs2Data = Capability()
+      val cs1Data = RegCapability()
+      val cs2Data = RegCapability()
 
       override def asMaster(): Unit = {
         in(cs1, cs2)
@@ -38,7 +38,7 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
 
     case class WriteIo() extends Bundle with IMasterSlave {
       val cd = UInt(5 bits)
-      val data = Capability()
+      val data = RegCapability()
       val write = Bool()
 
       override def asMaster(): Unit = {
@@ -51,12 +51,12 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
 
       val readIo = master(ReadIo())
       val writeIo = master(WriteIo())
-      val regs = Mem(Capability(), Seq.fill(config.numRegs) {Capability.Null})
+      val regs = Mem(RegCapability(), Seq.fill(config.numRegs) {RegCapability.Null})
 
       // Add a wire for each register with a readable name. This is to easily
       // view register values in a wave dump.
       for (i <- 0 until config.numRegs) {
-        val regWire = Capability()
+        val regWire = RegCapability()
         regWire.setName(s"c$i")
         regWire := regs.readAsync(U(i).resized, writeFirst)
       }

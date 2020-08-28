@@ -110,7 +110,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
             rhs := value(pipeline.data.RS2_DATA)
           }
 
-          val cd = Capability()
+          val cd = RegCapability()
           cd := cs
 
           val exceptionHandler = pipeline.getService[ExceptionService]
