@@ -2,22 +2,25 @@ package riscv.plugins.capabilities
 
 import spinal.core._
 
-case class Permissions() extends Bundle {
-  val execute = Bool()
-  val load = Bool()
-  val store = Bool()
-  val loadCapability = Bool()
-  val storeCapability = Bool()
-  val accessSystemRegisters = Bool()
+trait Permissions {
+  def execute: Bool
+  def load: Bool
+  def store: Bool
+  def loadCapability: Bool
+  def storeCapability: Bool
+  def accessSystemRegisters: Bool
 
-  def allowAll() = setAll(True)
-  def allowNone() = setAll(False)
-
-  private def setAll(value: Bool) = {
-    for ((_, element) <- elements) {
-      element := value
-    }
+  def setAll(value: Bool): Unit = {
+    execute := value
+    load := value
+    store := value
+    loadCapability := value
+    storeCapability := value
+    accessSystemRegisters := value
   }
+
+  def allowAll(): Unit = setAll(True)
+  def allowNone(): Unit = setAll(False)
 
   def asIsaBits: Bits = {
     B"0" ## accessSystemRegisters ## B"0000" ## storeCapability ##
@@ -32,6 +35,24 @@ case class Permissions() extends Bundle {
     storeCapability := bits(5)
     accessSystemRegisters := bits(10)
   }
+
+  def assignFrom(other: Permissions): Unit = {
+    execute := other.execute
+    load := other.load
+    store := other.store
+    loadCapability := other.loadCapability
+    storeCapability := other.storeCapability
+    accessSystemRegisters := other.accessSystemRegisters
+  }
+}
+
+case class PackedPermissions() extends Bundle with Permissions {
+  override val execute = Bool()
+  override val load = Bool()
+  override val store = Bool()
+  override val loadCapability = Bool()
+  override val storeCapability = Bool()
+  override val accessSystemRegisters = Bool()
 }
 
 trait Capability {
@@ -50,7 +71,7 @@ trait Capability {
     tag := other.tag
     base := other.base
     length := other.length
-    perms := other.perms
+    perms.assignFrom(other.perms)
 
     if (hasOffset && other.hasOffset) {
       offset := other.offset
@@ -92,7 +113,7 @@ class PackedCapabilityFields(hasOffset: Boolean = true)
   val base = UInt(xlen bits)
   val length = UInt(xlen bits)
   val offset = if (hasOffset) UInt(xlen bits) else null
-  val perms = Permissions()
+  val perms = PackedPermissions()
 }
 
 object PackedCapabilityFields {
@@ -138,4 +159,50 @@ object RegCapability {
     cap.padding := 0
     cap
   }
+}
+
+case class MemPermissions() extends Bundle with Permissions {
+  private val padding1 = B"0"
+  override val execute = Bool()
+  override val load = Bool()
+  override val store = Bool()
+  override val loadCapability = Bool()
+  override val storeCapability = Bool()
+  private val padding2 = B"0000"
+  override val accessSystemRegisters = Bool()
+  private val padding3 = B"0000"
+
+  assert(getBitsWidth == 15)
+}
+
+case class MemCapability()(implicit context: Context) extends Bundle with Capability {
+  private val xlen = context.config.xlen
+
+  val cursor = UInt(xlen bits)
+  override val base = UInt(xlen bits)
+  override val length = UInt(xlen bits)
+  private val padding1 = B"0"
+  override val perms = MemPermissions()
+  private val padding2 = B(0, xlen - perms.getBitsWidth - 1 bits)
+  override val tag = Bool()
+
+  override def offset = cursor - base
+
+  def value: UInt = asBits.resize(context.clen).asUInt
+
+  def assignValue(value: UInt): Unit = {
+    assignFromBits(value.asBits, 0, context.clen bits)
+  }
+
+  override def assignFrom(other: Capability): this.type = {
+    cursor := other.address
+    base := other.base
+    length := other.length
+    perms.assignFrom(other.perms)
+    tag := other.tag
+    this
+  }
+
+  assert(getBitsWidth == context.clen + 1,
+    s"Bit width of MemCapability is ${getBitsWidth} but should be ${context.clen + 1}")
 }
