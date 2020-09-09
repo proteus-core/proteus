@@ -22,6 +22,9 @@ object Opcodes {
   val CClearTag       = M"111111101011-----000-----1011011"
 
   val CSpecialRW      = M"0000001----------000-----1011011"
+
+  val LC              = M"-----------------011-----0000011"
+  val SC              = M"-----------------011-----0100011"
 }
 
 object RegisterType {
@@ -31,10 +34,12 @@ object RegisterType {
 object InstructionType {
   // Naming scheme: <FORMAT>_<RS1_TYPE><RS2_TYPE><RD_TYPE>
   // Where register type can be R (GPR), C (CAP), or x (NONE)
-  case object R_CxR extends InstructionType(InstructionFormat.R, RegisterType.CAP, riscv.RegisterType.NONE, riscv.RegisterType.GPR)
-  case object R_CRC extends InstructionType(InstructionFormat.R, RegisterType.CAP, riscv.RegisterType.GPR,  RegisterType.CAP)
-  case object R_CxC extends InstructionType(InstructionFormat.R, RegisterType.CAP, riscv.RegisterType.NONE, RegisterType.CAP)
-  case object I_CxC extends InstructionType(InstructionFormat.I, RegisterType.CAP, riscv.RegisterType.NONE, RegisterType.CAP)
+  case object R_CxR extends InstructionType(InstructionFormat.R, RegisterType.CAP,       riscv.RegisterType.NONE, riscv.RegisterType.GPR)
+  case object R_CRC extends InstructionType(InstructionFormat.R, RegisterType.CAP,       riscv.RegisterType.GPR,  RegisterType.CAP)
+  case object R_CxC extends InstructionType(InstructionFormat.R, RegisterType.CAP,       riscv.RegisterType.NONE, RegisterType.CAP)
+  case object I_CxC extends InstructionType(InstructionFormat.I, RegisterType.CAP,       riscv.RegisterType.NONE, RegisterType.CAP)
+  case object I_RxC extends InstructionType(InstructionFormat.I, riscv.RegisterType.GPR, riscv.RegisterType.NONE, RegisterType.CAP)
+  case object S_RCx extends InstructionType(InstructionFormat.S, riscv.RegisterType.GPR, RegisterType.CAP,        riscv.RegisterType.NONE)
 }
 
 object ScrIndex {

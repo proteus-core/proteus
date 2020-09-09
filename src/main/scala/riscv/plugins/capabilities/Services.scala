@@ -24,3 +24,7 @@ trait ExceptionService {
     handleException(stage, cause, reg.asUInt)
   }
 }
+
+trait TaggedMemoryService {
+  def createCapBus(stage: Stage): CapBus
+}

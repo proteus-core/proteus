@@ -18,9 +18,10 @@ object createCheriPipeline {
       new RegisterFile(pipeline.stages(1), pipeline.stages.last),
       new Access(pipeline.stages(2)),
       new ScrFile(pipeline.stages.last),
-      new Lsu,
+      new Lsu(pipeline.stages(3)),
       new ExceptionHandler,
-      new Ccsr
+      new Ccsr,
+      new MemoryTagger(0x0, 10 MiB)
     ))
 
     pipeline
