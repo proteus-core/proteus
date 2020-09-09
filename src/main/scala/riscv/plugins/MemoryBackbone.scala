@@ -20,13 +20,22 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
     assert(internalIBus != null)
     assert(internalDBus != null)
 
+    if (dbusFilter.isEmpty) {
+      dbusFilter = Some((_, idbus, edbus) => {idbus <> edbus})
+    }
+
     pipeline plug new Area {
       externalIBus = master(new MemBus(config.ibusConfig)).setName("ibus")
       externalIBus <> internalIBus
 
       externalDBus = master(new MemBus(config.dbusConfig)).setName("dbus")
-      externalDBus <> internalDBus
-      dbusFilter.foreach(_(internalDBusStage, internalDBus, externalDBus))
+
+      if (dbusFilter.isEmpty) {
+        internalDBus <> externalDBus
+      } else {
+        dbusFilter.get(internalDBusStage, internalDBus, externalDBus)
+      }
+
       dbusObservers.foreach(_(internalDBusStage, internalDBus))
     }
   }

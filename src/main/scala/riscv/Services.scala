@@ -37,8 +37,7 @@ trait MemoryService {
     * arguments are 1) the stage in which the data bus is created, 2) the data
     * bus that is used in this stage, and 2) the data bus that will be connected
     * to the external data bus. When `filter` is called, the two data buses are
-    * fully connected. Inside `filter`, these connection can be arbitrarily
-    * altered or broken. The `filter` function is called in the context of the
+    * disconnected. The `filter` function is called in the context of the
     * top-level Pipeline component.
     */
   def filterDBus(filter: MemBusFilter): Unit
