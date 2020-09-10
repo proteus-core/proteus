@@ -6,23 +6,30 @@
 RVTEST_RV32U
 RVTEST_CODE_BEGIN
 
-    # c1 contains a root capability during this whole test
-    CSpecialR c1, ddc;
+    INIT_ROOT_CAP
 
     TEST_CASE_FREE(1)
-        LC c2, (zero)
-        CHECK_TAG(c2, 0)
+        LC c1, (zero)
+        CHECK_TAG(c1, 0)
 
     TEST_CASE_FREE(2)
-        SC c1, (zero)
-        LC c2, (zero)
-        CHECK_CAP_EQ(c1, c2)
+        SC ROOT, (zero)
+        LC c1, (zero)
+        CHECK_CAP_EQ(c1, ROOT)
 
     TEST_CASE_FREE(3)
-        SC c1, (zero)
+        SC ROOT, (zero)
         sb zero, 1(zero)
-        LC c2, (zero)
-        CHECK_TAG(c2, 0)
+        LC c1, (zero)
+        CHECK_TAG(c1, 0)
+
+    TEST_CASE_DCC_BOUNDS_EXCEPTION(4, 7, CAUSE_LENGTH_VIOLATION, SC ROOT, (zero))
+
+    TEST_CASE_DCC_AND_PERM_EXCEPTION(5, ~(1 << PERM_PERMIT_STORE), CAUSE_PERMIT_STORE_VIOLATION, SC ROOT, (zero))
+    TEST_CASE_DCC_AND_PERM_EXCEPTION(6, ~(1 << PERM_PERMIT_LOAD),  CAUSE_PERMIT_LOAD_VIOLATION,  LC c1, (zero))
+
+    TEST_CASE_DCC_AND_PERM_NO_EXCEPTION(7, ~(1 << PERM_PERMIT_STORE), LC c1, (zero))
+    TEST_CASE_DCC_AND_PERM_NO_EXCEPTION(8, ~(1 << PERM_PERMIT_LOAD),  SC ROOT, (zero))
 
     TEST_PASSFAIL
 

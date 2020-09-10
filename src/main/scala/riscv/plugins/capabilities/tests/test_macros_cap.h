@@ -143,4 +143,33 @@ test_ ## testnum: \
     j fail; \
 2:
 
+#define SET_BOUNDS_DCC(bounds) \
+    CSetBounds c1, ROOT, bounds; \
+    CSpecialW ddc, c1
+
+#define TEST_CASE_DCC_BOUNDS_EXCEPTION(testnum, bounds, cause, code...) \
+    TEST_CASE_START(testnum); \
+    SET_BOUNDS_DCC(bounds); \
+    EXPECT_EXCEPTION(cause, CAP_IDX_DDC, code)
+
+#define TEST_CASE_DCC_BOUNDS_NO_EXCEPTION(testnum, bounds, code...) \
+    TEST_CASE_START(testnum); \
+    SET_BOUNDS_DCC(bounds); \
+    EXPECT_NO_EXCEPTION(code)
+
+#define AND_PERM_DCC(perm) \
+    li t0, perm; \
+    CAndPerm c1, ROOT, t0; \
+    CSpecialW ddc, c1
+
+#define TEST_CASE_DCC_AND_PERM_EXCEPTION(testnum, perm, cause, code...) \
+    TEST_CASE_START(testnum); \
+    AND_PERM_DCC(perm); \
+    EXPECT_EXCEPTION(cause, CAP_IDX_DDC, code)
+
+#define TEST_CASE_DCC_AND_PERM_NO_EXCEPTION(testnum, perm, code...) \
+    TEST_CASE_START(testnum); \
+    AND_PERM_DCC(perm); \
+    EXPECT_NO_EXCEPTION(code)
+
 #endif
