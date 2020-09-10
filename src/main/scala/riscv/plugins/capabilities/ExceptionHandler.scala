@@ -11,12 +11,13 @@ class ExceptionHandler extends Plugin[Pipeline] with ExceptionService {
     object CEXC_CAP_IDX extends PipelineData(UInt(6 bits))
   }
 
-  override def handleException(stage: Stage, cause: ExceptionCause, reg: UInt): Unit = {
+  override def handleException(stage: Stage, cause: UInt, reg: UInt): Unit = {
+    assert(cause.getBitsWidth <= 5)
     assert(reg.getBitsWidth == 6)
 
     val trapHandler = pipeline.getService[TrapService]
     trapHandler.trap(stage, TrapCause.CheriException)
-    stage.output(Data.CEXC_CAUSE) := cause.code
+    stage.output(Data.CEXC_CAUSE) := cause.resized
     stage.output(Data.CEXC_CAP_IDX) := reg
   }
 

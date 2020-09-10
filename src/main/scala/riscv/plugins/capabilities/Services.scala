@@ -10,18 +10,26 @@ trait ScrService {
 }
 
 trait ExceptionService {
-  protected def handleException(stage:Stage, cause: ExceptionCause, reg: UInt)
+  protected def handleException(stage: Stage, cause: UInt, reg: UInt): Unit
 
-  def except(stage:Stage, cause: ExceptionCause, cr: UInt): Unit = {
+  def except(stage: Stage, cause: UInt, cr: UInt): Unit = {
     assert(cr.getBitsWidth <= 5)
     handleException(stage, cause, cr.resize(6 bits))
   }
 
-  def except(stage:Stage, cause: ExceptionCause, scr: Int): Unit = {
+  def except(stage: Stage, cause: UInt, scr: Int): Unit = {
     val reg = Bits(6 bits)
     reg.msb := True
     reg(4 downto 0) := scr
     handleException(stage, cause, reg.asUInt)
+  }
+
+  def except(stage: Stage, cause: ExceptionCause, cr: UInt): Unit = {
+    except(stage, U(cause.code), cr)
+  }
+
+  def except(stage: Stage, cause: ExceptionCause, scr: Int): Unit = {
+    except(stage, U(cause.code), scr)
   }
 }
 
