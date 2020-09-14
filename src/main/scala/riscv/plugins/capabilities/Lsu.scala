@@ -77,7 +77,7 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
 
           when (cause =/= ExceptionCause.None.code) {
             val handler = pipeline.getService[ExceptionHandler]
-            handler.except(stage, cause, ScrIndex.DDC)
+            handler.except(stage, cause, ScrCapIdx(ScrIndex.DDC))
           }
         }
 
@@ -120,7 +120,7 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
 
         when (cause =/= ExceptionCause.None.code) {
           val handler = pipeline.getService[ExceptionHandler]
-          handler.except(stage, cause, ScrIndex.DDC)
+          handler.except(stage, cause, ScrCapIdx(ScrIndex.DDC))
           ok := False
         }
 

@@ -9,27 +9,36 @@ trait ScrService {
   def getDdc(stage: Stage): Capability
 }
 
-trait ExceptionService {
-  protected def handleException(stage: Stage, cause: UInt, reg: UInt): Unit
+sealed trait CapIdx {
+  def idx: UInt
+}
 
-  def except(stage: Stage, cause: UInt, cr: UInt): Unit = {
-    assert(cr.getBitsWidth <= 5)
-    handleException(stage, cause, cr.resize(6 bits))
-  }
-
-  def except(stage: Stage, cause: UInt, scr: Int): Unit = {
+final case class ScrCapIdx(scr: Int) extends CapIdx {
+  override def idx: UInt = {
     val reg = Bits(6 bits)
     reg.msb := True
     reg(4 downto 0) := scr
-    handleException(stage, cause, reg.asUInt)
+    reg.asUInt
+  }
+}
+
+final case class GpcrCapIdx(cr: UInt) extends CapIdx {
+  assert(cr.getBitsWidth <= 5)
+
+  override def idx: UInt = {
+    cr.resize(6 bits)
+  }
+}
+
+trait ExceptionService {
+  protected def handleException(stage: Stage, cause: UInt, reg: UInt): Unit
+
+  def except(stage: Stage, cause: UInt, capIdx: CapIdx): Unit = {
+    handleException(stage, cause, capIdx.idx)
   }
 
-  def except(stage: Stage, cause: ExceptionCause, cr: UInt): Unit = {
-    except(stage, U(cause.code), cr)
-  }
-
-  def except(stage: Stage, cause: ExceptionCause, scr: Int): Unit = {
-    except(stage, U(cause.code), scr)
+  def except(stage: Stage, cause: ExceptionCause, capIdx: CapIdx): Unit = {
+    handleException(stage, U(cause.code), capIdx.idx)
   }
 }
 
