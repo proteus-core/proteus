@@ -159,6 +159,11 @@ trait JumpService {
     * of the top-level Pipeline.
     */
   def onPcUpdate(observer: PcUpdateObserver): Unit
+
+  /**
+   * Like onPcUpdate but only called for jumps.
+   */
+  def onJump(observer: PcUpdateObserver): Unit
 }
 
 trait TrapService {
