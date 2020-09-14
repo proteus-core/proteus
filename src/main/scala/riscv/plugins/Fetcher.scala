@@ -5,7 +5,15 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] {
+class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] with FetchService {
+  private var addressTranslator = new FetchAddressTranslator {
+    override def translate(stage: Stage, address: UInt): UInt = {
+      address
+    }
+  }
+
+  private var addressTranslatorChanged = false
+
   override def build(): Unit = {
     fetchStage plug new Area {
       import fetchStage._
@@ -19,7 +27,8 @@ class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] {
       val nextPc = pc + 4
 
       when (arbitration.isRunning) {
-        val (valid, rdata) = ibusCtrl.read(pc)
+        val fetchAddress = addressTranslator.translate(fetchStage, pc)
+        val (valid, rdata) = ibusCtrl.read(fetchAddress)
 
         when (valid) {
           arbitration.isReady := True
@@ -29,5 +38,12 @@ class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] {
         }
       }
     }
+  }
+
+  override def setAddressTranslator(translator: FetchAddressTranslator): Unit = {
+    assert(!addressTranslatorChanged, "FetchAddressTranslator can only be set once")
+
+    addressTranslator = translator
+    addressTranslatorChanged = true
   }
 }
