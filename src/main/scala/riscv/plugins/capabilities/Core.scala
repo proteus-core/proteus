@@ -21,7 +21,8 @@ object createCheriPipeline {
       new Lsu(pipeline.stages(3)),
       new ExceptionHandler,
       new Ccsr,
-      new MemoryTagger(0x0, 10 MiB)
+      new MemoryTagger(0x0, 10 MiB),
+      new PccManager(pipeline.stages(2))
     ))
 
     pipeline

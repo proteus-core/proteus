@@ -64,11 +64,6 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
     scrStage plug new Area {
       import scrStage._
 
-      pipeline plug {
-        // FIXME: This should probably be done by a "PccManager" plugin
-        pipeline.fetchStage.input(context.data.PCC) := PackedCapability.Root(hasOffset = false)
-      }
-
       val writingDdc = out(False)
       ScrFile.this.writingDdc = writingDdc
 
