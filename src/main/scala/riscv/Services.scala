@@ -160,10 +160,12 @@ trait JumpService {
     */
   def onPcUpdate(observer: PcUpdateObserver): Unit
 
+  type JumpObserver = (Stage, UInt, UInt, Boolean) => Unit
+
   /**
    * Like onPcUpdate but only called for jumps.
    */
-  def onJump(observer: PcUpdateObserver): Unit
+  def onJump(observer: JumpObserver): Unit
 }
 
 trait TrapService {
