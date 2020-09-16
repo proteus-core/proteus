@@ -116,7 +116,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           val exceptionHandler = pipeline.getService[ExceptionService]
 
           def except(cause: ExceptionCause) = {
-            exceptionHandler.except(stage, cause, GpcrCapIdx(value(pipeline.data.RS1)))
+            exceptionHandler.except(stage, cause, CapIdx.gpcr(value(pipeline.data.RS1)))
           }
 
           when (!arbitration.isStalled) {

@@ -8,17 +8,16 @@ import spinal.lib._
 class ExceptionHandler extends Plugin[Pipeline] with ExceptionService {
   object Data {
     object CEXC_CAUSE extends PipelineData(UInt(5 bits))
-    object CEXC_CAP_IDX extends PipelineData(UInt(6 bits))
+    object CEXC_CAP_IDX extends PipelineData(CapIdx())
   }
 
-  override def handleException(stage: Stage, cause: UInt, reg: UInt): Unit = {
+  override def handleException(stage: Stage, cause: UInt, capIdx: CapIdx): Unit = {
     assert(cause.getBitsWidth <= 5)
-    assert(reg.getBitsWidth == 6)
 
     val trapHandler = pipeline.getService[TrapService]
     trapHandler.trap(stage, TrapCause.CheriException)
     stage.output(Data.CEXC_CAUSE) := cause.resized
-    stage.output(Data.CEXC_CAP_IDX) := reg
+    stage.output(Data.CEXC_CAP_IDX) := capIdx
   }
 
   override def setup(): Unit = {
@@ -36,7 +35,7 @@ class ExceptionHandler extends Plugin[Pipeline] with ExceptionService {
         val newCcsr = UInt(config.xlen bits)
         newCcsr := ccsr.read()
         newCcsr(9 downto 5) := stage.value(Data.CEXC_CAUSE)
-        newCcsr(15 downto 10) := stage.value(Data.CEXC_CAP_IDX)
+        newCcsr(15 downto 10) := stage.value(Data.CEXC_CAP_IDX).asUInt
         ccsr.write(newCcsr)
       }
     }
