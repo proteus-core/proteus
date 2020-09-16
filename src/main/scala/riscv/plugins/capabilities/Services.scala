@@ -4,6 +4,10 @@ import riscv._
 
 import spinal.core._
 
+trait PccService {
+  def getPcc(stage: Stage): Capability
+}
+
 trait ScrService {
   def getPcc(stage: Stage): Capability
   def getDdc(stage: Stage): Capability

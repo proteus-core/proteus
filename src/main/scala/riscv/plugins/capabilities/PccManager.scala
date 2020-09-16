@@ -6,7 +6,8 @@ import spinal.core._
 
 import scala.collection.mutable
 
-class PccManager(branchStage: Stage)(implicit context: Context) extends Plugin[StaticPipeline] {
+class PccManager(branchStage: Stage)(implicit context: Context)
+  extends Plugin[StaticPipeline] with PccService {
   private class PccData extends PackedCapability(hasOffset = false)
   private object PccData {
     def apply(): PccData = new PccData
@@ -14,6 +15,7 @@ class PccManager(branchStage: Stage)(implicit context: Context) extends Plugin[S
   }
 
   private object Data {
+    object PCC extends PipelineData(PccData())
     object CJALR extends PipelineData(Bool())
   }
 
@@ -61,9 +63,11 @@ class PccManager(branchStage: Stage)(implicit context: Context) extends Plugin[S
 
   private def getCurrentPcc(stage: Stage): PccData = {
     val pcc = PccData()
-    pcc.assignFrom(stage.value(context.data.PCC))
+    pcc.assignFrom(stage.value(Data.PCC))
     pcc
   }
+
+  override def getPcc(stage: Stage): Capability = getCurrentPcc(stage)
 
   override def setup(): Unit = {
     pipeline.getService[DecoderService].configure {config =>
@@ -99,7 +103,7 @@ class PccManager(branchStage: Stage)(implicit context: Context) extends Plugin[S
       override def initValue = PccData.Root
       override def get(stage: Stage) = getTargetPcc(stage).value
       override def set(stage: Stage, value: PccData) = {
-        stage.input(context.data.PCC) := value
+        stage.input(Data.PCC) := value
       }
     }
 

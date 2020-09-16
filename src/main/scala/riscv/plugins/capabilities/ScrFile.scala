@@ -24,10 +24,7 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
   }
 
   override def getPcc(stage: Stage): Capability = {
-    val pcc = PackedCapability()
-    pcc.assignFrom(stage.value(context.data.PCC))
-    pcc.offset := stage.value(pipeline.data.PC)
-    pcc
+    pipeline.getService[PccService].getPcc(stage)
   }
 
   override def getDdc(stage: Stage): Capability = {
@@ -71,7 +68,7 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
       val ignoreRead = value(pipeline.data.RD) === 0
       val ignoreWrite = value(pipeline.data.RS1) === 0
       val illegalScrId = False
-      val pcc = value(context.data.PCC)
+      val pcc = getPcc(scrStage)
       val cs1 = value(context.data.CS1_DATA)
       val hasAsr = pcc.perms.accessSystemRegisters
       val needAsr = True
@@ -81,7 +78,7 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
         when(!ignoreRead) {
           switch (scrId) {
             is (ScrIndex.PCC) {
-              cd.assignFrom(getPcc(scrStage))
+              cd.assignFrom(pcc)
               needAsr := False
             }
             is (ScrIndex.DDC) {
