@@ -11,6 +11,12 @@ class PcManager extends Plugin[StaticPipeline] with JumpService {
   private val pcUpdateObservers = mutable.Buffer[PcUpdateObserver]()
   private val jumpObservers = mutable.Buffer[JumpObserver]()
 
+  private trait PcPayloadArea extends Area {
+    def onPcUpdate(stage: Stage)
+  }
+
+  private val pcPayloads = mutable.Buffer[PcPayloadArea]()
+
   override def onPcUpdate(observer: PcUpdateObserver): Unit = {
     pcUpdateObservers += observer
   }
@@ -41,6 +47,17 @@ class PcManager extends Plugin[StaticPipeline] with JumpService {
     }
   }
 
+  override def addPcPayload[T <: Data](pcPayload: PcPayload[T]): Unit = {
+    pcPayloads += pipeline plug new PcPayloadArea {
+      val reg = Reg(pcPayload.dataType()).init(pcPayload.initValue)
+      pcPayload.set(pipeline.fetchStage, reg)
+
+      override def onPcUpdate(stage: Stage): Unit = {
+        reg := pcPayload.get(stage)
+      }
+    }
+  }
+
   override def finish(): Unit = {
     pipeline plug new Area {
       val pc = Reg(UInt(config.xlen bits)).init(0)
@@ -50,6 +67,7 @@ class PcManager extends Plugin[StaticPipeline] with JumpService {
         val currPc = stage.output(pipeline.data.PC)
         val nextPc = stage.output(pipeline.data.NEXT_PC)
         pc := nextPc
+        pcPayloads.foreach(_.onPcUpdate(stage))
 
         pcUpdateObservers.foreach(_(stage, currPc, nextPc))
       }

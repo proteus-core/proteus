@@ -146,8 +146,41 @@ trait LsuService {
   def setAddressTranslator(translator: LsuAddressTranslator): Unit
 }
 
+trait PcPayload[T <: Data] {
+  /**
+   * The payload's data type.
+   */
+  def dataType: HardType[T]
+
+  /**
+   * The payload's initial value. The first executed instruction will see this
+   * value as the payload.
+   */
+  def initValue: T
+
+  /**
+   * Called when the given Stage causes PC to change. The return value should be
+   * the payload's value for the target instruction.
+   */
+  def get(stage: Stage): T
+
+  /**
+   * Called to inject the payload in a Stage.
+   */
+  def set(stage: Stage, value: T)
+}
+
 trait JumpService {
   def jump(stage: Stage, target: UInt, isTrap: Boolean = false): Unit
+
+  /**
+   * Add a payload that travels through the pipeline along with PC.
+   * A payload will typically be a pipeline register but PcPayload provides a
+   * more abstract interface: whenever PC is updated, the payload is extracted
+   * from the stage using PcPayload.get() and later injected into the first
+   * stage of the target instruction using PcPayload.set().
+   */
+  def addPcPayload[T <: Data](pcPayload: PcPayload[T])
 
   type PcUpdateObserver = (Stage, UInt, UInt) => Unit
 
