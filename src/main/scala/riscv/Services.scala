@@ -170,8 +170,17 @@ trait PcPayload[T <: Data] {
   def set(stage: Stage, value: T)
 }
 
+trait JumpType
+
+object JumpType {
+  case object Normal extends JumpType
+  case object Trap extends JumpType
+  case object TrapReturn extends JumpType
+}
+
 trait JumpService {
-  def jump(stage: Stage, target: UInt, isTrap: Boolean = false): Unit
+  def jump(stage: Stage, target: UInt, jumpType: JumpType = JumpType.Normal,
+           checkAlignment: Boolean = true): Unit
 
   /**
    * Add a payload that travels through the pipeline along with PC.
@@ -193,7 +202,7 @@ trait JumpService {
     */
   def onPcUpdate(observer: PcUpdateObserver): Unit
 
-  type JumpObserver = (Stage, UInt, UInt, Boolean) => Unit
+  type JumpObserver = (Stage, UInt, UInt, JumpType) => Unit
 
   /**
    * Like onPcUpdate but only called for jumps.

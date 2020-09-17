@@ -107,7 +107,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
         mtval.write(value(Data.TRAP_VAL))
 
         val vecBase = mtvec.read()(config.xlen - 1 downto 2) << 2
-        jumpService.jump(trapStage, vecBase, isTrap = true)
+        jumpService.jump(trapStage, vecBase, JumpType.Trap, checkAlignment = false)
 
         trapCommitCallbacks.foreach {
           _(trapStage, value(Data.TRAP_IS_INTERRUPT), value(Data.TRAP_CAUSE))
@@ -122,7 +122,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
         mstatusNew(7) := True // mpie = 1
         mstatus.write(mstatusNew)
 
-        jumpService.jump(trapStage, mepc.read())
+        jumpService.jump(trapStage, mepc.read(), JumpType.TrapReturn, checkAlignment = false)
       }
     }
 
