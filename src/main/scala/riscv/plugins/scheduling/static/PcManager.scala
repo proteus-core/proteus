@@ -25,17 +25,18 @@ class PcManager extends Plugin[StaticPipeline] with JumpService {
     jumpObservers += observer
   }
 
-  override def jump(stage: Stage, target: UInt, isTrap: Boolean): Unit = {
+  override def jump(stage: Stage, target: UInt, jumpType: JumpType,
+                    checkAlignment: Boolean): Unit = {
     jumpStages += stage
 
     def doJump() = {
       stage.output(pipeline.data.NEXT_PC) := target
       stage.arbitration.jumpRequested := True
 
-      jumpObservers.foreach(_(stage, stage.value(pipeline.data.PC), target, isTrap))
+      jumpObservers.foreach(_(stage, stage.value(pipeline.data.PC), target, jumpType))
     }
 
-    if (isTrap) {
+    if (!checkAlignment) {
       doJump()
     } else {
       when (target(1 downto 0) =/= 0) {
