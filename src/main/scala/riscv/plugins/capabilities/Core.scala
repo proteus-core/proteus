@@ -10,21 +10,58 @@ import spinal.lib._
 import spinal.core.sim._
 
 object createCheriPipeline {
-  def apply()(implicit config: Config): Pipeline = {
-    val pipeline = createStaticPipeline(build = false)
+  def apply()(implicit conf: Config): StaticPipeline = {
+    val pipeline = new Component with StaticPipeline {
+      setDefinitionName("Pipeline")
+
+      val fetch = new Stage("IF")
+      val decode = new Stage("ID")
+      val execute = new Stage("EX")
+      val memory = new Stage("MEM")
+      val writeback = new Stage("WB")
+
+      override val stages = Seq(fetch, decode, execute, memory, writeback)
+      override val config: Config = conf
+      override val data: StandardPipelineData = new StandardPipelineData(conf)
+      override val pipelineComponent: Component = this
+    }
+
+    import riscv.{plugins => rvp}
+
+    pipeline.addPlugins(Seq(
+      new rvp.scheduling.static.Scheduler,
+      new rvp.scheduling.static.DataHazardResolver(firstRsReadStage = pipeline.execute),
+      new rvp.scheduling.static.TrapHandler(pipeline.writeback),
+      new rvp.MemoryBackbone,
+      new rvp.Fetcher(pipeline.fetch),
+      new rvp.Decoder(pipeline.decode),
+      new rvp.RegisterFile(pipeline.decode, pipeline.writeback),
+      new rvp.IntAlu(pipeline.execute),
+      new rvp.Shifter(pipeline.execute),
+      new rvp.Lsu(pipeline.memory),
+      new rvp.BranchUnit(pipeline.execute),
+      new rvp.scheduling.static.PcManager,
+      new rvp.CsrFile(pipeline.writeback),
+      new rvp.Timers,
+      new rvp.MachineMode(pipeline.execute),
+      new rvp.Interrupts(pipeline.writeback),
+      new rvp.MulDiv(pipeline.execute)
+    ))
 
     implicit val context = Context(pipeline)
+
     pipeline.addPlugins(Seq(
-      new RegisterFile(pipeline.stages(1), pipeline.stages.last),
-      new Access(pipeline.stages(2)),
-      new ScrFile(pipeline.stages.last),
-      new Lsu(pipeline.stages(3)),
+      new RegisterFile(pipeline.decode, pipeline.writeback),
+      new Access(pipeline.execute),
+      new ScrFile(pipeline.writeback),
+      new Lsu(pipeline.memory),
       new ExceptionHandler,
       new Ccsr,
       new MemoryTagger(0x0, 10 MiB),
-      new PccManager(pipeline.stages(2))
+      new PccManager(pipeline.execute)
     ))
 
+    pipeline.build()
     pipeline
   }
 }
@@ -33,7 +70,6 @@ class Core(imemHexPath: String) extends Component {
   implicit val config = new Config(BaseIsa.RV32I)
 
   val pipeline = createCheriPipeline()
-  pipeline.build()
 
   val charDev = new CharDev
   val charOut = master(Flow(UInt(8 bits)))
@@ -95,7 +131,6 @@ class CoreExtMem extends Component {
 
   implicit val config = new Config(BaseIsa.RV32I)
   val pipeline = createCheriPipeline()
-  pipeline.build()
 
   val ibus = master(new MemBus(config.ibusConfig))
   val dbus = master(new MemBus(config.dbusConfig))
