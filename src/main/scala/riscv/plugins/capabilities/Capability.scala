@@ -134,9 +134,13 @@ object PackedCapability {
     PackedCapability(hasOffset).assignRoot()
   }
 
+  def Root(implicit context: Context): PackedCapability = Root(true)
+
   def Null(hasOffset: Boolean = true)(implicit context: Context): PackedCapability = {
     PackedCapability(hasOffset).assignNull()
   }
+
+  def Null(implicit context: Context): PackedCapability = Null(true)
 }
 
 case class RegCapability(implicit context: Context)
