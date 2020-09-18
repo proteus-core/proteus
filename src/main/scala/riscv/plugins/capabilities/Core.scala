@@ -43,7 +43,7 @@ object createCheriPipeline {
       new rvp.scheduling.static.PcManager,
       new rvp.CsrFile(pipeline.writeback),
       new rvp.Timers,
-      new rvp.MachineMode(pipeline.execute),
+      new rvp.MachineMode(pipeline.execute, addMepc = false, addMtvec = false),
       new rvp.Interrupts(pipeline.writeback),
       new rvp.MulDiv(pipeline.execute)
     ))

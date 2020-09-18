@@ -67,7 +67,12 @@ class PccManager(branchStage: Stage)(implicit context: Context)
     pcc
   }
 
-  override def getPcc(stage: Stage): Capability = getCurrentPcc(stage)
+  override def getPcc(stage: Stage): Capability = {
+    val pcc = PackedCapability()
+    pcc.assignFrom(getCurrentPcc(stage))
+    pcc.offset := stage.input(pipeline.data.PC)
+    pcc
+  }
 
   override def setup(): Unit = {
     pipeline.getService[DecoderService].configure {config =>
@@ -119,16 +124,58 @@ class PccManager(branchStage: Stage)(implicit context: Context)
       }
     }
 
-    // 2) While executing jumps. Note that this violation would ultimately also
-    // be caught by the logic added to the fetch stage but it seems to make more
-    // sense to fault the jump instruction instead of the target. Also note that
-    // we don't check traps since mtvec+mtcc should always be valid.
-    pipeline.getService[JumpService] onJump {(stage, prevPc, nextPc, isTrap) =>
-      if (!isTrap) {
-        val pccInfo = getTargetPcc(stage)
-        checkJumpTarget(stage, pccInfo.value.base + nextPc)
+    pipeline.getService[JumpService] onJump {(stage, prevPc, nextPc, jumpType) =>
+      jumpType match {
+        // 2) While executing jumps. Note that this violation would ultimately
+        // also be caught by the logic added to the fetch stage but it seems to
+        // make more sense to fault the jump instruction instead of the target.
+        case JumpType.Normal => {
+          val pccInfo = getTargetPcc(stage)
+          checkJumpTarget(stage, pccInfo.value.base + nextPc)
+        }
+        // No permission checks are done on traps since the new trap would fail
+        // again for the same reason. There seem to be two ways of handling
+        // this:
+        // 1) Generate an exception when a capability that would cause a trap is
+        //    is written to MTCC.
+        // 2) Generate a full system reset when a trap is taken with an MTCC
+        //    that would cause another trap.
+        // Since an illegal MTCC value is almost certainly a bug, and there seem
+        // to be no use-cases for trying to recover from it, we opt for option
+        // 2) for now.
+        // TODO: actually implement a full reset.
+        case JumpType.Trap => {
+          val scrService = pipeline.getService[ScrService]
+          val mtcc = scrService.getScr(stage, ScrIndex.MTCC)
+          val mepcc = scrService.getScr(stage, ScrIndex.MEPCC)
+
+          setTargetPcc(stage, mtcc.read(), CapIdx.scr(ScrIndex.MTCC))
+          mepcc.write(getPcc(stage))
+        }
+        // No permission checks are done on MRET either because the target
+        // address comes from the source of the trap and it seems to make more
+        // sense to generate a violation there.
+        case JumpType.TrapReturn => {
+          val scrService = pipeline.getService[ScrService]
+          val mepcc = scrService.getScr(stage, ScrIndex.MEPCC)
+          setTargetPcc(stage, mepcc.read(), CapIdx.scr(ScrIndex.MEPCC))
+        }
       }
     }
+
+    pipeline.getService[ScrService] registerScr(ScrIndex.MTCC, 0x305, new Area with Scr {
+      override val needAsr: Boolean = true
+      private val mtcc = Reg(PackedCapability()).init(PackedCapability.Root)
+      override def read(): Capability = mtcc
+      override def write(value: Capability): Unit = mtcc.assignFrom(value)
+    })
+
+    pipeline.getService[ScrService] registerScr(ScrIndex.MEPCC, 0x341, new Area with Scr {
+      override val needAsr: Boolean = true
+      private val mepcc = Reg(PackedCapability()).init(PackedCapability.Root)
+      override def read(): Capability = mepcc
+      override def write(value: Capability): Unit = mepcc.assignFrom(value)
+    })
   }
 
   override def build(): Unit = {
