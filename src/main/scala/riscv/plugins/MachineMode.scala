@@ -140,7 +140,9 @@ private class Mhartid(implicit config: Config) extends Csr {
   override def read(): UInt = U(0, config.xlen bits)
 }
 
-class MachineMode(ecallStage: Stage) extends Plugin[Pipeline] {
+class MachineMode(ecallStage: Stage,
+                  addMtvec: Boolean = true,
+                  addMepc: Boolean = true) extends Plugin[Pipeline] {
   object Data {
     object ECALL  extends PipelineData(Bool())
     object EBREAK extends PipelineData(Bool())
@@ -156,10 +158,17 @@ class MachineMode(ecallStage: Stage) extends Plugin[Pipeline] {
 
     csr.registerCsr(0x300, new Mstatus)
     csr.registerCsr(0x301, new Misa(pipeline))
-    csr.registerCsr(0x305, new Mtvec)
+
+    if (addMtvec) {
+      csr.registerCsr(0x305, new Mtvec)
+    }
 
     csr.registerCsr(0x340, new Mscratch)
-    csr.registerCsr(0x341, new Mepc)
+
+    if (addMepc) {
+      csr.registerCsr(0x341, new Mepc)
+    }
+
     csr.registerCsr(0x342, new Mcause)
     csr.registerCsr(0x343, new Mtval)
 
