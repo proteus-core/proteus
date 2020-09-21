@@ -38,7 +38,7 @@ class PccManager(branchStage: Stage)(implicit context: Context)
     } elsewhen (address + 4 > targetPcc.top) {
       except(ExceptionCause.LengthViolation)
     } elsewhen (address < targetPcc.base) {
-      except(ExceptionCause.AccessSystemRegistersViolation)
+      except(ExceptionCause.LengthViolation)
     }
 
     ok
