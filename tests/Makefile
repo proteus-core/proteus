@@ -6,11 +6,18 @@ BUILD_DIR = $(TESTS_DIR)/build
 SIM_DIR = $(BASE_DIR)/sim
 SIM_EXE = $(SIM_DIR)/build/sim
 CORE = riscv.CoreExtMem
+BUILD_CORE ?= 1
 
 RISCV_PREFIX = riscv32-unknown-elf
 CC = $(RISCV_PREFIX)-gcc
 LD = $(RISCV_PREFIX)-gcc
 OBJCOPY = $(RISCV_PREFIX)-objcopy
+
+ifeq ($(BUILD_CORE),1)
+FORCE = FORCE
+else
+FORCE =
+endif
 
 -include $(CUSTOM_TESTS_DIR)/Makefile.include
 
@@ -36,7 +43,7 @@ $(BUILD_DIR)/%.o: %.S
 %.bin: %.elf
 	$(OBJCOPY) -O binary $^ $@
 
-$(SIM_EXE): FORCE
+$(SIM_EXE): $(FORCE)
 	make -C $(SIM_DIR) CORE=$(CORE)
 
 .PHONY: FORCE
