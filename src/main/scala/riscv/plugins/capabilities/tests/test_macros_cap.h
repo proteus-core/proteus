@@ -112,12 +112,12 @@ test_ ## testnum: \
     csrw mtvec, tp
 
 #define EXPECT_EXCEPTION(cause, capidx, code...) \
-    la tp, 1f; \
+    la tp, 999f; \
     csrw mtvec, tp; \
     code; \
     RESTORE_SAFE_STATE; \
     j fail; \
-1: \
+999: \
     RESTORE_SAFE_STATE; \
     csrr tp, mcause; \
     li t6, 10; \
