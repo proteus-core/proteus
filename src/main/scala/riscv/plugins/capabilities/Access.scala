@@ -19,6 +19,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
     object CMODIFY extends PipelineData(Bool())
     object CMODIFICATION extends PipelineData(Modification())
     object IMM_IS_UNSIGNED extends PipelineData(Bool())
+    object CMOVE extends PipelineData(Bool())
   }
 
   override def setup(): Unit = {
@@ -26,7 +27,8 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
       config.addDefault(Map(
         Data.CGET -> False,
         Data.CMODIFY -> False,
-        Data.IMM_IS_UNSIGNED -> False
+        Data.IMM_IS_UNSIGNED -> False,
+        Data.CMOVE -> False
       ))
 
       val getters = Map(
@@ -65,6 +67,10 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
 
       config.addDecoding(Opcodes.CSetBoundsImm, Map(
         Data.IMM_IS_UNSIGNED -> True
+      ))
+
+      config.addDecoding(Opcodes.CMove, InstructionType.R_CxC, Map(
+        Data.CMOVE -> True
       ))
     }
   }
@@ -156,6 +162,15 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
             }
 
             output(context.data.CD_DATA) := cd
+            output(pipeline.data.RD_VALID) := True
+          }
+        }
+
+        when (value(Data.CMOVE)) {
+          arbitration.rs1Needed := True
+
+          when (!arbitration.isStalled) {
+            output(context.data.CD_DATA) := value(context.data.CS1_DATA)
             output(pipeline.data.RD_VALID) := True
           }
         }
