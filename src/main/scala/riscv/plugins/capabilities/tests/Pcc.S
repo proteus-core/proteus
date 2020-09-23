@@ -76,6 +76,12 @@ RVTEST_CODE_BEGIN
         j fail
     2:
 
+    # Jump to sealed capability
+    TEST_CASE_START(8)
+        SET_DUMMY_TARGET(c1)
+        SEAL(c1, c1, 456)
+        EXPECT_EXCEPTION(CAUSE_SEAL_VIOLATION, 1, CJALR c1)
+
     TEST_PASSFAIL
 
     dummy_jump_target:

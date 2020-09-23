@@ -22,6 +22,8 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
     when (operation =/= LsuOperationType.NONE) {
       when (!cap.tag) {
         except(ExceptionCause.TagViolation)
+      } elsewhen (cap.isSealed) {
+        except(ExceptionCause.SealViolation)
       } elsewhen (operation === LsuOperationType.LOAD && !cap.perms.load) {
         except(ExceptionCause.PermitLoadViolation)
       } elsewhen (operation === LsuOperationType.STORE && !cap.perms.store) {

@@ -6,7 +6,7 @@ import spinal.core._
 
 class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
   object FieldSelect extends SpinalEnum {
-    val PERM, BASE, LEN, TAG, OFFSET, ADDR = newElement()
+    val PERM, TYPE, BASE, LEN, TAG, OFFSET, ADDR = newElement()
   }
 
   object Modification extends SpinalEnum {
@@ -33,6 +33,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
 
       val getters = Map(
         Opcodes.CGetPerm   -> FieldSelect.PERM,
+        Opcodes.CGetType   -> FieldSelect.TYPE,
         Opcodes.CGetBase   -> FieldSelect.BASE,
         Opcodes.CGetLen    -> FieldSelect.LEN,
         Opcodes.CGetTag    -> FieldSelect.TAG,
@@ -87,6 +88,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           when (!arbitration.isStalled) {
             val rd = value(Data.CFIELD).mux(
               FieldSelect.PERM -> cap.perms.asIsaBits.asUInt.resized,
+              FieldSelect.TYPE -> cap.otype.extendedValue,
               FieldSelect.BASE -> cap.base,
               FieldSelect.LEN -> cap.length,
               FieldSelect.TAG -> cap.tag.asUInt.resized,

@@ -6,12 +6,15 @@ import spinal.core._
 
 object Opcodes {
   val CGetPerm        = M"111111100000-----000-----1011011"
+  val CGetType        = M"111111100001-----000-----1011011"
   val CGetBase        = M"111111100010-----000-----1011011"
   val CGetLen         = M"111111100011-----000-----1011011"
   val CGetTag         = M"111111100100-----000-----1011011"
   val CGetOffset      = M"111111100110-----000-----1011011"
   val CGetAddr        = M"111111101111-----000-----1011011"
 
+  val CSeal           = M"0001011----------000-----1011011"
+  val CUnseal         = M"0001100----------000-----1011011"
   val CAndPerm        = M"0001101----------000-----1011011"
   val CSetOffset      = M"0001111----------000-----1011011"
   val CIncOffset      = M"0010001----------000-----1011011"
@@ -40,6 +43,7 @@ object InstructionType {
   case object R_CxR extends InstructionType(InstructionFormat.R, RegisterType.CAP,       riscv.RegisterType.NONE, riscv.RegisterType.GPR)
   case object R_CRC extends InstructionType(InstructionFormat.R, RegisterType.CAP,       riscv.RegisterType.GPR,  RegisterType.CAP)
   case object R_CxC extends InstructionType(InstructionFormat.R, RegisterType.CAP,       riscv.RegisterType.NONE, RegisterType.CAP)
+  case object R_CCC extends InstructionType(InstructionFormat.R, RegisterType.CAP,       RegisterType.CAP,        RegisterType.CAP)
   case object I_CxC extends InstructionType(InstructionFormat.I, RegisterType.CAP,       riscv.RegisterType.NONE, RegisterType.CAP)
   case object I_RxC extends InstructionType(InstructionFormat.I, riscv.RegisterType.GPR, riscv.RegisterType.NONE, RegisterType.CAP)
   case object S_RCx extends InstructionType(InstructionFormat.S, riscv.RegisterType.GPR, RegisterType.CAP,        riscv.RegisterType.NONE)

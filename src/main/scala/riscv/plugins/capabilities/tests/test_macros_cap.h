@@ -21,13 +21,17 @@
 #define CHECK_PERMS(cr, perms) \
     CHECK_GETTER(CGetPerm, cr, perms);
 
-#define CHECK_CAP_NO_OFFSET(cr, tag, base, len, perms) \
+#define CHECK_TYPE(cr, type) \
+    CHECK_GETTER(CGetType, cr, type);
+
+#define CHECK_CAP_NO_OFFSET(cr, tag, base, len, perms, type) \
     CHECK_TAG(cr, tag) \
     CHECK_BOUNDS(cr, base, len) \
-    CHECK_PERMS(cr, perms)
+    CHECK_PERMS(cr, perms) \
+    CHECK_TYPE(cr, type)
 
-#define CHECK_CAP(cr, tag, base, len, offset, perms) \
-    CHECK_CAP_NO_OFFSET(cr, tag, base, len, perms) \
+#define CHECK_CAP(cr, tag, base, len, offset, perms, type) \
+    CHECK_CAP_NO_OFFSET(cr, tag, base, len, perms, type) \
     CHECK_OFFSET(cr, offset)
 
 #define CHECK_GETTER_EQ(getter, cd, cs) \
@@ -48,39 +52,51 @@
 #define CHECK_PERMS_EQ(cd, cs) \
     CHECK_GETTER_EQ(CGetPerm, cd, cs);
 
+#define CHECK_TYPE_EQ(cd, cs) \
+    CHECK_GETTER_EQ(CGetType, cd, cs);
+
 #define CHECK_CAP_NEW_BOUNDS_OFFSET(cd, cs, base, len, offset) \
     CHECK_BOUNDS(cd, base, len); \
     CHECK_OFFSET(cd, offset); \
     CHECK_TAG_EQ(cd, cs); \
-    CHECK_PERMS_EQ(cd, cs);
+    CHECK_PERMS_EQ(cd, cs); \
+    CHECK_TYPE_EQ(cd, cs);
+
+#define CHECK_CAP_NEW_TYPE(cd, cs, type) \
+    CHECK_TAG_EQ(cd, cs); \
+    CHECK_BOUNDS_EQ(cd, cs); \
+    CHECK_OFFSET_EQ(cd, cs); \
+    CHECK_PERMS_EQ(cd, cs); \
+    CHECK_TYPE(cd, type);
 
 #define CHECK_CAP_EQ(cd, cs) \
     CHECK_TAG_EQ(cd, cs); \
     CHECK_BOUNDS_EQ(cd, cs); \
     CHECK_OFFSET_EQ(cd, cs); \
-    CHECK_PERMS_EQ(cd, cs);
+    CHECK_PERMS_EQ(cd, cs); \
+    CHECK_TYPE_EQ(cd, cs);
 
 
-#define TEST_CASE_CAP_NO_OFFSET(testnum, testcap, correct_tag, correct_base, correct_len, correct_perms, code... ) \
+#define TEST_CASE_CAP_NO_OFFSET(testnum, testcap, correct_tag, correct_base, correct_len, correct_perms, correct_type, code... ) \
 test_ ## testnum: \
     code; \
     li  TESTNUM, testnum; \
-    CHECK_CAP_NO_OFFSET(testcap, correct_tag, correct_base, correct_len, correct_perms)
+    CHECK_CAP_NO_OFFSET(testcap, correct_tag, correct_base, correct_len, correct_perms, correct_type)
 
-#define TEST_CASE_CAP(testnum, testcap, correct_tag, correct_base, correct_len, correct_offset, correct_perms, code... ) \
+#define TEST_CASE_CAP(testnum, testcap, correct_tag, correct_base, correct_len, correct_offset, correct_perms, correct_type, code... ) \
 test_ ## testnum: \
     code; \
     li  TESTNUM, testnum; \
-    CHECK_CAP(testcap, correct_tag, correct_base, correct_len, correct_offset, correct_perms)
+    CHECK_CAP(testcap, correct_tag, correct_base, correct_len, correct_offset, correct_perms, correct_type)
 
 #define TEST_CASE_NULL_CAP(testnum, testcap, code...) \
-    TEST_CASE_CAP(testnum, testcap, 0, 0x0, 0x0, 0x0, 0b0, code)
+    TEST_CASE_CAP(testnum, testcap, 0, 0x0, 0x0, 0x0, 0b0, 0xffffffff, code)
 
 #define TEST_CASE_ROOT_CAP_NO_OFFSET(testnum, testcap, code...) \
-    TEST_CASE_CAP_NO_OFFSET(testnum, testcap, 1, 0x0, 0xffffffff, 0b010000111110, code)
+    TEST_CASE_CAP_NO_OFFSET(testnum, testcap, 1, 0x0, 0xffffffff, 0b011010111110, 0xffffffff, code)
 
 #define TEST_CASE_ROOT_CAP(testnum, testcap, code...) \
-    TEST_CASE_CAP(testnum, testcap, 1, 0x0, 0xffffffff, 0x0, 0b010000111110, code)
+    TEST_CASE_CAP(testnum, testcap, 1, 0x0, 0xffffffff, 0x0, 0b011010111110, 0xffffffff, code)
 
 #define TEST_CASE_CAP_NEW_BOUNDS_OFFSET(testnum, cd, cs, base, len, offset, code...) \
 test_ ## testnum: \
@@ -171,5 +187,12 @@ test_ ## testnum: \
     TEST_CASE_START(testnum); \
     AND_PERM_DCC(perm); \
     EXPECT_NO_EXCEPTION(code)
+
+#define SEAL(cd, cs, type) \
+    li t0, type; \
+    CSetOffset c30, ROOT, t0; \
+    CSeal cd, cs, c30
+
+#define SEAL_ROOT(cd, type) SEAL(cd, ROOT, type)
 
 #endif

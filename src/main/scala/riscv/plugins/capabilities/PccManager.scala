@@ -33,6 +33,8 @@ class PccManager(branchStage: Stage)(implicit context: Context)
 
     when (!targetPcc.tag) {
       except(ExceptionCause.TagViolation)
+    } elsewhen (targetPcc.isSealed) {
+      except(ExceptionCause.SealViolation)
     } elsewhen (!targetPcc.perms.execute) {
       except(ExceptionCause.PermitExecuteViolation)
     } elsewhen (address + 4 > targetPcc.top) {

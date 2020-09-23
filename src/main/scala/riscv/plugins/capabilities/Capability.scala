@@ -8,6 +8,8 @@ trait Permissions {
   def store: Bool
   def loadCapability: Bool
   def storeCapability: Bool
+  def seal: Bool
+  def unseal: Bool
   def accessSystemRegisters: Bool
 
   def setAll(value: Bool): Unit = {
@@ -16,6 +18,8 @@ trait Permissions {
     store := value
     loadCapability := value
     storeCapability := value
+    seal := value
+    unseal := value
     accessSystemRegisters := value
   }
 
@@ -23,8 +27,8 @@ trait Permissions {
   def allowNone(): Unit = setAll(False)
 
   def asIsaBits: Bits = {
-    B"0" ## accessSystemRegisters ## B"0000" ## storeCapability ##
-      loadCapability ## store ## load ## execute ## B"0" resized
+    B"0" ## accessSystemRegisters ## unseal ## B"0" ## seal ## B"0" ##
+      storeCapability ## loadCapability ## store ## load ## execute ## B"0" resized
   }
 
   def assignFromIsaBits(bits: Bits): Unit = {
@@ -33,6 +37,8 @@ trait Permissions {
     store := bits(3)
     loadCapability := bits(4)
     storeCapability := bits(5)
+    seal := bits(7)
+    unseal := bits(9)
     accessSystemRegisters := bits(10)
   }
 
@@ -42,6 +48,8 @@ trait Permissions {
     store := other.store
     loadCapability := other.loadCapability
     storeCapability := other.storeCapability
+    seal := other.seal
+    unseal := other.unseal
     accessSystemRegisters := other.accessSystemRegisters
   }
 }
@@ -52,7 +60,21 @@ case class PackedPermissions() extends Bundle with Permissions {
   override val store = Bool()
   override val loadCapability = Bool()
   override val storeCapability = Bool()
+  override val seal = Bool()
+  override val unseal = Bool()
   override val accessSystemRegisters = Bool()
+}
+
+case class ObjectType(implicit context: Context) extends Bundle {
+  val value = UInt(context.otypeLen bits)
+
+  def extendedValue: UInt = {
+    val xlen = context.config.xlen
+    isSealed ? value.resize(xlen bits) | UInt(xlen bits).setAll()
+  }
+
+  def unseal(): Unit = value.setAll()
+  def isSealed: Bool = value <= context.maxOtype
 }
 
 trait Capability {
@@ -61,17 +83,21 @@ trait Capability {
   def length: UInt
   def offset: UInt
   def perms: Permissions
+  def otype: ObjectType
 
   def hasOffset: Boolean = true
 
   def top: UInt = base + length
   def address: UInt = base + offset
 
+  def isSealed: Bool = otype.isSealed
+
   def assignFrom(other: Capability): this.type = {
     tag := other.tag
     base := other.base
     length := other.length
     perms.assignFrom(other.perms)
+    otype := other.otype
 
     if (hasOffset && other.hasOffset) {
       offset := other.offset
@@ -85,6 +111,7 @@ trait Capability {
     base := 0
     length := U"32'hffffffff"
     perms.allowAll()
+    otype.unseal()
 
     if (hasOffset) {
       offset := 0
@@ -98,6 +125,7 @@ trait Capability {
     base := 0
     length := 0
     perms.allowNone()
+    otype.unseal()
 
     if (hasOffset) {
       offset := 0
@@ -114,6 +142,7 @@ class PackedCapabilityFields(hasOffset: Boolean = true)
   val length = UInt(xlen bits)
   val offset = if (hasOffset) UInt(xlen bits) else null
   val perms = PackedPermissions()
+  val otype = ObjectType()
 }
 
 object PackedCapabilityFields {
@@ -172,9 +201,12 @@ case class MemPermissions() extends Bundle with Permissions {
   override val store = Bool()
   override val loadCapability = Bool()
   override val storeCapability = Bool()
-  private val padding2 = B"0000"
+  private val padding2 = B"0"
+  override val seal = Bool()
+  private val padding3 = B"0"
+  override val unseal = Bool()
   override val accessSystemRegisters = Bool()
-  private val padding3 = B"0000"
+  private val padding4 = B"0000"
 
   assert(getBitsWidth == 15)
 }
@@ -187,7 +219,8 @@ case class MemCapability()(implicit context: Context) extends Bundle with Capabi
   override val length = UInt(xlen bits)
   private val padding1 = B"0"
   override val perms = MemPermissions()
-  private val padding2 = B(0, xlen - perms.getBitsWidth - 1 bits)
+  override val otype = ObjectType()
+  private val padding2 = B(0, xlen - perms.getBitsWidth - otype.getBitsWidth - 1 bits)
   override val tag = Bool()
 
   override def offset = cursor - base
@@ -203,6 +236,7 @@ case class MemCapability()(implicit context: Context) extends Bundle with Capabi
     base := other.base
     length := other.length
     perms.assignFrom(other.perms)
+    otype := other.otype
     tag := other.tag
     this
   }

@@ -58,7 +58,8 @@ object createCheriPipeline {
       new ExceptionHandler,
       new Ccsr,
       new MemoryTagger(0x0, 10 MiB),
-      new PccManager(pipeline.execute)
+      new PccManager(pipeline.execute),
+      new Sealing(pipeline.execute)
     ))
 
     pipeline.build()
