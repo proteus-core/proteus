@@ -93,10 +93,10 @@ test_ ## testnum: \
     TEST_CASE_CAP(testnum, testcap, 0, 0x0, 0x0, 0x0, 0b0, 0xffffffff, code)
 
 #define TEST_CASE_ROOT_CAP_NO_OFFSET(testnum, testcap, code...) \
-    TEST_CASE_CAP_NO_OFFSET(testnum, testcap, 1, 0x0, 0xffffffff, 0b011010111110, 0xffffffff, code)
+    TEST_CASE_CAP_NO_OFFSET(testnum, testcap, 1, 0x0, 0xffffffff, 0b011110111110, 0xffffffff, code)
 
 #define TEST_CASE_ROOT_CAP(testnum, testcap, code...) \
-    TEST_CASE_CAP(testnum, testcap, 1, 0x0, 0xffffffff, 0x0, 0b011010111110, 0xffffffff, code)
+    TEST_CASE_CAP(testnum, testcap, 1, 0x0, 0xffffffff, 0x0, 0b011110111110, 0xffffffff, code)
 
 #define TEST_CASE_CAP_NEW_BOUNDS_OFFSET(testnum, cd, cs, base, len, offset, code...) \
 test_ ## testnum: \

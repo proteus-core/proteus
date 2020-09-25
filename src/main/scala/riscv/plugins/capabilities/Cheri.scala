@@ -28,6 +28,8 @@ object Opcodes {
   val CSpecialRW      = M"0000001----------000-----1011011"
 
   val CJALR           = M"111111101100-----000-----1011011"
+  val CCall           = M"1111110----------000000001011011"
+  val CCallFast       = M"1111110----------000000011011011"
 
   val LC              = M"-----------------011-----0000011"
   val SC              = M"-----------------011-----0100011"
@@ -43,6 +45,7 @@ object InstructionType {
   case object R_CxR extends InstructionType(InstructionFormat.R, RegisterType.CAP,       riscv.RegisterType.NONE, riscv.RegisterType.GPR)
   case object R_CRC extends InstructionType(InstructionFormat.R, RegisterType.CAP,       riscv.RegisterType.GPR,  RegisterType.CAP)
   case object R_CxC extends InstructionType(InstructionFormat.R, RegisterType.CAP,       riscv.RegisterType.NONE, RegisterType.CAP)
+  case object R_CCx extends InstructionType(InstructionFormat.R, RegisterType.CAP,       RegisterType.CAP,        riscv.RegisterType.NONE)
   case object R_CCC extends InstructionType(InstructionFormat.R, RegisterType.CAP,       RegisterType.CAP,        RegisterType.CAP)
   case object I_CxC extends InstructionType(InstructionFormat.I, RegisterType.CAP,       riscv.RegisterType.NONE, RegisterType.CAP)
   case object I_RxC extends InstructionType(InstructionFormat.I, riscv.RegisterType.GPR, riscv.RegisterType.NONE, RegisterType.CAP)
