@@ -76,6 +76,17 @@ trait DecoderService {
                     itype: InstructionType,
                     action: Action): Unit
     def addDecoding(opcode: MaskedLiteral, action: Action): Unit
+
+    /**
+     * Hardcode the register operands used by the given opcode. This means the
+     * operands will not be decoded from the opcode but the given values will
+     * be used instead.
+     */
+    def setFixedRegisters(opcode: MaskedLiteral,
+                          rs1: Option[Int] = None,
+                          rs2: Option[Int] = None,
+                          rd:  Option[Int] = None): Unit
+
     def addDefault(action: Action): Unit
     def addDefault(data: PipelineData[_ <: Data], value: Data): Unit
   }
