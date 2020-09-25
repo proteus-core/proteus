@@ -32,7 +32,7 @@ trap_vector:                                                            \
     la tp, mtvec_handler;                                               \
     beqz tp, 1f;                                                        \
     jr tp;                                                              \
-    la tp, fail;                                                        \
+1:  la tp, fail;                                                        \
     beqz tp, 1f;                                                        \
     jr tp;                                                              \
 1:  mret;                                                               \
