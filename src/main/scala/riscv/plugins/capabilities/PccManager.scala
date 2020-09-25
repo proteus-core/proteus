@@ -76,6 +76,15 @@ class PccManager(branchStage: Stage)(implicit context: Context)
     pcc
   }
 
+  def jump(stage: Stage, pcc: Capability, capIdx: CapIdx): Unit = {
+    setTargetPcc(stage, pcc, capIdx)
+
+    val pc = UInt(config.xlen bits)
+    pc := pcc.offset
+    pc.lsb := False
+    pipeline.getService[JumpService].jump(stage, pc)
+  }
+
   override def setup(): Unit = {
     pipeline.getService[DecoderService].configure {config =>
       config.addDefault(Map(
@@ -190,12 +199,7 @@ class PccManager(branchStage: Stage)(implicit context: Context)
         when (!arbitration.isStalled) {
           val targetPcc = value(context.data.CS1_DATA)
           val capIdx = CapIdx.gpcr(value(pipeline.data.RS1))
-          setTargetPcc(branchStage, targetPcc, capIdx)
-
-          val targetPc = UInt(config.xlen bits)
-          targetPc := targetPcc.offset
-          targetPc.lsb := False
-          pipeline.getService[JumpService].jump(branchStage, targetPc)
+          jump(branchStage, targetPcc, capIdx)
 
           val cd = PackedCapability()
           cd.assignFrom(getCurrentPcc(branchStage))

@@ -6,6 +6,7 @@ import spinal.core._
 
 trait PccService {
   def getPcc(stage: Stage): Capability
+  def jump(stage: Stage, pcc: Capability, capIdx: CapIdx): Unit
 }
 
 trait Scr {
