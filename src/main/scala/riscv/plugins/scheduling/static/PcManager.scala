@@ -6,7 +6,7 @@ import spinal.core._
 
 import scala.collection.mutable
 
-class PcManager extends Plugin[StaticPipeline] with JumpService {
+class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with JumpService {
   private val jumpStages = mutable.Set[Stage]()
   private val pcUpdateObservers = mutable.Buffer[PcUpdateObserver]()
   private val jumpObservers = mutable.Buffer[JumpObserver]()
@@ -61,7 +61,7 @@ class PcManager extends Plugin[StaticPipeline] with JumpService {
 
   override def finish(): Unit = {
     pipeline plug new Area {
-      val pc = Reg(UInt(config.xlen bits)).init(0)
+      val pc = Reg(UInt(config.xlen bits)).init(resetVec)
       val fetchStage = pipeline.stages.head
 
       def updatePc(stage: Stage, isJump: Boolean) = {

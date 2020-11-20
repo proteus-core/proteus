@@ -47,7 +47,7 @@ start_tests:
 
 #define TESTNUM gp
 
-#define TESTDEV 0xf0003000
+#define TESTDEV 0x30000000
 
 #define RVTEST_FAIL                                                     \
     li tp, TESTDEV;                                                     \
