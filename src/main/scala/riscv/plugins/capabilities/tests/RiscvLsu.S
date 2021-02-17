@@ -29,8 +29,8 @@ RVTEST_CODE_BEGIN
     TEST_CASE_DCC_AND_PERM_NO_EXCEPTION(16, ~(1 << PERM_PERMIT_LOAD),  sb zero, (zero))
 
     TEST_CASE_FREE(17)
-        SEAL_ROOT(c1, 123)
-        CSpecialW ddc, c1
+        SET_BOUNDS_DCC(512)
+        SEAL_DDC(123)
         EXPECT_EXCEPTION(CAUSE_SEAL_VIOLATION, CAP_IDX_DDC, sb zero, (zero))
 
     TEST_PASSFAIL

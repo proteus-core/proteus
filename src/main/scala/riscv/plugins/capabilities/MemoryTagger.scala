@@ -35,7 +35,7 @@ class MemoryTagger(memoryStart: BigInt, memorySize: BigInt)(implicit context: Co
       cbusIn.rsp.payload.rdata.assignDontCare()
 
       val address = dbusIn.cmd.valid ? dbusIn.cmd.payload.address | cbusIn.cmd.payload.address
-      val addressInMemory = address < memorySize
+      val addressInMemory = (address >= memoryStart) && (address < memoryStart + memorySize)
       val tagIndex = ((address - memoryStart) >> log2Up(context.clen / 8)).resized
 
       val cbusPayload = cbusIn.cmd.payload

@@ -6,7 +6,10 @@
 #define CHECK_GETTER(getter, cr, correct_result) \
     getter x30, cr; \
     li  x29, MASK_XLEN(correct_result); \
-    bne x29, x30, fail;
+    beq x29, x30, 1f; \
+    RESTORE_SAFE_STATE; \
+    j fail; \
+1:
 
 #define CHECK_TAG(cr, tag) \
     CHECK_GETTER(CGetTag, cr, tag);
@@ -37,7 +40,10 @@
 #define CHECK_GETTER_EQ(getter, cd, cs) \
     getter x29, cs; \
     getter x30, cd; \
-    bne x29, x30, fail;
+    beq x29, x30, 1f; \
+    RESTORE_SAFE_STATE; \
+    j fail; \
+1:
 
 #define CHECK_TAG_EQ(cd, cs) \
     CHECK_GETTER_EQ(CGetTag, cd, cs);
@@ -160,7 +166,9 @@ test_ ## testnum: \
 2:
 
 #define SET_BOUNDS_DCC(bounds) \
-    CSetBounds c1, ROOT, bounds; \
+    li t0, 0x80000000; \
+    CSetOffset c1, ROOT, t0; \
+    CSetBounds c1, c1, bounds; \
     CSpecialW ddc, c1
 
 #define TEST_CASE_DCC_BOUNDS_EXCEPTION(testnum, bounds, cause, code...) \
@@ -175,16 +183,19 @@ test_ ## testnum: \
 
 #define AND_PERM_DCC(perm) \
     li t0, perm; \
-    CAndPerm c1, ROOT, t0; \
+    CSpecialR c1, ddc; \
+    CAndPerm c1, c1, t0; \
     CSpecialW ddc, c1
 
 #define TEST_CASE_DCC_AND_PERM_EXCEPTION(testnum, perm, cause, code...) \
     TEST_CASE_START(testnum); \
+    SET_BOUNDS_DCC(512); \
     AND_PERM_DCC(perm); \
     EXPECT_EXCEPTION(cause, CAP_IDX_DDC, code)
 
 #define TEST_CASE_DCC_AND_PERM_NO_EXCEPTION(testnum, perm, code...) \
     TEST_CASE_START(testnum); \
+    SET_BOUNDS_DCC(512); \
     AND_PERM_DCC(perm); \
     EXPECT_NO_EXCEPTION(code)
 
@@ -192,6 +203,11 @@ test_ ## testnum: \
     li t0, type; \
     CSetOffset c30, ROOT, t0; \
     CSeal cd, cs, c30
+
+#define SEAL_DDC(type) \
+    CSpecialR c1, ddc; \
+    SEAL(c1, c1, type); \
+    CSpecialW ddc, c1
 
 #define SEAL_ROOT(cd, type) SEAL(cd, ROOT, type)
 

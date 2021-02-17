@@ -57,7 +57,7 @@ object createCheriPipeline {
       new Lsu(pipeline.memory),
       new ExceptionHandler,
       new Ccsr,
-      new MemoryTagger(0x0, 10 MiB),
+      new MemoryTagger(0x80000000L, 10 MiB),
       new PccManager(pipeline.execute),
       new Sealing(pipeline.execute)
     ))
