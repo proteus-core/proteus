@@ -52,7 +52,7 @@ object createStaticPipeline {
       new Shifter(pipeline.execute),
       new Lsu(pipeline.memory),
       new BranchUnit(pipeline.execute),
-      new PcManager,
+      new PcManager(0x80000000L),
       new CsrFile(pipeline.writeback),
       new Timers,
       new MachineMode(pipeline.execute),
@@ -85,10 +85,10 @@ class Core(imemHexPath: String, formal: Boolean = false) extends Component {
   val soc = new Soc(
     pipeline,
     Seq(
-      MemSegment(0x0, 10 MiB).init(imemHexPath),
-      MmioSegment(0xf0001000L, new MachineTimers(pipeline)),
-      MmioSegment(0xf0002000L, charDev),
-      MmioSegment(0xf0004000L, byteDev)
+      MemSegment(0x80000000L, 10 MiB).init(imemHexPath),
+      MmioSegment(0x02000000L, new MachineTimers(pipeline)),
+      MmioSegment(0x10000000L, charDev),
+      MmioSegment(0x20000000L, byteDev)
     )
   )
 }
@@ -158,8 +158,8 @@ class CoreTest(memHexPath: String) extends Component {
   val soc = new Soc(
     pipeline,
     Seq(
-      MemSegment(0x0, 1 MiB).init(memHexPath),
-      MmioSegment(0xf0003000L, testDev)
+      MemSegment(0x80000000L, 10 MiB).init(memHexPath),
+      MmioSegment(0x30000000L, testDev)
     )
   )
 }
@@ -220,11 +220,11 @@ class CoreExtMem extends Component {
   val soc = new Soc(
     pipeline,
     Seq(
-      MemBusSegment(0x0, 10 MiB, dbus, ibus),
-      MmioSegment(0xf0001000L, new MachineTimers(pipeline)),
-      MmioSegment(0xf0002000L, charDev),
-      MmioSegment(0xf0003000L, testDev),
-      MmioSegment(0xf0004000L, byteDev)
+      MmioSegment(0x02000000L, new MachineTimers(pipeline)),
+      MmioSegment(0x10000000L, charDev),
+      MmioSegment(0x20000000L, byteDev),
+      MmioSegment(0x30000000L, testDev),
+      MemBusSegment(0x80000000L, 10 MiB, dbus, ibus)
     )
   )
 }
