@@ -155,6 +155,10 @@ class CoreTest(memHexPath: String) extends Component {
   dummyTimerIo.update := False
   dummyTimerIo.interruptPending.assignDontCare()
 
+  val external_irq = pipeline.getService[InterruptService].getExternalIrqIo
+  external_irq.update := False
+  external_irq.interruptPending := False
+
   val soc = new Soc(
     pipeline,
     Seq(
