@@ -298,8 +298,10 @@ int main(int argc, char** argv)
 
         if (clockEdge && top->clk)
         {
-            if (memory.eval())
-                top->eval();
+            memory.eval();
+            top->eval();
+            memory.eval();
+            top->eval();
 
             charDev.eval();
             testDev.eval();
