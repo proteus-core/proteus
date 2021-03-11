@@ -59,7 +59,8 @@ object createCheriPipeline {
       new Ccsr,
       new MemoryTagger(0x80000000L, 10 MiB),
       new PccManager(pipeline.execute),
-      new Sealing(pipeline.execute)
+      new Sealing(pipeline.execute),
+      new MachineMode
     ))
 
     pipeline.build()
