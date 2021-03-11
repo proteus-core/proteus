@@ -28,6 +28,7 @@
 
 #define CAP_IDX_PCC 0x20
 #define CAP_IDX_DDC 0x21
+#define CAP_IDX_MTDC 0x3d
 
 #define PERM_GLOBAL 0
 #define PERM_PERMIT_EXECUTE 1

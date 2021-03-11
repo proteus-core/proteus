@@ -19,6 +19,21 @@ RVTEST_CODE_BEGIN
         CSpecialR c2, mscratchc;
     )
 
+    # test exception when PERM_ACCESS_SYSTEM_REGISTERS is not set
+    TEST_CASE_START(3)
+        # to unset PERM_ACCESS_SYSTEM_REGISTERS on PCC, we have to create the
+        # new capability and jump to it.
+        CSpecialR c2, pcc
+        li t0, ~(1 << PERM_ACCESS_SYSTEM_REGISTERS)
+        CAndPerm c2, c2, t0
+        la t0, 1f
+        CSetOffset c2, c2, t0
+        CJALR c2
+    1:
+        EXPECT_EXCEPTION(CAUSE_ACCESS_SYSTEM_REGISTERS_VIOLATION, CAP_IDX_MTDC,
+            CSpecialR c3, mtdc
+        )
+
     TEST_PASSFAIL
 
 RVTEST_CODE_END

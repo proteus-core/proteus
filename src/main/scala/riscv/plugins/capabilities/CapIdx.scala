@@ -5,9 +5,9 @@ import spinal.core._
 class CapIdx extends Bundle {
   private val idx = Bits(6 bits)
 
-  def assignFromScr(scr: Int): Unit = {
+  def assignFromScr(scr: UInt): Unit = {
     idx.msb := True
-    idx(4 downto 0) := scr
+    idx(4 downto 0) := scr.asBits
   }
 
   def assignFromGpcr(cr: UInt): Unit = {
@@ -21,10 +21,14 @@ class CapIdx extends Bundle {
 object CapIdx {
   def apply(): CapIdx = new CapIdx
 
-  def scr(scr: Int): CapIdx = {
+  def scr(scr: UInt): CapIdx = {
     val idx = new CapIdx()
     idx.assignFromScr(scr)
     idx
+  }
+
+  def scr(scr: Int): CapIdx = {
+    this.scr(U(scr, 5 bits))
   }
 
   def gpcr(cr: UInt): CapIdx = {

@@ -194,7 +194,12 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
           val ir = value(pipeline.data.IR)
           trapHandler.trap(scrStage, riscv.TrapCause.IllegalInstruction(ir))
         } elsewhen (needAsr && !hasAsr) {
-          // TODO: AccessSystemRegsViolation
+          val exceptionHandler = pipeline.getService[ExceptionHandler]
+          exceptionHandler.except(
+            scrStage,
+            ExceptionCause.AccessSystemRegistersViolation,
+            CapIdx.scr(scrId)
+          )
         } elsewhen (!ignoreRead) {
           output(context.data.CD_DATA) := cd
           output(pipeline.data.RD_VALID) := True
