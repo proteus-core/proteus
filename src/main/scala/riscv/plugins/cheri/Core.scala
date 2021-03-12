@@ -1,4 +1,4 @@
-package riscv.plugins.capabilities
+package riscv.plugins.cheri
 
 import riscv._
 import riscv.soc._

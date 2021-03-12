@@ -1,4 +1,4 @@
-package riscv.plugins.capabilities
+package riscv.plugins.cheri
 
 import spinal.core._
 import spinal.lib._
