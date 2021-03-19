@@ -27,7 +27,7 @@
 First, make sure this repository is recursively cloned:
 
 ```
-git clone --recurse-submodules git@github.com:JobNoorman/RiscV.git
+git clone --recurse-submodules git@gitlab.com:ProteusCore/ProteusCore.git
 ```
 
 The default configuration uses Verilog arrays to simulate memories which need to be initialized with an Intel HEX file.
@@ -73,12 +73,12 @@ A more detailed explanation will follow later.
 
 The default configuration used above has the following memory map:
 
-- `0x00000000`: 1 MiB of RAM initialized with the given memory file
-- `0xf0001000`: `mtime` register
-- `0xf0001008`: `mtimecmp` register
-- `0xf0002000`: Custom character devive
+- `0x80000000`: 10 MiB of RAM initialized with the given memory file
+- `0x20000000`: `mtime` register
+- `0x20000008`: `mtimecmp` register
+- `0x10000000`: Custom character devive
 
-The CPU starts executing at `0x0`.
+The CPU starts executing at `0x80000000`.
 
 The custom character device will print any stored ASCII character to the console.
 When ASCII `EOT` (`0x4`) is stored, simulation is halted.
