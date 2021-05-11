@@ -424,8 +424,8 @@ class CoreDynamic(imemHexPath: String, formal: Boolean = false) extends Componen
   val soc = new Soc(
     pipeline,
     Seq(
-      MemSegment(0x0, 1 MiB).init(imemHexPath),
-      MmioSegment(0xf0002000L, charDev)
+      MemSegment(0x80000000L, 10 MiB).init(imemHexPath),
+      MmioSegment(0x10000000L, charDev)
     )
   )
 }
