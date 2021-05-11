@@ -393,6 +393,7 @@ object createDynamicPipeline {
     pipeline.issuePipeline.addPlugins(Seq(
       new scheduling.static.Scheduler(canStallExternally = true),
       new scheduling.static.PcManager,
+      new MemoryBackbone,
       new Fetcher(pipeline.issuePipeline.fetch),
       new Decoder(pipeline.issuePipeline.decode)
     ))
