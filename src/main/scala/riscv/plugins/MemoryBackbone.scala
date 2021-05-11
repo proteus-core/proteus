@@ -17,25 +17,40 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
   private val dbusObservers = mutable.ArrayBuffer[MemBusObserver]()
 
   override def finish(): Unit = {
-    if (internalIBus != null) {
-      pipeline plug new Area {
-        externalIBus = master(new MemBus(config.ibusConfig)).setName("ibus")
+    def dummyConnect(bus: MemBus) = {
+      bus.cmd.valid := False
+      bus.cmd.payload.assignDontCare()
+      bus.rsp.ready := False
+    }
+
+    // IBUS
+    pipeline plug new Area {
+      externalIBus = master(new MemBus(config.ibusConfig)).setName("ibus")
+
+      if (internalIBus != null) {
         externalIBus <> internalIBus
+      } else {
+        internalIBus = externalIBus
+        dummyConnect(internalIBus)
       }
     }
 
-    if (internalDBus != null) {
-      if (dbusFilter.isEmpty) {
-        dbusFilter = Some((_, idbus, edbus) => {
-          idbus <> edbus
-        })
-      }
+    // DBUS
+    if (dbusFilter.isEmpty) {
+      dbusFilter = Some((_, idbus, edbus) => {
+        idbus <> edbus
+      })
+    }
 
-      pipeline plug new Area {
-        externalDBus = master(new MemBus(config.dbusConfig)).setName("dbus")
+    pipeline plug new Area {
+      externalDBus = master(new MemBus(config.dbusConfig)).setName("dbus")
 
-        dbusFilter.get(internalDBusStage, internalDBus, externalDBus)
+      if (internalDBus != null) {
+        dbusFilter.get (internalDBusStage, internalDBus, externalDBus)
         dbusObservers.foreach(_ (internalDBusStage, internalDBus))
+      } else {
+        internalDBus = externalDBus
+        dummyConnect(internalDBus)
       }
     }
   }
