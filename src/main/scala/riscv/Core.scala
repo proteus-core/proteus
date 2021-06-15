@@ -432,7 +432,7 @@ class CoreDynamic(imemHexPath: String, formal: Boolean = false) extends Componen
 
 object CoreDynamic {
   def main(args: Array[String]) {
-    SpinalVerilog(new Core(args(0)))
+    SpinalVerilog(new CoreDynamic(args(0)))
   }
 }
 
