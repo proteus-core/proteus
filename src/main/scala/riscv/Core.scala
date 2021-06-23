@@ -267,6 +267,10 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
       val memService = pipeline.getService[MemoryService]
       val ibus = memService.getExternalIBus
       val dbus = memService.getExternalDBus
+
+      val externalIrq = pipeline.getService[InterruptService].getExternalIrqIo
+      externalIrq.update := False
+      externalIrq.interruptPending := False
     }
 
     core.setName("")
@@ -277,7 +281,7 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
       idWidth = 4
     )
     if (!imemHexPath.isEmpty) {
-      HexTools.initRam(ram.ram, imemHexPath.get, 0x00000000L)
+      HexTools.initRam(ram.ram, imemHexPath.get, 0x80000000L)
     }
 
     val apbBridge = Axi4SharedToApb3Bridge(
@@ -288,7 +292,7 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
 
     val axiCrossbar = Axi4CrossbarFactory()
     axiCrossbar.addSlaves(
-      ram.io.axi       -> (0x00000000L, 4 KiB),
+      ram.io.axi       -> (0x80000000L, 4 KiB),
       apbBridge.io.axi -> (0xF0000000L, 1 MiB)
     )
     axiCrossbar.addConnections(
