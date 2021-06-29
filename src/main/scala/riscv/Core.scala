@@ -172,7 +172,7 @@ object CoreTestSim {
   def main(args: Array[String]) {
     var mainResult = 0
 
-    SimConfig.withWave.compile(new CoreTest(args(0))).doSim {dut =>
+    SimConfig.withWave.compile(new CoreAxi4(Some(args(0)))).doSim {dut =>
       dut.clockDomain.forkStimulus(10)
 
       var done = false
@@ -180,8 +180,8 @@ object CoreTestSim {
       while (!done) {
         dut.clockDomain.waitSampling()
 
-        if (dut.testOut.valid.toBoolean) {
-          val result = dut.testOut.payload.toBigInt
+        if (dut.io.testDev.valid.toBoolean) {
+          val result = dut.io.testDev.payload.toBigInt
 
           if (result == 0) {
             println("All tests passed")
@@ -242,12 +242,14 @@ object CoreExtMem {
 class CoreAxi4(imemHexPath: Option[String]) extends Component {
   setDefinitionName("Core")
 
+  implicit val config = new Config(BaseIsa.RV32I)
+
   val io = new Bundle{
     // Peripherals
-    val uart = master(Uart())
+    val charOut = master(Flow(UInt(8 bits)))
+    val testDev = master(Flow(UInt(config.xlen bits)))
+    val byteDev = master(new ByteDevIo)
   }
-
-  implicit val config = new Config(BaseIsa.RV32I)
 
   val socClockDomain = ClockDomain(
     clock = clockDomain.clock,
@@ -267,10 +269,6 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
       val memService = pipeline.getService[MemoryService]
       val ibus = memService.getExternalIBus
       val dbus = memService.getExternalDBus
-
-      val externalIrq = pipeline.getService[InterruptService].getExternalIrqIo
-      externalIrq.update := False
-      externalIrq.interruptPending := False
     }
 
     core.setName("")
@@ -285,52 +283,62 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
     }
 
     val apbBridge = Axi4SharedToApb3Bridge(
-      addressWidth = config.dbusConfig.addressWidth - 8,
+      addressWidth = config.dbusConfig.addressWidth,
       dataWidth = config.dbusConfig.dataWidth,
       idWidth = 4
     )
 
     val axiCrossbar = Axi4CrossbarFactory()
+
+    // Without low latency, only one command every 2 cycles is accepted on the master bus which
+    // wouldn't allow us to reach IPC=1. This could be fixed by using bursts on the ibus.
+    axiCrossbar.lowLatency = true
+
     axiCrossbar.addSlaves(
-      ram.io.axi       -> (0x80000000L, 4 KiB),
-      apbBridge.io.axi -> (0xF0000000L, 1 MiB)
+      ram.io.axi       -> (0x80000000L, 10 MiB),
+      apbBridge.io.axi -> (0x00000000L, 1 GiB)
     )
+
+    val ibusAxi = core.ibus.toAxi4ReadOnly()
+
     axiCrossbar.addConnections(
-      core.ibus.toAxi4ReadOnly() -> List(ram.io.axi),
+      ibusAxi -> List(ram.io.axi),
       core.dbus.toAxi4Shared()   -> List(ram.io.axi, apbBridge.io.axi)
     )
-    axiCrossbar.addPipelining(apbBridge.io.axi)((crossbar, bridge) => {
-      crossbar.sharedCmd.halfPipe() >> bridge.sharedCmd
-      crossbar.writeData.halfPipe() >> bridge.writeData
-      crossbar.writeRsp             << bridge.writeRsp
-      crossbar.readRsp              << bridge.readRsp
+
+    // This pipelining is used to cut combinatorial loops caused by lowLatency=true. It is based on
+    // advice from the Spinal developers: "m2sPipe is a full bandwidth master to slave cut,
+    // s2mPipe is a full bandwidth slave to master cut".
+    // TODO I should really read-up on this pipelining stuff...
+    axiCrossbar.addPipelining(ibusAxi)((ibus, crossbar) => {
+      ibus.readCmd.m2sPipe() >> crossbar.readCmd
+      ibus.readRsp << crossbar.readRsp.s2mPipe()
     })
 
     axiCrossbar.build()
 
-    val uartCtrlConfig = UartCtrlMemoryMappedConfig(
-      uartCtrlConfig = UartCtrlGenerics(),
-      initConfig = UartCtrlInitConfig(
-        baudrate = 115200,
-        dataLength = 7,
-        parity = UartParityType.NONE,
-        stop = UartStopType.ONE
-      )
-    )
-    val uartCtrl = Apb3UartCtrl(uartCtrlConfig)
+    val machineTimers = new Apb3MachineTimers(core.pipeline)
 
-    val machineTimers = new MachineTimers(core.pipeline)
+    val charDev = new Apb3CharDev
+    io.charOut << charDev.io.char
+
+    val testDev = new Apb3TestDev
+    io.testDev << testDev.io.test
+
+    val byteDev = new Apb3ByteDev
+    io.byteDev <> byteDev.io.bytes
+    core.pipeline.getService[InterruptService].getExternalIrqIo <> byteDev.io.irq
 
     val apbDecoder = Apb3Decoder(
       master = apbBridge.io.apb,
       slaves = List(
-        uartCtrl.io.apb             -> (0x000000L, 4 KiB),
-        machineTimers.dbus.toApb3() -> (0x001000L, 4 KiB)
+        machineTimers.io.apb        -> (0x02000000L, 4 KiB),
+        charDev.io.apb              -> (0x10000000L, 4 KiB),
+        byteDev.io.apb              -> (0x20000000L, 4 KiB),
+        testDev.io.apb              -> (0x30000000L, 4 KiB)
       )
     )
   }
-
-  io.uart <> soc.uartCtrl.io.uart
 }
 
 object CoreAxi4 {
@@ -349,19 +357,25 @@ object CoreAxi4Sim {
     SimConfig.withWave.compile(new CoreAxi4(Some(args(0)))).doSim {dut =>
       dut.clockDomain.forkStimulus(10)
 
-      var done = false
-      var cycles = 0
+      val byteDevSim = new sim.StdioByteDev(dut.io.byteDev)
 
-      dut.clockDomain.onRisingEdges {
-        cycles += 1
-      }
+      var done = false
 
       while (!done) {
         dut.clockDomain.waitSampling()
 
-        if (cycles >= 10000) {
-          done = true
+        if (dut.io.charOut.valid.toBoolean) {
+          val char = dut.io.charOut.payload.toInt.toChar
+
+          if (char == 4) {
+            println("Simulation halted by software")
+            done = true
+          } else {
+            print(char)
+          }
         }
+
+        byteDevSim.eval()
       }
     }
   }
