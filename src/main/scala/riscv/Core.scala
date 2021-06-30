@@ -74,7 +74,6 @@ sealed abstract class RamType(val size: BigInt)
 object RamType {
   case class OnChipRam(override val size: BigInt, initHexFile: Option[String]) extends RamType(size)
   case class ExternalAxi4(override val size: BigInt) extends RamType(size)
-
 }
 
 class SoC(ramType: RamType, createPipeline: Config => Pipeline) extends Component {
@@ -201,6 +200,10 @@ class SoC(ramType: RamType, createPipeline: Config => Pipeline) extends Componen
 object SoC {
   def static(ramType: RamType): SoC = {
     new SoC(ramType, config => createStaticPipeline()(config))
+  }
+
+  def dynamic(ramType: RamType): SoC = {
+    new SoC(ramType, config => createDynamicPipeline()(config))
   }
 }
 
@@ -338,33 +341,15 @@ object createDynamicPipeline {
   }
 }
 
-class CoreDynamic(imemHexPath: String, formal: Boolean = false) extends Component {
-  setDefinitionName("Core")
-  implicit val config = new Config(BaseIsa.RV32I)
-  val pipeline = createDynamicPipeline()
-
-  val charDev = new CharDev
-  val charOut = master(Flow(UInt(8 bits)))
-  charOut << charDev.io
-
-  val soc = new Soc(
-    pipeline,
-    Seq(
-      MemSegment(0x80000000L, 10 MiB).init(imemHexPath),
-      MmioSegment(0x10000000L, charDev)
-    )
-  )
-}
-
 object CoreDynamic {
   def main(args: Array[String]) {
-    SpinalVerilog(new CoreDynamic(args(0)))
+    SpinalVerilog(SoC.dynamic(RamType.OnChipRam(10 MiB, args.headOption)))
   }
 }
 
 object CoreDynamicSim {
   def main(args: Array[String]) {
-    SimConfig.withWave.compile(new CoreDynamic(args(0))).doSim {dut =>
+    SimConfig.withWave.compile(SoC.dynamic(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim {dut =>
       dut.clockDomain.forkStimulus(10)
 
       var done = false
@@ -373,8 +358,8 @@ object CoreDynamicSim {
       while (!done) {
         dut.clockDomain.waitSampling()
 
-        if (dut.charOut.valid.toBoolean) {
-          val char = dut.charOut.payload.toInt.toChar
+        if (dut.io.charOut.valid.toBoolean) {
+          val char = dut.io.charOut.payload.toInt.toChar
 
           if (char == 4) {
             println("Simulation halted by software")
