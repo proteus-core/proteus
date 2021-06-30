@@ -172,7 +172,7 @@ object CoreTestSim {
   def main(args: Array[String]) {
     var mainResult = 0
 
-    SimConfig.withWave.compile(new CoreAxi4(Some(args(0)))).doSim {dut =>
+    SimConfig.withWave.compile(new CoreAxi4(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim {dut =>
       dut.clockDomain.forkStimulus(10)
 
       var done = false
@@ -235,11 +235,19 @@ class CoreExtMem extends Component {
 
 object CoreExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(new CoreExtMem)
+    SpinalVerilog(new CoreAxi4(RamType.ExternalAxi4(10 MiB)))
   }
 }
 
-class CoreAxi4(imemHexPath: Option[String]) extends Component {
+sealed abstract class RamType(val size: BigInt)
+
+object RamType {
+  case class OnChipRam(override val size: BigInt, initHexFile: Option[String]) extends RamType(size)
+  case class ExternalAxi4(override val size: BigInt) extends RamType(size)
+
+}
+
+class CoreAxi4(ramType: RamType) extends Component {
   setDefinitionName("Core")
 
   implicit val config = new Config(BaseIsa.RV32I)
@@ -249,6 +257,18 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
     val charOut = master(Flow(UInt(8 bits)))
     val testDev = master(Flow(UInt(config.xlen bits)))
     val byteDev = master(new ByteDevIo)
+
+    val axi = ramType match {
+      case RamType.ExternalAxi4(size) =>
+        val axiConfig = Axi4SharedOnChipRam.getAxiConfig(
+          dataWidth = config.xlen,
+          byteCount = size,
+          idWidth = 4
+        )
+
+        master(Axi4Shared(axiConfig))
+      case _ => null
+    }
   }
 
   val socClockDomain = ClockDomain(
@@ -273,13 +293,17 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
 
     core.setName("")
 
-    val ram = Axi4SharedOnChipRam(
-      byteCount = 4 KiB,
-      dataWidth = config.xlen,
-      idWidth = 4
-    )
-    if (!imemHexPath.isEmpty) {
-      HexTools.initRam(ram.ram, imemHexPath.get, 0x80000000L)
+    val ramAxi = ramType match {
+      case RamType.ExternalAxi4(_) => io.axi
+      case RamType.OnChipRam(size, initHexFile) =>
+        val ram = Axi4SharedOnChipRam(
+          byteCount = size,
+          dataWidth = config.xlen,
+          idWidth = 4
+        )
+
+        initHexFile.foreach(HexTools.initRam(ram.ram, _, 0x80000000L))
+        ram.io.axi
     }
 
     val apbBridge = Axi4SharedToApb3Bridge(
@@ -295,15 +319,15 @@ class CoreAxi4(imemHexPath: Option[String]) extends Component {
     axiCrossbar.lowLatency = true
 
     axiCrossbar.addSlaves(
-      ram.io.axi       -> (0x80000000L, 10 MiB),
+      ramAxi           -> (0x80000000L, ramType.size),
       apbBridge.io.axi -> (0x00000000L, 1 GiB)
     )
 
     val ibusAxi = core.ibus.toAxi4ReadOnly()
 
     axiCrossbar.addConnections(
-      ibusAxi -> List(ram.io.axi),
-      core.dbus.toAxi4Shared()   -> List(ram.io.axi, apbBridge.io.axi)
+      ibusAxi -> List(ramAxi),
+      core.dbus.toAxi4Shared()   -> List(ramAxi, apbBridge.io.axi)
     )
 
     // This pipelining is used to cut combinatorial loops caused by lowLatency=true. It is based on
@@ -348,13 +372,13 @@ object CoreAxi4 {
       imemHexPath = args(0)
     }
 
-    SpinalVerilog(new CoreAxi4(Option(imemHexPath)))
+    SpinalVerilog(new CoreAxi4(RamType.OnChipRam(10 MiB, Option(imemHexPath))))
   }
 }
 
 object CoreAxi4Sim {
   def main(args: Array[String]) {
-    SimConfig.withWave.compile(new CoreAxi4(Some(args(0)))).doSim {dut =>
+    SimConfig.withWave.compile(new CoreAxi4(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim {dut =>
       dut.clockDomain.forkStimulus(10)
 
       val byteDevSim = new sim.StdioByteDev(dut.io.byteDev)

@@ -47,38 +47,41 @@ public:
         }
     }
 
-    bool eval()
+    void eval(vluint64_t cycle)
     {
-        auto updated = false;
+        top_.io_axi_arw_ready = true;
+        top_.io_axi_w_ready = true;
+        top_.io_axi_r_valid = false;
+        top_.io_axi_b_valid = false;
 
-        if (top_.ibus_cmd_valid)
+        if (nextReadCycle_ == cycle)
         {
-            top_.ibus_rsp_valid = true;
-            top_.ibus_rsp_payload_rdata = read(top_.ibus_cmd_payload_address);
-            updated = true;
+            top_.io_axi_r_payload_data = nextReadWord_;
+            top_.io_axi_r_payload_id = nextReadId_;
+            top_.io_axi_r_payload_last = true;
+            top_.io_axi_r_valid = true;
+            nextReadCycle_ = 0;
+
+            assert(top_.io_axi_r_ready);
         }
 
-        if (top_.dbus_cmd_valid)
+        if (top_.io_axi_arw_valid)
         {
-            top_.dbus_cmd_ready = true;
-
-            if (top_.dbus_cmd_payload_write)
+            if (top_.io_axi_arw_payload_write)
             {
-                write(top_.dbus_cmd_payload_address,
-                      top_.dbus_cmd_payload_wmask,
-                      top_.dbus_cmd_payload_wdata);
+                write(top_.io_axi_arw_payload_addr,
+                      top_.io_axi_w_payload_strb,
+                      top_.io_axi_w_payload_data);
+
+                top_.io_axi_b_valid = true;
             }
             else
             {
-                top_.dbus_rsp_valid = true;
-                top_.dbus_rsp_payload_rdata =
-                    read(top_.dbus_cmd_payload_address);
+                nextReadWord_ = read(top_.io_axi_arw_payload_addr);
+                nextReadCycle_ = cycle + 1;
+                nextReadId_ = top_.io_axi_arw_payload_id;
             }
-
-            updated = true;
         }
-
-        return updated;
     }
 
 private:
@@ -121,6 +124,9 @@ private:
 
     VCore& top_;
     std::vector<Word> memory_;
+    Word nextReadWord_;
+    vluint64_t nextReadCycle_ = 0;
+    vluint8_t nextReadId_;
 };
 
 class CharDev
@@ -133,9 +139,9 @@ public:
 
     void eval()
     {
-        if (top_.charOut_valid)
+        if (top_.io_charOut_valid)
         {
-            auto charOut = char(top_.charOut_payload);
+            auto charOut = char(top_.io_charOut_payload);
 
             if (charOut == 0x4)
                 gotEot_ = true;
@@ -168,8 +174,8 @@ public:
 
     void eval()
     {
-        if (top_.testOut_valid)
-            result_ = top_.testOut_payload;
+        if (top_.io_testDev_valid)
+            result_ = top_.io_testDev_payload;
     }
 
     bool gotResult() const
@@ -207,11 +213,11 @@ public:
         if (top_.reset)
             return false;
 
-        top_.byteIo_rdata_valid = false;
+        top_.io_byteDev_rdata_valid = false;
 
-        if (top_.byteIo_wdata_valid)
+        if (top_.io_byteDev_wdata_valid)
         {
-            auto charOut = char(top_.byteIo_wdata_payload);
+            auto charOut = char(top_.io_byteDev_wdata_payload);
             std::cout << charOut;
         }
 
@@ -223,10 +229,10 @@ public:
 
         if (hasStdinByte)
         {
-            top_.byteIo_rdata_valid = true;
-            top_.byteIo_rdata_payload = currentStdinByte;
+            top_.io_byteDev_rdata_valid = true;
+            top_.io_byteDev_rdata_payload = currentStdinByte;
 
-            if (top_.byteIo_rdata_ready)
+            if (top_.io_byteDev_rdata_ready)
                 hasStdinByte = false;
 
             return true;
@@ -281,6 +287,7 @@ int main(int argc, char** argv)
     tracer->open("sim.vcd");
 
     vluint64_t mainTime = 0;
+    vluint64_t cycle = 0;
     auto isDone = false;
     int result = 0;
 
@@ -298,10 +305,12 @@ int main(int argc, char** argv)
 
         if (clockEdge && top->clk)
         {
-            memory.eval();
+            cycle++;
+
+            memory.eval(cycle);
             top->eval();
-            memory.eval();
-            top->eval();
+            //memory.eval(cycle);
+            //top->eval();
 
             charDev.eval();
             testDev.eval();
