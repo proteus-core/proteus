@@ -69,176 +69,6 @@ object createStaticPipeline {
   }
 }
 
-class Core(imemHexPath: String, formal: Boolean = false) extends Component {
-  implicit val config = new Config(BaseIsa.RV32I)
-  val pipeline = createStaticPipeline()
-
-  val charDev = new CharDev
-  val charOut = master(Flow(UInt(8 bits)))
-  charOut << charDev.io
-
-  val byteDev = new ByteDev
-  val byteIo = master(new ByteDevIo)
-  byteIo <> byteDev.io
-  byteDev.irq <> pipeline.getService[InterruptService].getExternalIrqIo
-
-  val soc = new Soc(
-    pipeline,
-    Seq(
-      MemSegment(0x80000000L, 10 MiB).init(imemHexPath),
-      MmioSegment(0x02000000L, new MachineTimers(pipeline)),
-      MmioSegment(0x10000000L, charDev),
-      MmioSegment(0x20000000L, byteDev)
-    )
-  )
-}
-
-object Core {
-  def main(args: Array[String]) {
-    SpinalVerilog(new Core(args(0)))
-  }
-}
-
-object CoreSim {
-  def main(args: Array[String]) {
-    SimConfig.withWave.compile(new Core(args(0))).doSim {dut =>
-      dut.clockDomain.forkStimulus(10)
-
-      val byteDevSim = new sim.StdioByteDev(dut.byteIo)
-
-      var done = false
-
-      while (!done) {
-        dut.clockDomain.waitSampling()
-
-        if (dut.charOut.valid.toBoolean) {
-          val char = dut.charOut.payload.toInt.toChar
-
-          if (char == 4) {
-            println("Simulation halted by software")
-            done = true
-          } else {
-            print(char)
-          }
-        }
-
-        byteDevSim.eval()
-      }
-    }
-  }
-}
-
-class CoreFormal extends Component {
-  setDefinitionName("Core")
-
-  implicit val config = new Config(BaseIsa.RV32I)
-  val pipeline = createStaticPipeline(extraPlugins = Seq(new RiscvFormal))
-}
-
-object CoreFormal {
-  def main(args: Array[String]) {
-    SpinalVerilog(new CoreFormal)
-  }
-}
-
-class CoreTest(memHexPath: String) extends Component {
-  setDefinitionName("Core")
-
-  implicit val config = new Config(BaseIsa.RV32I)
-  val pipeline = createStaticPipeline()
-
-  val testDev = new TestDev
-  val testOut = master(Flow(UInt(config.xlen bits)))
-  testOut << testDev.io
-
-  val dummyTimerIo = pipeline.getService[InterruptService].getMachineTimerIrqIo
-  dummyTimerIo.update := False
-  dummyTimerIo.interruptPending.assignDontCare()
-
-  val external_irq = pipeline.getService[InterruptService].getExternalIrqIo
-  external_irq.update := False
-  external_irq.interruptPending := False
-
-  val soc = new Soc(
-    pipeline,
-    Seq(
-      MemSegment(0x80000000L, 10 MiB).init(memHexPath),
-      MmioSegment(0x30000000L, testDev)
-    )
-  )
-}
-
-object CoreTestSim {
-  def main(args: Array[String]) {
-    var mainResult = 0
-
-    SimConfig.withWave.compile(new CoreAxi4(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim {dut =>
-      dut.clockDomain.forkStimulus(10)
-
-      var done = false
-
-      while (!done) {
-        dut.clockDomain.waitSampling()
-
-        if (dut.io.testDev.valid.toBoolean) {
-          val result = dut.io.testDev.payload.toBigInt
-
-          if (result == 0) {
-            println("All tests passed")
-          } else {
-            println(s"Test $result failed")
-            mainResult = 1
-          }
-
-          done = true
-        }
-      }
-    }
-
-    sys.exit(mainResult)
-  }
-}
-
-class CoreExtMem extends Component {
-  setDefinitionName("Core")
-
-  implicit val config = new Config(BaseIsa.RV32I)
-  val pipeline = createStaticPipeline()
-
-  val ibus = master(new MemBus(config.ibusConfig))
-  val dbus = master(new MemBus(config.dbusConfig))
-
-  val charDev = new CharDev
-  val charOut = master(Flow(UInt(8 bits)))
-  charOut << charDev.io
-
-  val testDev = new TestDev
-  val testOut = master(Flow(UInt(config.xlen bits)))
-  testOut << testDev.io
-
-  val byteDev = new ByteDev
-  val byteIo = master(new ByteDevIo)
-  byteIo <> byteDev.io
-  byteDev.irq <> pipeline.getService[InterruptService].getExternalIrqIo
-
-  val soc = new Soc(
-    pipeline,
-    Seq(
-      MmioSegment(0x02000000L, new MachineTimers(pipeline)),
-      MmioSegment(0x10000000L, charDev),
-      MmioSegment(0x20000000L, byteDev),
-      MmioSegment(0x30000000L, testDev),
-      MemBusSegment(0x80000000L, 10 MiB, dbus, ibus)
-    )
-  )
-}
-
-object CoreExtMem {
-  def main(args: Array[String]) {
-    SpinalVerilog(new CoreAxi4(RamType.ExternalAxi4(10 MiB)))
-  }
-}
-
 sealed abstract class RamType(val size: BigInt)
 
 object RamType {
@@ -247,7 +77,7 @@ object RamType {
 
 }
 
-class CoreAxi4(ramType: RamType) extends Component {
+class SoC(ramType: RamType) extends Component {
   setDefinitionName("Core")
 
   implicit val config = new Config(BaseIsa.RV32I)
@@ -365,20 +195,15 @@ class CoreAxi4(ramType: RamType) extends Component {
   }
 }
 
-object CoreAxi4 {
+object Core {
   def main(args: Array[String]) {
-    var imemHexPath: String = null
-    if (args.length > 0) {
-      imemHexPath = args(0)
-    }
-
-    SpinalVerilog(new CoreAxi4(RamType.OnChipRam(10 MiB, Option(imemHexPath))))
+    SpinalVerilog(new SoC(RamType.OnChipRam(10 MiB, args.headOption)))
   }
 }
 
-object CoreAxi4Sim {
+object CoreSim {
   def main(args: Array[String]) {
-    SimConfig.withWave.compile(new CoreAxi4(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim {dut =>
+    SimConfig.withWave.compile(new SoC(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
       val byteDevSim = new sim.StdioByteDev(dut.io.byteDev)
@@ -402,6 +227,56 @@ object CoreAxi4Sim {
         byteDevSim.eval()
       }
     }
+  }
+}
+
+class CoreFormal extends Component {
+  setDefinitionName("Core")
+
+  implicit val config = new Config(BaseIsa.RV32I)
+  val pipeline = createStaticPipeline(extraPlugins = Seq(new RiscvFormal))
+}
+
+object CoreFormal {
+  def main(args: Array[String]) {
+    SpinalVerilog(new CoreFormal)
+  }
+}
+
+object CoreTestSim {
+  def main(args: Array[String]) {
+    var mainResult = 0
+
+    SimConfig.withWave.compile(new SoC(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim { dut =>
+      dut.clockDomain.forkStimulus(10)
+
+      var done = false
+
+      while (!done) {
+        dut.clockDomain.waitSampling()
+
+        if (dut.io.testDev.valid.toBoolean) {
+          val result = dut.io.testDev.payload.toBigInt
+
+          if (result == 0) {
+            println("All tests passed")
+          } else {
+            println(s"Test $result failed")
+            mainResult = 1
+          }
+
+          done = true
+        }
+      }
+    }
+
+    sys.exit(mainResult)
+  }
+}
+
+object CoreExtMem {
+  def main(args: Array[String]) {
+    SpinalVerilog(new SoC(RamType.ExternalAxi4(10 MiB)))
   }
 }
 
