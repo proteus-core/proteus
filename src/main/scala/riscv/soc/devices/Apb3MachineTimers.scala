@@ -20,7 +20,9 @@ class Apb3MachineTimers(pipeline: Pipeline)(implicit config: Config) extends Com
   private val mtimecmp = Reg(UInt(64 bits)).init(0)
 
   parent rework {
-    pipeline.getService[InterruptService].getMachineTimerIrqIo <> io.mtimer
+    if (pipeline.hasService[InterruptService]) {
+      pipeline.getService[InterruptService].getMachineTimerIrqIo <> io.mtimer
+    }
   }
 
   // It is important that this comes before the call to build() to ensure that

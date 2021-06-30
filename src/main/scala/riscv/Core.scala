@@ -181,7 +181,10 @@ class SoC(ramType: RamType, createPipeline: Config => Pipeline) extends Componen
 
     val byteDev = new Apb3ByteDev
     io.byteDev <> byteDev.io.bytes
-    core.pipeline.getService[InterruptService].getExternalIrqIo <> byteDev.io.irq
+
+    if (core.pipeline.hasService[InterruptService]) {
+      core.pipeline.getService[InterruptService].getExternalIrqIo <> byteDev.io.irq
+    }
 
     val apbDecoder = Apb3Decoder(
       master = apbBridge.io.apb,
