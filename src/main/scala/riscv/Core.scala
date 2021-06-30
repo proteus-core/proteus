@@ -77,7 +77,7 @@ object RamType {
 
 }
 
-class SoC(ramType: RamType) extends Component {
+class SoC(ramType: RamType, createPipeline: Config => Pipeline) extends Component {
   setDefinitionName("Core")
 
   implicit val config = new Config(BaseIsa.RV32I)
@@ -114,7 +114,7 @@ class SoC(ramType: RamType) extends Component {
 
   val soc = new ClockingArea(socClockDomain) {
     val core = new ClockingArea(coreClockDomain) {
-      val pipeline = createStaticPipeline()
+      val pipeline = createPipeline(config)
 
       val memService = pipeline.getService[MemoryService]
       val ibus = memService.getExternalIBus
@@ -195,15 +195,21 @@ class SoC(ramType: RamType) extends Component {
   }
 }
 
+object SoC {
+  def static(ramType: RamType): SoC = {
+    new SoC(ramType, config => createStaticPipeline()(config))
+  }
+}
+
 object Core {
   def main(args: Array[String]) {
-    SpinalVerilog(new SoC(RamType.OnChipRam(10 MiB, args.headOption)))
+    SpinalVerilog(SoC.static(RamType.OnChipRam(10 MiB, args.headOption)))
   }
 }
 
 object CoreSim {
   def main(args: Array[String]) {
-    SimConfig.withWave.compile(new SoC(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim { dut =>
+    SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
       val byteDevSim = new sim.StdioByteDev(dut.io.byteDev)
@@ -247,7 +253,7 @@ object CoreTestSim {
   def main(args: Array[String]) {
     var mainResult = 0
 
-    SimConfig.withWave.compile(new SoC(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim { dut =>
+    SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
       var done = false
@@ -276,7 +282,7 @@ object CoreTestSim {
 
 object CoreExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(new SoC(RamType.ExternalAxi4(10 MiB)))
+    SpinalVerilog(SoC.static(RamType.ExternalAxi4(10 MiB)))
   }
 }
 
