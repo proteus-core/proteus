@@ -299,20 +299,26 @@ class IBusControl(
   restartAddress.valid := False
   restartAddress.payload.assignDontCare()
 
+  // When restarting from a new address, we have to flush all in-flight commands. To make sure we
+  // can immediately issue a command for the restarted address, we keep track of how many commands
+  // are currently in-flight and simply ignore their responses. The maximum number of in-flight
+  // commands is the depth of cmdFifo plus one for nextCmd.
+  val restartCmdsToFlush = Reg(UInt(log2Up(cmdFifo.depth + 1) bits)).init(0)
+  val restarting = restartCmdsToFlush =/= 0
+
+  // Did we accept restartAddress?
+  val restartAccepted = False
+
   // Next command to be put on the bus
   val nextCmd = Flow(UInt(bus.config.addressWidth bits))
   nextCmd.valid := False
   nextCmd.payload.assignDontCare()
 
+  // Are we popping a value from cmdFifo?
+  val poppingCmd  = False
+
   when (restartAddress.valid) {
-    // When restarting, we first drain cmdFifo to flush all in-flight commands before starting a new
-    // one. If we don't do this, we can get in a "restart loop" when near forward jumps happen
-    // because the restarted address is already in-flight and added again to cmdFifo. When the
-    // second response comes in, we have to restart again and this cycle continues until we have a
-    // jump to an address that is not yet in cmdFifo.
-    when (!cmdFifo.io.pop.valid) {
-      nextCmd.push(restartAddress.payload)
-    }
+    nextCmd.push(restartAddress.payload)
   } elsewhen (currentCmd.valid) {
     // We speculatively prefetch the next word when no new address is requested
     nextCmd.push(currentCmd.address + bus.config.dataWidth / 8)
@@ -326,6 +332,9 @@ class IBusControl(
       currentCmd.address := nextCmd.payload
       currentCmd.valid := True
       currentCmd.accepted := False
+
+      // We accepted a new command which is a restart if restartAddress is valid.
+      restartAccepted := restartAddress.valid
     }
 
     when (!currentCmd.valid || currentCmd.accepted) {
@@ -343,6 +352,14 @@ class IBusControl(
     currentCmd.accepted := bus.cmd.ready
   }
 
+  when (restartAccepted) {
+    // The amount of commands to flush when restarting is the amount currently in cmdFifo, minus one
+    // if we are popping from cmdFifo in this cycle, and plus one if currentCmd is valid but not yet
+    // accepted (as it will be pushed on cmdFifo later).
+    restartCmdsToFlush :=
+      cmdFifo.io.occupancy - U(poppingCmd) + U(currentCmd.valid && !currentCmd.accepted)
+  }
+
   // Should a memory response be pushed on rspFifo? When it's accepted immediately by the fetch
   // stage, we don't have to store it.
   val pushRsp = True
@@ -354,6 +371,7 @@ class IBusControl(
     // Pop the address off the cmdFifo
     rsp.address := cmdFifo.io.pop.payload.address
     cmdFifo.io.pop.ready := True
+    poppingCmd := True
 
     // ir is on the bus
     rsp.ir := bus.rsp.payload.rdata
@@ -361,6 +379,11 @@ class IBusControl(
     // Push it only when pushRsp is true
     rspFifo.io.push.payload := rsp
     rspFifo.io.push.valid := pushRsp
+
+    when (restarting) {
+      // We just got a response for a command while restarting, one less to flush.
+      restartCmdsToFlush := restartCmdsToFlush - 1
+    }
   }
 
   // Push accepted commands on cmdFifo
@@ -391,6 +414,15 @@ class IBusControl(
       pushRsp := False
     }
 
+    when (restarting) {
+      // Make sure responses are ignored while restarting. If we don't do this, we can get in a
+      // "restart loop" when near forward jumps happen because the restarted address is already
+      // in-flight and added again to cmdFifo. When the second response comes in, we have to restart
+      // again and this cycle continues until we have a jump to an address that is not yet in
+      // cmdFifo.
+      result.valid := False
+    }
+
     result
   }
 
@@ -418,7 +450,7 @@ class IBusControl(
       restartNeeded := True
     }
 
-    when (restartNeeded){
+    when (restartNeeded && !restarting){
       // Request restart from address
       restartAddress.push(address)
 
