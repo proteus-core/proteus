@@ -8,7 +8,7 @@ import spinal.core._
 import spinal.core.sim._
 
 object createCheriPipeline {
-  def apply()(implicit conf: Config): StaticPipeline = {
+  def apply(memorySize: BigInt)(implicit conf: Config): StaticPipeline = {
     val pipeline = new Component with StaticPipeline {
       setDefinitionName("Pipeline")
 
@@ -55,7 +55,7 @@ object createCheriPipeline {
       new Lsu(pipeline.memory),
       new ExceptionHandler,
       new Ccsr,
-      new MemoryTagger(0x80000000L, 10 MiB),
+      new MemoryTagger(0x80000000L, memorySize),
       new PccManager(pipeline.execute),
       new Sealing(pipeline.execute),
       new MachineMode
@@ -68,7 +68,7 @@ object createCheriPipeline {
 
 object SoC {
   def static(ramType: RamType): SoC = {
-    new SoC(ramType, config => createCheriPipeline()(config))
+    new SoC(ramType, config => createCheriPipeline(ramType.size)(config))
   }
 }
 
