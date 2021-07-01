@@ -2,6 +2,7 @@ package riscv.plugins.cheri
 
 import riscv._
 import riscv.sim._
+import riscv.soc._
 
 import spinal.core._
 import spinal.core.sim._

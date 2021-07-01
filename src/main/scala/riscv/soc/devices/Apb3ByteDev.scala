@@ -6,6 +6,16 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.bus.amba3.apb._
 
+class ByteDevIo(implicit config: Config) extends Bundle with IMasterSlave {
+  val wdata = Flow(UInt(8 bits))
+  val rdata = Stream(UInt(8 bits))
+
+  override def asMaster(): Unit = {
+    master(wdata)
+    slave(rdata)
+  }
+}
+
 class Apb3ByteDev(implicit config: Config) extends Component {
   val io = new Bundle {
     val bytes = master(new ByteDevIo)
