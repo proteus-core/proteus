@@ -15,6 +15,8 @@ before_script:
   # Log the dependency versions
   - verilator --version
   - sbt sbtVersion
+  # Update all submodules (e.g., riscv-tests)
+  - git submodule update --init
 
 test:
   script:
