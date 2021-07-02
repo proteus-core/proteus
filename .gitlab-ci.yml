@@ -3,7 +3,7 @@ image: ubuntu:focal
 before_script:
   - apt-get update -yqq
   # Install build dependencies
-  - apt-get install make verilator gcc-riscv64-unknown-elf openjdk-11-jdk -yqq
+  - apt-get install build-essential verilator gcc-riscv64-unknown-elf openjdk-11-jdk -yqq
   # Install dependencies needed for adding the sbt repo
   - apt-get install apt-transport-https gnupg -yqq
   # Add keyserver for SBT
