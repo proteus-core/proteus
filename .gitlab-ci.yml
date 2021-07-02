@@ -3,7 +3,7 @@ image: ubuntu:focal
 before_script:
   - apt-get update -yqq
   # Install build dependencies
-  - apt-get install make verilator gcc-riscv64-unknown-elf openjdk-11-jdk
+  - apt-get install make verilator gcc-riscv64-unknown-elf openjdk-11-jdk -yqq
   # Enable the usage of sources over https
   - apt-get install apt-transport-https -yqq
   # Add keyserver for SBT
