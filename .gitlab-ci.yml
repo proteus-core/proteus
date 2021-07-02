@@ -2,6 +2,8 @@ image: ubuntu:focal
 
 before_script:
   - apt-get update -yqq
+  # Prevent interactive prompt when installing tzdata
+  - DEBIAN_FRONTEND=noninteractive apt-get install tzdata -yqq
   # Install build dependencies
   - apt-get install build-essential verilator gcc-riscv64-unknown-elf openjdk-11-jdk -yqq
   # Install dependencies needed for adding the sbt repo
