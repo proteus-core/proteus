@@ -8,10 +8,12 @@ SIM_EXE = $(SIM_DIR)/build/sim
 CORE = riscv.CoreExtMem
 BUILD_CORE ?= 1
 
-RISCV_PREFIX = riscv32-unknown-elf
+RISCV_PREFIX = riscv64-unknown-elf
 CC = $(RISCV_PREFIX)-gcc
 LD = $(RISCV_PREFIX)-gcc
 OBJCOPY = $(RISCV_PREFIX)-objcopy
+ARCHFLAGS = -march=rv32im -mabi=ilp32
+CFLAGS = $(ARCHFLAGS)
 
 ifeq ($(BUILD_CORE),1)
 FORCE = FORCE
@@ -38,7 +40,7 @@ $(BUILD_DIR)/%.o: %.S
 	$(CC) $(CFLAGS) -I$(TESTS_DIR) -I$(ISA_TESTS_DIR)/macros/scalar -c -o $@ $^
 
 %.elf: %.o
-	$(LD) -ffreestanding -nostdlib -T tests.ld -o $@ $^
+	$(LD) $(ARCHFLAGS) -ffreestanding -nostdlib -T tests.ld -o $@ $^
 
 %.bin: %.elf
 	$(OBJCOPY) -O binary $^ $@
