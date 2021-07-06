@@ -5,7 +5,7 @@ ISA_TESTS_DIR = $(RISCV_TESTS_DIR)/isa
 BUILD_DIR = $(TESTS_DIR)/build
 SIM_DIR = $(BASE_DIR)/sim
 SIM_EXE = $(SIM_DIR)/build/sim
-CORE = riscv.CoreExtMem
+CORE ?= riscv.CoreExtMem
 BUILD_CORE ?= 1
 
 RISCV_PREFIX = riscv64-unknown-elf
