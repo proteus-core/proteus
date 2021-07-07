@@ -190,6 +190,11 @@ object JumpType {
 }
 
 trait JumpService {
+  /**
+    * Jump initiated from outside a stage
+    */
+  def jump(target: UInt): Unit
+
   def jump(stage: Stage, target: UInt, jumpType: JumpType = JumpType.Normal,
            checkAlignment: Boolean = true): Unit
 

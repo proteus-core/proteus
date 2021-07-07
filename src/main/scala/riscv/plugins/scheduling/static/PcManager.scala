@@ -1,8 +1,8 @@
 package riscv.plugins.scheduling.static
 
 import riscv._
-
 import spinal.core._
+import spinal.lib.Flow
 
 import scala.collection.mutable
 
@@ -10,6 +10,8 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
   private val jumpStages = mutable.Set[Stage]()
   private val pcUpdateObservers = mutable.Buffer[PcUpdateObserver]()
   private val jumpObservers = mutable.Buffer[JumpObserver]()
+
+  private var globalTarget: Flow[UInt] = null
 
   private trait PcPayloadArea extends Area {
     def onPcUpdate(stage: Stage)
@@ -59,10 +61,28 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
     }
   }
 
+  override def jump(target: UInt): Unit = {
+    globalTarget.push(target)
+  }
+
+  override def setup(): Unit = {
+    pipeline plug new Area {
+      globalTarget = Flow(UInt(config.xlen bits))
+      globalTarget.valid := False
+      globalTarget.payload.assignDontCare()
+    }
+  }
+
   override def finish(): Unit = {
     pipeline plug new Area {
       val pc = Reg(UInt(config.xlen bits)).init(resetVec)
       val fetchStage = pipeline.stages.head
+
+      def updatePc(target: UInt) = {
+        pc := target
+
+        // TODO: update observers? either here on in jump?
+      }
 
       def updatePc(stage: Stage, isJump: Boolean) = {
         val currPc = stage.output(pipeline.data.PC)
@@ -79,13 +99,21 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
 
       fetchStage.input(pipeline.data.PC) := pc
 
-      for (stage <- jumpStages) {
-        when (stage.arbitration.isDone && stage.arbitration.jumpRequested) {
-          for (prevStage <- pipeline.stages.takeWhile(_ != stage)) {
-            prevStage.arbitration.isValid := False
-          }
+      when (globalTarget.valid) {
+        for (stage <- pipeline.stages) {
+          stage.arbitration.isValid := False
+        }
 
-          updatePc(stage, true)
+        updatePc(globalTarget.payload)
+      } otherwise {
+        for (stage <- jumpStages) {
+          when (stage.arbitration.isDone && stage.arbitration.jumpRequested) {
+            for (prevStage <- pipeline.stages.takeWhile(_ != stage)) {
+              prevStage.arbitration.isValid := False
+            }
+
+            updatePc(stage, true)
+          }
         }
       }
     }

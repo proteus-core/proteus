@@ -25,20 +25,35 @@ trait Pipeline {
     this.plugins ++= plugins
   }
 
-  def build() {
+  final def initBuild(): Unit = {
     pipelineComponent.rework {
       init()
     }
 
     plugins.foreach(_.setPipeline(this))
-    plugins.foreach(_.setup())
-    plugins.foreach(_.build())
+  }
 
+  final def setupPlugins(): Unit = {
+    plugins.foreach(_.setup())
+  }
+
+  final def buildPlugins(): Unit = {
+    plugins.foreach(_.build())
+  }
+
+  final def finishBuild(): Unit = {
     pipelineComponent.rework {
       connectStages()
     }
 
     plugins.foreach(_.finish())
+  }
+
+  def build(): Unit = {
+    initBuild()
+    setupPlugins()
+    buildPlugins()
+    finishBuild()
   }
 
   protected def init(): Unit

@@ -8,7 +8,12 @@ class Scheduler(implicit val robCapacity: Int = 8) extends Plugin[DynamicPipelin
     val registerArray = Vec.fill(config.numRegs)(Reg(UInt(config.xlen bits)).init(0))
 
     def getValue(regId: UInt): UInt = {
-      registerArray(regId)
+      val ret = UInt(config.xlen bits)
+      ret := 0
+      when (regId =/= 0) {
+        ret := registerArray(regId)
+      }
+      ret
     }
 
     def updateValue(regId: UInt, value: UInt): Unit = {
@@ -31,7 +36,7 @@ class Scheduler(implicit val robCapacity: Int = 8) extends Plugin[DynamicPipelin
   override def finish(): Unit = {
     pipeline plug new Area {
       val registerFile = new RegisterFile
-      val rob = new ReorderBuffer(registerFile, robCapacity)
+      val rob = new ReorderBuffer(pipeline, registerFile, robCapacity)
       val reservationStations = pipeline.exeStages.map(stage => new ReservationStation(stage, registerFile, rob, pipeline))
       val cdb = new CommonDataBus(reservationStations, rob)
       rob.build()
@@ -50,12 +55,12 @@ class Scheduler(implicit val robCapacity: Int = 8) extends Plugin[DynamicPipelin
 
         var context = when (fuMask === 0) {
           // TODO Illegal instruction
+          dispatchStage.arbitration.isStalled := True
         }
 
         for ((rs, index) <- reservationStations.zipWithIndex) {
           context = context.elsewhen (fuMask(index) && rs.isAvailable && rob.isAvailable) {
-            val robIndex = rob.pushEntry(RobEntryType.REGISTER, dispatchStage.output(pipeline.data.RD))
-            rs.execute(robIndex)
+            rs.execute()
           }
         }
 

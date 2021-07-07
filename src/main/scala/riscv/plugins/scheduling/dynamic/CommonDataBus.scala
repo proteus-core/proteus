@@ -4,9 +4,13 @@ import riscv.Config
 import spinal.core._
 import spinal.lib.{Stream, StreamArbiterFactory}
 
+// TODO: can we save area by making some signals ROB-exclusive?
+// TODO: would it make sense to move the signals common to CdbMessage and RobEntry into one structure?
 case class CdbMessage(robIndexBits: BitCount)(implicit config: Config) extends Bundle {
-  val robIndex = UInt(robIndexBits)
-  val value = UInt(config.xlen bits)
+  val robIndex: UInt = UInt(robIndexBits)
+  val actions: InstructionActions = InstructionActions()
+  val writeValue: UInt = UInt(config.xlen bits)
+  val jumpTarget: UInt = UInt(config.xlen bits)
 }
 
 trait CdbListener {
@@ -14,9 +18,9 @@ trait CdbListener {
 }
 
 class CommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBuffer)(implicit config: Config) extends Area {
-  val inputs = Vec(Stream(HardType(CdbMessage(rob.indexBits))), reservationStations.size)
+  val inputs: Vec[Stream[CdbMessage]] = Vec(Stream(HardType(CdbMessage(rob.indexBits))), reservationStations.size)
 
-  val arbitratedInputs = StreamArbiterFactory.roundRobin.on(inputs)
+  private val arbitratedInputs = StreamArbiterFactory.roundRobin.on(inputs)
 
   def build(): Unit = {
     when (arbitratedInputs.valid) {
