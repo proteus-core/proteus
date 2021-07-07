@@ -24,13 +24,18 @@ class ReservationStation(exeStage: Stage, registerFile: Scheduler#RegisterFile, 
   private val stateNext = State()
   private val state = RegNext(stateNext).init(State.IDLE)
 
-  val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
+  private val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
 
-  val cdbStream = Stream(HardType(CdbMessage(rob.indexBits)))
+  val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
 
   private val regs = pipeline.pipelineRegs(exeStage)
 
-  val isAvailable = Bool()
+  val isAvailable: Bool = Bool()
+
+  def reset(): Unit = {
+    isAvailable := True
+    stateNext := State.IDLE
+  }
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
     val currentRs1Waiting, currentRs2Waiting = Bool()
@@ -57,13 +62,13 @@ class ReservationStation(exeStage: Stage, registerFile: Scheduler#RegisterFile, 
       when (currentRs1Waiting && cdbMessage.robIndex === currentRs1RobIndex) {
         rs1Waiting := False
         r1w := False
-        regs.setReg(pipeline.data.RS1_DATA, cdbMessage.value)
+        regs.setReg(pipeline.data.RS1_DATA, cdbMessage.writeValue)
       }
 
       when (currentRs2Waiting && cdbMessage.robIndex === currentRs2RobIndex) {
         rs2Waiting := False
-        r1w := False
-        regs.setReg(pipeline.data.RS2_DATA, cdbMessage.value)
+        r2w := False
+        regs.setReg(pipeline.data.RS2_DATA, cdbMessage.writeValue)
       }
 
       when (!r1w && !r2w) {
@@ -87,7 +92,9 @@ class ReservationStation(exeStage: Stage, registerFile: Scheduler#RegisterFile, 
     stateNext := state
 
     resultCdbMessage.robIndex := robEntryIndex
-    resultCdbMessage.value := 0
+    resultCdbMessage.actions := InstructionActions.none
+    resultCdbMessage.writeValue.assignDontCare
+    resultCdbMessage.jumpTarget.assignDontCare
 
     cdbStream.valid := False
     cdbStream.payload := resultCdbMessage
@@ -104,20 +111,32 @@ class ReservationStation(exeStage: Stage, registerFile: Scheduler#RegisterFile, 
       isAvailable := True
     }
 
+    // execution was invalidated while running
+    when (state === State.EXECUTING && !exeStage.arbitration.isValid) {
+      reset()
+    }
+
     // when waiting for the result, and it is ready, put in on the bus
     when (state === State.EXECUTING && exeStage.arbitration.isDone) {
-      val rd = exeStage.output(pipeline.data.RD_DATA)
-      resultCdbMessage.value := rd
+      when (exeStage.output(pipeline.data.RD_VALID)) {
+        cdbStream.payload.actions.writesRegister := True
+        cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
+      }
 
-      // Override the assignment of returnBundle to stream.payload to make
-      // sure it's available this cycle (since returnBundle is a Reg)
+      when (exeStage.arbitration.jumpRequested) {
+        cdbStream.payload.actions.performsJump := True
+        cdbStream.payload.jumpTarget := exeStage.output(pipeline.data.NEXT_PC)
+      }
+
       cdbStream.payload.robIndex := robEntryIndex
-      cdbStream.payload.value := rd
       cdbStream.valid := True
 
+      // Override the assignment of resultCdbMessage to make sure data can be sent in later cycles
+      // in case of contention in this cycle
+      resultCdbMessage := cdbStream.payload
+
       when (cdbStream.ready) {
-        isAvailable := True
-        stateNext := State.IDLE
+        reset()
       } otherwise {
         stateNext := State.BROADCASTING_RESULT
       }
@@ -129,19 +148,22 @@ class ReservationStation(exeStage: Stage, registerFile: Scheduler#RegisterFile, 
       cdbStream.valid := True
 
       when (cdbStream.ready) {
-        isAvailable := True
-        stateNext := State.IDLE
+        reset()
       }
     }
   }
 
-  def execute(robIndex: UInt): Unit = {
-    stateNext := State.EXECUTING
+  def execute(): Unit = {
+    val dispatchStage = pipeline.issuePipeline.stages.last
+
+    val robIndex = rob.pushEntry(dispatchStage.output(pipeline.data.RD))
     robEntryIndex := robIndex
+
+    stateNext := State.EXECUTING
     regs.shift := True
 
-    val dispatchStage = pipeline.issuePipeline.stages.last
-    val immUsed = dispatchStage.output(pipeline.data.IMM_USED)
+    val rs2Used = dispatchStage.output(pipeline.data.RS2_TYPE) === RegisterType.GPR
+
     val rs1Id = dispatchStage.output(pipeline.data.RS1)
     val rs2Id = dispatchStage.output(pipeline.data.RS2)
 
@@ -163,7 +185,7 @@ class ReservationStation(exeStage: Stage, registerFile: Scheduler#RegisterFile, 
     }
 
     when (rs2Found) {
-      when (rs2Valid || immUsed) {
+      when (rs2Valid || !rs2Used) {
         rs2WaitingNext := False
         regs.setReg(pipeline.data.RS2_DATA, rs2Value)
       } otherwise {

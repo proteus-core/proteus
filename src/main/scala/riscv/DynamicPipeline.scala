@@ -15,8 +15,17 @@ trait DynamicPipeline extends Pipeline {
   override val retirementStage: Stage = null
 
   override def build(): Unit = {
-    super.build()
-    issuePipeline.build()
+    issuePipeline.initBuild()
+    initBuild()
+
+    issuePipeline.setupPlugins()
+    setupPlugins()
+
+    issuePipeline.buildPlugins()
+    buildPlugins()
+
+    finishBuild()
+    issuePipeline.finishBuild()
   }
 
   override def init(): Unit = {

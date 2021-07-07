@@ -2,7 +2,6 @@ package riscv
 
 import riscv.plugins._
 import riscv.soc._
-
 import spinal.core._
 import spinal.core.sim._
 import spinal.lib._
@@ -199,8 +198,10 @@ object createDynamicPipeline {
 
     pipeline.addPlugins(Seq(
       new scheduling.dynamic.Scheduler,
+      new scheduling.dynamic.PcManager,
       new IntAlu(pipeline.intAlu),
-      new MulDiv(pipeline.intMul)
+      new MulDiv(pipeline.intMul),
+      new BranchUnit(pipeline.intAlu)
     ))
 
     if (build) {

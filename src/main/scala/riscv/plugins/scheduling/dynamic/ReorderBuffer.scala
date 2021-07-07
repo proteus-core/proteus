@@ -1,26 +1,38 @@
 package riscv.plugins.scheduling.dynamic
 
-import riscv.Config
+import riscv._
 import spinal.core._
 
-object RobEntryType extends SpinalEnum {
-  val BRANCH, STORE, REGISTER = newElement()
+case class InstructionActions() extends Bundle {
+  val writesRegister = Bool()
+  val performsJump = Bool()
 }
 
+object InstructionActions {
+  def none(): InstructionActions = {
+    val actions = InstructionActions()
+    actions.writesRegister := False
+    actions.performsJump := False
+    actions
+  }
+}
+
+// TODO: revisit how these signals are used for different instruction types
 case class RobEntry(implicit config: Config) extends Bundle {
-  val instructionType = RobEntryType()
-  val destination = UInt(config.xlen bits)
-  val value = UInt(config.xlen bits)
+  val actions = InstructionActions()
+  val writeDestination = UInt(config.xlen bits)
+  val writeValue = UInt(config.xlen bits)
+  val jumpTarget = UInt(config.xlen bits)
   val ready = Bool()
 }
 
-class ReorderBuffer(registerFile: Scheduler#RegisterFile, robCapacity: Int)(implicit config: Config) extends Area with CdbListener {
+class ReorderBuffer(pipeline: DynamicPipeline, registerFile: Scheduler#RegisterFile, robCapacity: Int)(implicit config: Config) extends Area with CdbListener {
   def capacity: Int = robCapacity
   def indexBits: BitCount = log2Up(capacity) bits
 
   val robEntries = Vec.fill(capacity)(RegInit(RobEntry().getZero))
   val oldestIndex = Reg(UInt(indexBits)).init(0)
-  val newestIndex = Reg(UInt(indexBits)).init(0)
+  val newestIndex = Reg(UInt(indexBits)).init(0) // TODO: use built-in counter class for these?
   private val isFull = RegInit(False)
   private val willRetire = False
   val isAvailable = !isFull || willRetire
@@ -29,6 +41,12 @@ class ReorderBuffer(registerFile: Scheduler#RegisterFile, robCapacity: Int)(impl
   pushInCycle := False
   val pushedEntry = RobEntry()
   pushedEntry := RobEntry().getZero
+
+  def reset(): Unit = {
+    oldestIndex := 0
+    newestIndex := 0
+    isFull := False
+  }
 
   def nextIndex(index: UInt): UInt = {
     val next = UInt()
@@ -66,11 +84,11 @@ class ReorderBuffer(registerFile: Scheduler#RegisterFile, robCapacity: Int)(impl
     adjusted
   }
 
-  def pushEntry(instructionType: SpinalEnumElement[RobEntryType.type], destination: UInt): UInt = {
+  def pushEntry(destination: UInt): UInt = {
     pushInCycle := True
     pushedEntry.ready := False
-    pushedEntry.instructionType := instructionType
-    pushedEntry.destination := destination.resized
+    pushedEntry.actions := InstructionActions.none
+    pushedEntry.writeDestination := destination.resized
     newestIndex
   }
 
@@ -88,10 +106,12 @@ class ReorderBuffer(registerFile: Scheduler#RegisterFile, robCapacity: Int)(impl
     for (nth <- 0 until capacity) {
       val index = indexForNth(nth)
       val entry = robEntries(index.resized)
-      when (isValidIndex(index) && entry.destination === regId) {
+
+      // last condition: prevent dependencies on x0
+      when (isValidIndex(index) && entry.writeDestination === regId && regId =/= 0) {
         found := True
         ready := entry.ready
-        value := entry.value
+        value := entry.writeValue
         ix := index.resized
       }
     }
@@ -99,7 +119,9 @@ class ReorderBuffer(registerFile: Scheduler#RegisterFile, robCapacity: Int)(impl
   }
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
-    robEntries(cdbMessage.robIndex).value := cdbMessage.value
+    robEntries(cdbMessage.robIndex).writeValue := cdbMessage.writeValue
+    robEntries(cdbMessage.robIndex).actions := cdbMessage.actions
+    robEntries(cdbMessage.robIndex).jumpTarget := cdbMessage.jumpTarget
     robEntries(cdbMessage.robIndex).ready := True
   }
 
@@ -108,14 +130,27 @@ class ReorderBuffer(registerFile: Scheduler#RegisterFile, robCapacity: Int)(impl
     val updatedOldestIndex = UInt(indexBits)
     updatedOldestIndex := oldestIndex
     val isEmpty = oldestIndex === newestIndex && !isFull
+
     when (!isEmpty && oldestEntry.ready) {
-      when (oldestEntry.instructionType === RobEntryType.REGISTER) {
-        registerFile.updateValue(oldestEntry.destination.resized, oldestEntry.value)
+      when (oldestEntry.actions.performsJump) {
+        val jumpService = pipeline.getService[JumpService]
+        jumpService.jump(oldestEntry.jumpTarget)
       }
-      updatedOldestIndex := nextIndex(oldestIndex)
-      oldestIndex := updatedOldestIndex
-      willRetire := True
-      isFull := False
+
+      when (oldestEntry.actions.writesRegister) {
+        registerFile.updateValue(oldestEntry.writeDestination.resized, oldestEntry.writeValue)
+      }
+
+      // removing the oldest entry and potentially resetting the ROB in case of a jump
+      // TODO: how do we keep track of the predicted jump address? a pipeline register maybe?
+      when (oldestEntry.actions.performsJump) {
+        reset()
+      } otherwise {
+        updatedOldestIndex := nextIndex(oldestIndex)
+        oldestIndex := updatedOldestIndex
+        willRetire := True
+        isFull := False
+      }
     }
 
     when (pushInCycle) {

@@ -18,6 +18,7 @@ class BranchUnit(branchStage: Stage) extends Plugin[Pipeline] {
 
   override def setup(): Unit = {
     val alu = pipeline.getService[IntAluService]
+    val issuer = pipeline.getService[IssueService]
 
     pipeline.getService[DecoderService].configure {config =>
       config.addDefault(Map(
@@ -32,6 +33,8 @@ class BranchUnit(branchStage: Stage) extends Plugin[Pipeline] {
         Data.BU_WRITE_RET_ADDR_TO_RD -> True
       ))
 
+      issuer.setDestination(Opcodes.JAL, branchStage)
+
       alu.addOperation(Opcodes.JAL, alu.AluOp.ADD,
                        alu.Src1Select.PC, alu.Src2Select.IMM)
 
@@ -40,6 +43,8 @@ class BranchUnit(branchStage: Stage) extends Plugin[Pipeline] {
         Data.BU_WRITE_RET_ADDR_TO_RD -> True,
         Data.BU_IGNORE_TARGET_LSB -> True
       ))
+
+      issuer.setDestination(Opcodes.JALR, branchStage)
 
       alu.addOperation(Opcodes.JALR, alu.AluOp.ADD,
                        alu.Src1Select.RS1, alu.Src2Select.IMM)
@@ -58,6 +63,8 @@ class BranchUnit(branchStage: Stage) extends Plugin[Pipeline] {
           Data.BU_IS_BRANCH -> True,
           Data.BU_CONDITION -> condition
         ))
+
+        issuer.setDestination(opcode, branchStage)
 
         alu.addOperation(opcode, alu.AluOp.ADD,
                          alu.Src1Select.PC, alu.Src2Select.IMM)
