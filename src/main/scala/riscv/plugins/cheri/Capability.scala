@@ -9,7 +9,7 @@ trait Permissions {
   def loadCapability: Bool
   def storeCapability: Bool
   def seal: Bool
-  def ccall: Bool
+  def cinvoke: Bool
   def unseal: Bool
   def accessSystemRegisters: Bool
 
@@ -20,7 +20,7 @@ trait Permissions {
     loadCapability := value
     storeCapability := value
     seal := value
-    ccall := value
+    cinvoke := value
     unseal := value
     accessSystemRegisters := value
   }
@@ -29,7 +29,7 @@ trait Permissions {
   def allowNone(): Unit = setAll(False)
 
   def asIsaBits: Bits = {
-    B"0" ## accessSystemRegisters ## unseal ## ccall ## seal ## B"0" ##
+    B"0" ## accessSystemRegisters ## unseal ## cinvoke ## seal ## B"0" ##
       storeCapability ## loadCapability ## store ## load ## execute ## B"0" resized
   }
 
@@ -40,7 +40,7 @@ trait Permissions {
     loadCapability := bits(4)
     storeCapability := bits(5)
     seal := bits(7)
-    ccall := bits(8)
+    cinvoke := bits(8)
     unseal := bits(9)
     accessSystemRegisters := bits(10)
   }
@@ -52,7 +52,7 @@ trait Permissions {
     loadCapability := other.loadCapability
     storeCapability := other.storeCapability
     seal := other.seal
-    ccall := other.ccall
+    cinvoke := other.cinvoke
     unseal := other.unseal
     accessSystemRegisters := other.accessSystemRegisters
   }
@@ -65,7 +65,7 @@ case class PackedPermissions() extends Bundle with Permissions {
   override val loadCapability = Bool()
   override val storeCapability = Bool()
   override val seal = Bool()
-  override val ccall = Bool()
+  override val cinvoke = Bool()
   override val unseal = Bool()
   override val accessSystemRegisters = Bool()
 }
@@ -208,7 +208,7 @@ case class MemPermissions() extends Bundle with Permissions {
   override val storeCapability = Bool()
   private val padding2 = B"0"
   override val seal = Bool()
-  override val ccall = Bool()
+  override val cinvoke = Bool()
   override val unseal = Bool()
   override val accessSystemRegisters = Bool()
   private val padding3 = B"0000"

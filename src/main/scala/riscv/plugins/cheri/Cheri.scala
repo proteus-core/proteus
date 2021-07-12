@@ -28,8 +28,7 @@ object Opcodes {
   val CSpecialRW      = M"0000001----------000-----1011011"
 
   val CJALR           = M"111111101100-----000-----1011011"
-  val CCall           = M"1111110----------000000001011011"
-  val CCallFast       = M"1111110----------000000011011011"
+  val CInvoke         = M"1111110----------000000011011011"
 
   val LC              = M"-----------------011-----0000011"
   val SC              = M"-----------------011-----0100011"
@@ -99,8 +98,8 @@ object ExceptionCause {
   case object PermitStoreLocalCapabilityViolation extends ExceptionCause(0x16)
   case object PermitSealViolation                 extends ExceptionCause(0x17)
   case object AccessSystemRegistersViolation      extends ExceptionCause(0x18)
-  case object PermitCCallViolation                extends ExceptionCause(0x19)
-  case object AccessCCallIdcViolation             extends ExceptionCause(0x1a)
+  case object PermitCInvokeViolation              extends ExceptionCause(0x19)
+  case object AccessCInvokeIdcViolation           extends ExceptionCause(0x1a)
   case object PermitUnsealViolation               extends ExceptionCause(0x1b)
   case object PermitSetCidViolation               extends ExceptionCause(0x1c)
 }

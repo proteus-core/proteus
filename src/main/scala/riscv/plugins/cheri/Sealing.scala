@@ -8,8 +8,7 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
   private object Data {
     object CSEAL extends PipelineData(Bool())
     object CUNSEAL extends PipelineData(Bool())
-    object CCALL extends PipelineData(Bool())
-    object CCALL_FAST extends PipelineData(Bool())
+    object CINVOKE extends PipelineData(Bool())
   }
 
   override def setup(): Unit = {
@@ -17,8 +16,7 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
       config.addDefault(Map(
         Data.CSEAL -> False,
         Data.CUNSEAL -> False,
-        Data.CCALL -> False,
-        Data.CCALL_FAST -> False
+        Data.CINVOKE -> False
       ))
 
       config.addDecoding(Opcodes.CSeal, InstructionType.R_CCC, Map(
@@ -29,15 +27,10 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
         Data.CUNSEAL -> True
       ))
 
-      config.addDecoding(Opcodes.CCall, InstructionType.R_CCx, Map(
-        Data.CCALL -> True
+      config.addDecoding(Opcodes.CInvoke, InstructionType.R_CCC, Map(
+        Data.CINVOKE -> True
       ))
-
-      config.addDecoding(Opcodes.CCallFast, InstructionType.R_CCC, Map(
-        Data.CCALL -> True,
-        Data.CCALL_FAST -> True
-      ))
-      config.setFixedRegisters(Opcodes.CCallFast, rd = Some(26))
+      config.setFixedRegisters(Opcodes.CInvoke, rd = Some(26))
     }
   }
 
@@ -122,17 +115,13 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
         }
       }
 
-      when (arbitration.isValid && value(Data.CCALL)) {
+      when (arbitration.isValid && value(Data.CINVOKE)) {
         arbitration.rs1Needed := True
         arbitration.rs2Needed := True
 
         when (!arbitration.isStalled) {
-          val fastCall = value(Data.CCALL_FAST)
           val target = cs1.address
-
-          when (fastCall) {
-            target.lsb := False
-          }
+          target.lsb := False
 
           when (!cs1.tag) {
             except(ExceptionCause.TagViolation, cs1Idx)
@@ -144,10 +133,10 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
             except(ExceptionCause.SealViolation, cs2Idx)
           } elsewhen (cs1.otype.value =/= cs2.otype.value) {
             except(ExceptionCause.TypeViolation, cs1Idx)
-          } elsewhen (fastCall && !cs1.perms.ccall) {
-            except(ExceptionCause.PermitCCallViolation, cs1Idx)
-          } elsewhen (fastCall && !cs2.perms.ccall) {
-            except(ExceptionCause.PermitCCallViolation, cs2Idx)
+          } elsewhen (!cs1.perms.cinvoke) {
+            except(ExceptionCause.PermitCInvokeViolation, cs1Idx)
+          } elsewhen (!cs2.perms.cinvoke) {
+            except(ExceptionCause.PermitCInvokeViolation, cs2Idx)
           } elsewhen (!cs1.perms.execute) {
             except(ExceptionCause.PermitExecuteViolation, cs1Idx)
           } elsewhen (cs2.perms.execute) {
@@ -157,22 +146,18 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
           } elsewhen (target >= cs1.top) {
             except(ExceptionCause.LengthViolation, cs1Idx)
           } otherwise {
-            when (fastCall) {
-              val targetPcc = PackedCapability()
-              targetPcc.assignFrom(cs1)
-              targetPcc.otype.value.allowOverride
-              targetPcc.otype.unseal()
-              pipeline.getService[PccService].jump(stage, targetPcc, cs1Idx)
+            val targetPcc = PackedCapability()
+            targetPcc.assignFrom(cs1)
+            targetPcc.otype.value.allowOverride
+            targetPcc.otype.unseal()
+            pipeline.getService[PccService].jump(stage, targetPcc, cs1Idx)
 
-              val cd = PackedCapability()
-              cd.assignFrom(cs2)
-              cd.otype.value.allowOverride
-              cd.otype.unseal()
-              output(context.data.CD_DATA).assignFrom(cd)
-              output(pipeline.data.RD_VALID) := True
-            } otherwise {
-              except(ExceptionCause.CallTrap, cs1Idx)
-            }
+            val cd = PackedCapability()
+            cd.assignFrom(cs2)
+            cd.otype.value.allowOverride
+            cd.otype.unseal()
+            output(context.data.CD_DATA).assignFrom(cd)
+            output(pipeline.data.RD_VALID) := True
           }
         }
       }
