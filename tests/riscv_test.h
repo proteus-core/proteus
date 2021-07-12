@@ -21,7 +21,6 @@
 
 #define RVTEST_CODE_BEGIN                                               \
     .text;                                                              \
-    .weak mtvec_handler;                                                \
     .weak fail;                                                         \
     .globl _start;                                                      \
 _start:                                                                 \
@@ -38,7 +37,11 @@ trap_vector:                                                            \
 1:  mret;                                                               \
 start_tests:
 
-#define RVTEST_CODE_END
+// HACK LLVM started erring when weak symbols are redefined as global. However,
+// globals being redefined as weak only causes a warning.
+// https://reviews.llvm.org/D90108
+#define RVTEST_CODE_END                                                 \
+    .weak mtvec_handler;
 
 #define RVTEST_DATA_BEGIN                                               \
     .data;
