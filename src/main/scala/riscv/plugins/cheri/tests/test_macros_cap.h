@@ -27,6 +27,9 @@
 #define CHECK_TYPE(cr, type) \
     CHECK_GETTER(CGetType, cr, type);
 
+#define CHECK_ADDR(cr, addr) \
+    CHECK_GETTER(CGetAddr, cr, addr);
+
 #define CHECK_CAP_NO_OFFSET(cr, tag, base, len, perms, type) \
     CHECK_TAG(cr, tag) \
     CHECK_BOUNDS(cr, base, len) \

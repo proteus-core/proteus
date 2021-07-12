@@ -10,7 +10,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
   }
 
   object Modification extends SpinalEnum {
-    val AND_PERM, SET_OFFSET, INC_OFFSET, SET_BOUNDS, CLEAR_TAG = newElement()
+    val AND_PERM, SET_OFFSET, SET_ADDR, INC_OFFSET, SET_BOUNDS, CLEAR_TAG = newElement()
   }
 
   object Data {
@@ -51,6 +51,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
       val modifiers = Seq(
         (Opcodes.CAndPerm,        Modification.AND_PERM,   InstructionType.R_CRC),
         (Opcodes.CSetOffset,      Modification.SET_OFFSET, InstructionType.R_CRC),
+        (Opcodes.CSetAddr,        Modification.SET_ADDR,   InstructionType.R_CRC),
         (Opcodes.CIncOffset,      Modification.INC_OFFSET, InstructionType.R_CRC),
         (Opcodes.CIncOffsetImm,   Modification.INC_OFFSET, InstructionType.I_CxC),
         (Opcodes.CSetBounds,      Modification.SET_BOUNDS, InstructionType.R_CRC),
@@ -139,6 +140,19 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
               }
               is (Modification.SET_OFFSET) {
                 cd.offset := rhs
+              }
+              is (Modification.SET_ADDR) {
+                when (cs.tag && cs.isSealed) {
+                  except(ExceptionCause.SealViolation)
+                } elsewhen (rhs < cs.base) {
+                  cd.base := rhs
+                  cd.offset := 0
+                  cd.tag := False
+                } otherwise {
+                  val offset = rhs - cs.base
+                  cd.offset := offset
+                  cd.tag := cs.tag && (offset < cs.length)
+                }
               }
               is (Modification.INC_OFFSET) {
                 cd.offset := cs.offset + rhs // TODO use IntAlu?
