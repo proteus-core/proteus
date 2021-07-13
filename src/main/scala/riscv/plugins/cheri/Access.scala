@@ -6,7 +6,7 @@ import spinal.core._
 
 class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
   object FieldSelect extends SpinalEnum {
-    val PERM, TYPE, BASE, LEN, TAG, OFFSET, ADDR = newElement()
+    val PERM, TYPE, BASE, LEN, TAG, SEALED, OFFSET, ADDR = newElement()
   }
 
   object Modification extends SpinalEnum {
@@ -37,6 +37,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
         Opcodes.CGetBase   -> FieldSelect.BASE,
         Opcodes.CGetLen    -> FieldSelect.LEN,
         Opcodes.CGetTag    -> FieldSelect.TAG,
+        Opcodes.CGetSealed -> FieldSelect.SEALED,
         Opcodes.CGetOffset -> FieldSelect.OFFSET,
         Opcodes.CGetAddr   -> FieldSelect.ADDR
       )
@@ -93,6 +94,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
               FieldSelect.BASE -> cap.base,
               FieldSelect.LEN -> cap.length,
               FieldSelect.TAG -> cap.tag.asUInt.resized,
+              FieldSelect.SEALED -> (cap.tag && cap.isSealed).asUInt.resized,
               FieldSelect.OFFSET -> cap.offset,
               FieldSelect.ADDR -> (cap.base + cap.offset) // TODO: use ALU
             )
