@@ -1,0 +1,48 @@
+#include "riscv_test.h"
+
+#include "test_macros_cap.h"
+#include "cheri.h"
+
+RVTEST_RV32U
+RVTEST_CODE_BEGIN
+
+    INIT_ROOT_CAP
+    SET_BOUNDS_DCC(512)
+
+    TEST_CASE_FREE(1)
+        LC c1, (zero)
+        CHECK_TAG(c1, 0)
+
+    TEST_CASE_FREE(2)
+        SC ROOT, (zero)
+        LC c1, (zero)
+        CHECK_CAP_EQ(c1, ROOT)
+
+    TEST_CASE_FREE(3)
+        SC ROOT, (zero)
+        sb zero, 1(zero)
+        LC c1, (zero)
+        CHECK_TAG(c1, 0)
+
+    TEST_CASE_DCC_BOUNDS_EXCEPTION(4, 7, CAUSE_LENGTH_VIOLATION, SC ROOT, (zero))
+
+    TEST_CASE_DCC_AND_PERM_EXCEPTION(5, ~(1 << PERM_PERMIT_STORE), CAUSE_PERMIT_STORE_VIOLATION, SC ROOT, (zero))
+    TEST_CASE_DCC_AND_PERM_EXCEPTION(6, ~(1 << PERM_PERMIT_LOAD),  CAUSE_PERMIT_LOAD_VIOLATION,  LC c1, (zero))
+
+    TEST_CASE_DCC_AND_PERM_NO_EXCEPTION(7, ~(1 << PERM_PERMIT_STORE), LC c1, (zero))
+    TEST_CASE_DCC_AND_PERM_NO_EXCEPTION(8, ~(1 << PERM_PERMIT_LOAD),  SC ROOT, (zero))
+
+    TEST_CASE_FREE(9)
+        SET_BOUNDS_DCC(512)
+        SEAL_DDC(123)
+        EXPECT_EXCEPTION(CAUSE_SEAL_VIOLATION, CAP_IDX_DDC, SC ROOT, (zero))
+
+    TEST_PASSFAIL
+
+RVTEST_CODE_END
+
+RVTEST_DATA_BEGIN
+
+    TEST_DATA
+
+RVTEST_DATA_END
