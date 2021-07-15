@@ -100,6 +100,16 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
         Data.USE_CAP_ADDR -> False
       ))
 
+      config.addDecoding(Opcodes.SC_CAP, InstructionType.R_CCx, Map(
+        Data.STORE_CAP -> True,
+        Data.USE_CAP_ADDR -> True
+      ))
+
+      config.addDecoding(Opcodes.LC_CAP, InstructionType.R_CxC, Map(
+        Data.LOAD_CAP -> True,
+        Data.USE_CAP_ADDR -> True
+      ))
+
       config.addDecoding(Opcodes.SC, InstructionType.S_RCx, Map(
         Data.STORE_CAP -> True
       ))
@@ -178,16 +188,34 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
       cbus.rsp.ready := True
 
       val ddc = pipeline.getService[ScrService].getDdc(stage)
-      val address = ddc.address + value(pipeline.data.RS1_DATA) + value(pipeline.data.IMM)
+      val cs1 = value(context.data.CS1_DATA)
+
+      val ddcRelAddress = ddc.address + value(pipeline.data.RS1_DATA) + value(pipeline.data.IMM)
+      val cs1Address = cs1.address
+
+      val cap = PackedCapability()
+      val capIdx = CapIdx()
+      val address = UInt(config.xlen bits)
+
+      when (value(Data.USE_CAP_ADDR)) {
+        cap.assignFrom(cs1)
+        capIdx := CapIdx.gpcr(value(pipeline.data.RS1))
+        address := cs1Address
+      } otherwise {
+        cap.assignFrom(ddc)
+        capIdx := CapIdx.scr(ScrIndex.DDC)
+        address := ddcRelAddress
+      }
+
       cbus.cmd.payload.address := address
 
       def checkCapBounds(operation: SpinalEnumCraft[LsuOperationType.type]): Bool = {
-        val cause = capCheck.check(ddc, address, operation, context.clen / 8)
+        val cause = capCheck.check(cap, address, operation, context.clen / 8)
         val ok = True
 
         when (cause =/= ExceptionCause.None.code) {
           val handler = pipeline.getService[ExceptionHandler]
-          handler.except(stage, cause, CapIdx.scr(ScrIndex.DDC))
+          handler.except(stage, cause, capIdx)
           ok := False
         }
 
