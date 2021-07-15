@@ -32,6 +32,16 @@ object Opcodes {
   val CJALR           = M"111111101100-----000-----1011011"
   val CInvoke         = M"1111110----------000000011011011"
 
+  val LB_CAP          = M"111110101000-----000-----1011011"
+  val LH_CAP          = M"111110101001-----000-----1011011"
+  val LW_CAP          = M"111110101010-----000-----1011011"
+  val LBU_CAP         = M"111110101100-----000-----1011011"
+  val LHU_CAP         = M"111110101101-----000-----1011011"
+
+  val SB_CAP          = M"1111100----------000010001011011"
+  val SH_CAP          = M"1111100----------000010011011011"
+  val SW_CAP          = M"1111100----------000010101011011"
+
   val LC              = M"-----------------011-----0000011"
   val SC              = M"-----------------011-----0100011"
 }
@@ -45,6 +55,7 @@ object InstructionType {
   // Where register type can be R (GPR), C (CAP), or x (NONE)
   case object R_CxR extends InstructionType(InstructionFormat.R, RegisterType.CAP,       riscv.RegisterType.NONE, riscv.RegisterType.GPR)
   case object R_CRC extends InstructionType(InstructionFormat.R, RegisterType.CAP,       riscv.RegisterType.GPR,  RegisterType.CAP)
+  case object R_CRx extends InstructionType(InstructionFormat.R, RegisterType.CAP,       riscv.RegisterType.GPR,  riscv.RegisterType.NONE)
   case object R_CxC extends InstructionType(InstructionFormat.R, RegisterType.CAP,       riscv.RegisterType.NONE, RegisterType.CAP)
   case object R_CCx extends InstructionType(InstructionFormat.R, RegisterType.CAP,       RegisterType.CAP,        riscv.RegisterType.NONE)
   case object R_CCC extends InstructionType(InstructionFormat.R, RegisterType.CAP,       RegisterType.CAP,        RegisterType.CAP)

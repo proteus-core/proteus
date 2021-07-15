@@ -8,13 +8,13 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
   object Data {
     object STORE_CAP extends PipelineData(Bool())
     object LOAD_CAP extends PipelineData(Bool())
+    object USE_CAP_ADDR extends PipelineData(Bool())
   }
 
   private class CapCheck extends Area {
     private val cap = PackedCapability().assignDontCare()
     private val address = UInt(config.xlen bits).assignDontCare()
-    private val operation = LsuOperationType()
-    operation := LsuOperationType.NONE
+    private val operation = LsuOperationType().assignDontCare()
     private val byteWidth = UInt(log2Up(context.clen / 8) + 1 bits).assignDontCare()
     private val exceptionCause = UInt(5 bits)
     exceptionCause := ExceptionCause.None.code
@@ -65,21 +65,27 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
                              address: UInt,
                              operation: SpinalEnumCraft[LsuOperationType.type],
                              width: SpinalEnumCraft[LsuAccessWidth.type]): UInt = {
-        val ddc = pipeline.getService[ScrService].getDdc(stage)
-        val result = ddc.address + address
+        val result = UInt(config.xlen bits)
+        result := address
 
-        val byteWidth = width.mux(
-          LsuAccessWidth.B -> U(1),
-          LsuAccessWidth.H -> U(2),
-          LsuAccessWidth.W -> U(4)
-        )
+        // When USE_CAP_ADDR is set, checks are done in build
+        when (!stage.value(Data.USE_CAP_ADDR)) {
+          val ddc = pipeline.getService[ScrService].getDdc(stage)
+          result := ddc.address + address
 
-        when (stage.arbitration.isRunning) {
-          val cause = capCheck.check(ddc, result, operation, byteWidth)
+          val byteWidth = width.mux(
+            LsuAccessWidth.B -> U(1),
+            LsuAccessWidth.H -> U(2),
+            LsuAccessWidth.W -> U(4)
+          )
 
-          when (cause =/= ExceptionCause.None.code) {
-            val handler = pipeline.getService[ExceptionHandler]
-            handler.except(stage, cause, CapIdx.scr(ScrIndex.DDC))
+          when (stage.arbitration.isRunning) {
+            val cause = capCheck.check(ddc, result, operation, byteWidth)
+
+            when (cause =/= ExceptionCause.None.code) {
+              val handler = pipeline.getService[ExceptionHandler]
+              handler.except(stage, cause, CapIdx.scr(ScrIndex.DDC))
+            }
           }
         }
 
@@ -90,7 +96,8 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
     pipeline.getService[DecoderService].configure {config =>
       config.addDefault(Map(
         Data.STORE_CAP -> False,
-        Data.LOAD_CAP -> False
+        Data.LOAD_CAP -> False,
+        Data.USE_CAP_ADDR -> False
       ))
 
       config.addDecoding(Opcodes.SC, InstructionType.S_RCx, Map(
@@ -100,12 +107,70 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
       config.addDecoding(Opcodes.LC, InstructionType.I_RxC, Map(
         Data.LOAD_CAP -> True
       ))
+
+      val lsu = pipeline.getService[LsuService]
+
+      def addDataLoadCap(opcode: MaskedLiteral,
+                         width: SpinalEnumElement[LsuAccessWidth.type],
+                         unsigned: Boolean) = {
+        config.addDecoding(opcode, InstructionType.R_CxR, Map(
+          Data.USE_CAP_ADDR -> True
+        ))
+
+        lsu.addLoad(opcode, width, unsigned)
+      }
+
+      addDataLoadCap(Opcodes.LB_CAP,  LsuAccessWidth.B, unsigned = false)
+      addDataLoadCap(Opcodes.LH_CAP,  LsuAccessWidth.H, unsigned = false)
+      addDataLoadCap(Opcodes.LW_CAP,  LsuAccessWidth.W, unsigned = false)
+      addDataLoadCap(Opcodes.LBU_CAP, LsuAccessWidth.B, unsigned = true)
+      addDataLoadCap(Opcodes.LHU_CAP, LsuAccessWidth.H, unsigned = true)
+
+      def addDataStoreCap(opcode: MaskedLiteral,
+                          width: SpinalEnumElement[LsuAccessWidth.type]) = {
+        config.addDecoding(opcode, InstructionType.R_CRx, Map(
+          Data.USE_CAP_ADDR -> True
+        ))
+
+        lsu.addStore(opcode, width)
+      }
+
+      addDataStoreCap(Opcodes.SB_CAP, LsuAccessWidth.B)
+      addDataStoreCap(Opcodes.SH_CAP, LsuAccessWidth.H)
+      addDataStoreCap(Opcodes.SW_CAP, LsuAccessWidth.W)
     }
   }
 
   override def build(): Unit = {
     stage plug new Area {
       import stage._
+
+      val lsu = pipeline.getService[LsuService]
+      assert(stage == lsu.stage)
+
+      when (arbitration.isValid && value(Data.USE_CAP_ADDR)) {
+        arbitration.rs1Needed := True
+
+        val cs1 = value(context.data.CS1_DATA)
+        val address = cs1.address
+        lsu.setAddress(address)
+
+        // FIXME this code is duplicated from LsuAddressTranslator.translate above
+        val byteWidth = lsu.width(stage).mux(
+          LsuAccessWidth.B -> U(1),
+          LsuAccessWidth.H -> U(2),
+          LsuAccessWidth.W -> U(4)
+        )
+
+        val cause = capCheck.check(cs1, address, lsu.operation(stage), byteWidth)
+
+        when (!arbitration.isStalled) {
+          when (cause =/= ExceptionCause.None.code) {
+            val handler = pipeline.getService[ExceptionHandler]
+            handler.except(stage, cause, CapIdx.gpcr(value(pipeline.data.RS1)))
+          }
+        }
+      }
 
       val cbus = pipeline.getService[TaggedMemoryService].createCapBus(stage)
       cbus.cmd.valid := False
