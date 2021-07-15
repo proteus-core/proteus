@@ -15,11 +15,14 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
   }
 
   private var addressTranslatorChanged = false
+  private var externalAddress: UInt = _
+  private var hasExternalOps = false
 
   object Data {
     object LSU_OPERATION_TYPE extends PipelineData(LsuOperationType())
     object LSU_ACCESS_WIDTH extends PipelineData(LsuAccessWidth())
     object LSU_IS_UNSIGNED extends PipelineData(Bool())
+    object LSU_IS_EXTERNAL_OP extends PipelineData(Bool())
   }
 
   class DummyFormalService extends FormalService {
@@ -31,7 +34,54 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
     override def lsuOnMisaligned(stage: Stage): Unit = ()
   }
 
+
+  override def addStore(opcode: MaskedLiteral, width: SpinalEnumCraft[LsuAccessWidth.type]): Unit = {
+    pipeline.getService[DecoderService].configure {config =>
+      config.addDecoding(opcode, Map(
+        Data.LSU_OPERATION_TYPE -> LsuOperationType.STORE,
+        Data.LSU_ACCESS_WIDTH -> width,
+        Data.LSU_IS_EXTERNAL_OP -> True
+      ))
+    }
+
+    hasExternalOps = true
+  }
+
+  override def addLoad(opcode: MaskedLiteral,
+                       width: SpinalEnumCraft[LsuAccessWidth.type],
+                       unsigned: Boolean): Unit = {
+    pipeline.getService[DecoderService].configure {config =>
+      config.addDecoding(opcode, Map(
+        Data.LSU_OPERATION_TYPE -> LsuOperationType.LOAD,
+        Data.LSU_ACCESS_WIDTH -> width,
+        Data.LSU_IS_UNSIGNED -> Bool(unsigned),
+        Data.LSU_IS_EXTERNAL_OP -> True
+      ))
+    }
+
+    hasExternalOps = true
+  }
+
+  override def setAddress(address: UInt): Unit = {
+    externalAddress := address
+  }
+
+  override def stage: Stage = lsuStage
+
+  override def operation(stage: Stage): SpinalEnumCraft[LsuOperationType.type] = {
+    stage.value(Data.LSU_OPERATION_TYPE)
+  }
+
+  override def width(stage: Stage): SpinalEnumCraft[LsuAccessWidth.type] = {
+    stage.value(Data.LSU_ACCESS_WIDTH)
+  }
+
   override def setup(): Unit = {
+    lsuStage plug new Area {
+      val externalAddress = UInt(config.xlen bits).assignDontCare()
+      Lsu.this.externalAddress = externalAddress
+    }
+
     val intAlu = pipeline.getService[IntAluService]
 
     val allOpcodes = Seq(Opcodes.LB, Opcodes.LH, Opcodes.LW, Opcodes.LBU,
@@ -46,7 +96,8 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
     decoder.configure {config =>
       config.addDefault(Map(
         Data.LSU_OPERATION_TYPE -> LsuOperationType.NONE,
-        Data.LSU_IS_UNSIGNED -> False
+        Data.LSU_IS_UNSIGNED -> False,
+        Data.LSU_IS_EXTERNAL_OP -> False
       ))
 
       def addLoad(opcode: MaskedLiteral,
@@ -88,10 +139,21 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
 
       val operation = value(Data.LSU_OPERATION_TYPE)
       val accessWidth = value(Data.LSU_ACCESS_WIDTH)
-      val inputAddress = input(pipeline.getService[IntAluService].resultData)
+      val aluResult = input(pipeline.getService[IntAluService].resultData)
+
+      val inputAddress = if (hasExternalOps) {
+        // We keep track of whether we have external loads/stores to 1) prevent LSU_IS_EXTERNAL_OP
+        // from being added to the pipeline regs and 2) not generate this mux when not necessary
+        // (although the latter might be optimized away at some point).
+        value(Data.LSU_IS_EXTERNAL_OP) ? externalAddress | aluResult
+      } else {
+        aluResult
+      }
+
       val address = addressTranslator.translate(
         lsuStage, inputAddress, operation, accessWidth
       )
+
       val busAddress = address & U(0xfffffffcL)
 
       val isLoad = operation === LsuOperationType.LOAD

@@ -155,6 +155,49 @@ trait LsuAddressTranslator {
 
 trait LsuService {
   def setAddressTranslator(translator: LsuAddressTranslator): Unit
+
+  /**
+   * Add a custom store instruction.
+   *
+   * Custom store instructions are processed like normal ones except their target address is taken
+   * from the one given to [[setAddress]]. So to add a custom store instruction, call this method
+   * with your opcode during the setup phase and call [[setAddress]] in the build phase when your
+   * opcode was detected.
+   */
+  def addStore(opcode: MaskedLiteral, width: SpinalEnumCraft[LsuAccessWidth.type]): Unit
+
+  /**
+   * Add a custom load instruction.
+   *
+   * @see [[addStore]]
+   */
+  def addLoad(opcode: MaskedLiteral,
+              width: SpinalEnumCraft[LsuAccessWidth.type],
+              unsigned: Boolean): Unit
+
+  /**
+   * Set the address used by custom loads/stores.
+   *
+   * Must be called in the context of [[stage]].
+   *
+   * @see [[addStore]]
+   */
+  def setAddress(address: UInt): Unit
+
+  /**
+   * The [[Stage]] of the LSU.
+   */
+  def stage: Stage
+
+  /**
+   * Get the [[LsuOperationType]] of the instruction in `stage`.
+   */
+  def operation(stage: Stage): SpinalEnumCraft[LsuOperationType.type]
+
+  /**
+   * Get the [[LsuAccessWidth]] of the instruction in `stage`.
+   */
+  def width(stage: Stage): SpinalEnumCraft[LsuAccessWidth.type]
 }
 
 trait PcPayload[T <: Data] {
