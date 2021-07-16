@@ -23,7 +23,7 @@ RVTEST_CODE_BEGIN
     test_func:
         CSpecialR c5, pcc
         CHECK_CAP_EQ(c5, c1)
-        CHECK_CAP_EQ(c26, c3)
+        CHECK_CAP_EQ(c31, c3)
 
     TEST_PASSFAIL
 

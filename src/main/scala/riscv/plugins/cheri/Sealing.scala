@@ -30,7 +30,7 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
       config.addDecoding(Opcodes.CInvoke, InstructionType.R_CCC, Map(
         Data.CINVOKE -> True
       ))
-      config.setFixedRegisters(Opcodes.CInvoke, rd = Some(26))
+      config.setFixedRegisters(Opcodes.CInvoke, rd = Some(31))
     }
   }
 
