@@ -15,6 +15,17 @@
   - Simple peripherals (Machine Timer, UART,. . . )
 - Very easy to configure and extend using a plugin system
 
+## Docker
+
+To simplify setting up the toolchain, Docker can be used to boot into a shell with tools:
+
+```
+sudo apt install docker.io
+sudo usermod -aG docker $(whoami) 
+docker build -t proteus .
+docker run -i -h "proteus" -t proteus
+```
+
 ## Build and simulation prerequisites
 
 - OpenJDK 11 (Ubuntu: openjdk-11-jdk)
