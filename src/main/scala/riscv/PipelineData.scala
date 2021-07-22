@@ -3,7 +3,7 @@ package riscv
 import spinal.core._
 
 class PipelineData[T <: Data](val dataType: HardType[T]) {
-  def name: String = getClass.getSimpleName.replace("$", "")
+  def name: String = getClass.getSimpleName.takeWhile(_ != '$')
 }
 
 class StandardPipelineData(config: Config) {
