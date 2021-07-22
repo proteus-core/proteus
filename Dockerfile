@@ -1,7 +1,7 @@
 ## Based on https://github.com/fritzalder/faulty-point-unit/blob/master/Dockerfile
 
 # Clean Ubuntu 18.04 container
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 RUN apt-get update -yqq && apt-get -yqq install git lsb-release sudo vim gnupg
 
 # Config parameters
