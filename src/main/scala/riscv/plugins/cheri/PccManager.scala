@@ -209,5 +209,18 @@ class PccManager(branchStage: Stage)(implicit context: Context)
         }
       }
     }
+
+    if (config.debug) {
+      // Add a debug pipeline register for the absolute PC. Since PC is relative to PCC, it's
+      // difficult to interpret the waveform when PCC.base != 0. ABS_PC to the rescue!
+      object ABS_PC extends PipelineData(UInt(config.xlen bits))
+
+      pipeline.fetchStage plug {
+        pipeline.fetchStage.output(ABS_PC) := getPcc(pipeline.fetchStage).address
+      }
+
+      // This forces ABS_PC to be propagated through the whole pipeline.
+      pipeline.retirementStage.output(ABS_PC)
+    }
   }
 }
