@@ -20,7 +20,7 @@ object BaseIsa {
   }
 }
 
-class Config(val baseIsa: BaseIsa) {
+class Config(val baseIsa: BaseIsa, val debug: Boolean = true) {
   def xlen = baseIsa.xlen
   def numRegs = baseIsa.xlen
 
