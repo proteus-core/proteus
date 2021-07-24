@@ -55,6 +55,11 @@ trait DynamicPipeline extends Pipeline {
         }
       }
 
+      // Make sure we get the input from the issue stage for all requested outputs.
+      for (outputData <- stage.outputs.keys) {
+        stage.input(outputData)
+      }
+
       for ((inputData, input) <- stage.inputs) {
         val (regInput, regOutput) = pipelineRegs(stage).addReg(inputData)
         input := regOutput
