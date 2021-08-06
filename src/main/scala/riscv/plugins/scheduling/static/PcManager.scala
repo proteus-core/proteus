@@ -10,6 +10,7 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
   private val jumpStages = mutable.Set[Stage]()
   private val pcUpdateObservers = mutable.Buffer[PcUpdateObserver]()
   private val jumpObservers = mutable.Buffer[JumpObserver]()
+  private var pcOverride: Flow[UInt] = _
 
   private var globalTarget: Flow[UInt] = null
 
@@ -65,11 +66,20 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
     globalTarget.push(target)
   }
 
+  override def setFetchPc(pc: UInt): Unit = {
+    pcOverride.push(pc)
+  }
+
   override def setup(): Unit = {
     pipeline plug new Area {
       globalTarget = Flow(UInt(config.xlen bits))
       globalTarget.valid := False
       globalTarget.payload.assignDontCare()
+
+      val pcOverride = Flow(UInt(config.xlen bits))
+      pcOverride.valid := False
+      pcOverride.payload.assignDontCare()
+      PcManager.this.pcOverride = pcOverride
     }
   }
 
@@ -115,6 +125,10 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
             updatePc(stage, true)
           }
         }
+      }
+
+      when (pcOverride.valid) {
+        updatePc(pcOverride.payload)
       }
     }
   }

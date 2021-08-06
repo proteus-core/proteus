@@ -23,6 +23,8 @@ class PcManager extends Plugin[DynamicPipeline] with JumpService {
     globalTarget.push(target)
   }
 
+  override def setFetchPc(pc: UInt): Unit = ???
+
   override def setup(): Unit = {
     pipeline plug new Area {
       globalTarget = Flow(UInt(config.xlen bits))

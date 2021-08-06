@@ -3,9 +3,20 @@ package riscv.plugins.scheduling.static
 import riscv._
 
 import spinal.core._
+import spinal.lib._
+
+import collection.mutable
 
 class Scheduler(canStallExternally: Boolean = false)
-  extends Plugin[StaticPipeline] with IssueService {
+  extends Plugin[StaticPipeline] with ScheduleService with IssueService {
+  private class ClaimPipelineArea extends Area {
+    val claimPipeline = out(Bool())
+    val pipelineFlushed = in(Bool())
+    claimPipeline := False
+  }
+
+  private val claimPipelineAreas = mutable.Map[Stage, ClaimPipelineArea]()
+
   override def build(): Unit = {
     pipeline plug new Area {
       val stages = pipeline.stages
@@ -35,6 +46,36 @@ class Scheduler(canStallExternally: Boolean = false)
         regs.shift := stage.arbitration.isDone
       }
     }
+  }
+
+  override def claimPipeline(stage: Stage): Bool = {
+    val area = claimPipelineAreas.getOrElseUpdate(stage, {
+      val stageArea = stage plug new ClaimPipelineArea
+
+      pipeline plug new Area {
+        val laterStagesEmpty = if (stage == pipeline.retirementStage) {
+          True
+        } else {
+          val laterStages = pipeline.stages.dropWhile(_ != stage).tail
+          !laterStages.map(_.arbitration.isValid).orR
+        }
+
+        stageArea.pipelineFlushed := laterStagesEmpty
+
+        when (stageArea.claimPipeline) {
+          for (prevStage <- pipeline.stages.takeWhile(_ != stage)) {
+            prevStage.arbitration.isValid := False
+          }
+
+          pipeline.getService[JumpService].setFetchPc(stage.input(pipeline.data.NEXT_PC))
+        }
+      }
+
+      stageArea
+    })
+
+    area.claimPipeline := True
+    area.pipelineFlushed
   }
 
   override def setDestinations(opcode: MaskedLiteral, stages: Set[Stage]): Unit = {

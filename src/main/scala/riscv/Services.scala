@@ -200,6 +200,20 @@ trait LsuService {
   def width(stage: Stage): SpinalEnumCraft[LsuAccessWidth.type]
 }
 
+trait ScheduleService {
+  /**
+    * Give `stage` exclusive access to the pipeline.
+    *
+    * All earlier instructions are executed until completion and all later
+    * instructions are canceled. Once this method returns True, `stage` is the
+    * only stage in the pipeline holding a valid instruction. This will continue
+    * to be true as long as this method is called. In the first cycle this
+    * method isn't called anymore, the pipeline is restarted from the
+    * instruction after the one in `stage`.
+    */
+  def claimPipeline(stage: Stage): Bool
+}
+
 trait PcPayload[T <: Data] {
   /**
    * The payload's data type.
@@ -267,6 +281,14 @@ trait JumpService {
    * Like onPcUpdate but only called for jumps.
    */
   def onJump(observer: JumpObserver): Unit
+
+  /**
+    * Override the next PC for the fetch stage.
+    *
+    * Note that this is  not the same as performing a jump! For example, no
+    * instructions are invalidated by this method.
+    */
+  def setFetchPc(pc: UInt): Unit
 }
 
 trait TrapService {
