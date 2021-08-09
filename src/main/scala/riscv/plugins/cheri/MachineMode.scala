@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-private class RegScr(implicit context: Context) extends Scr {
+private class RegScr(implicit context: Context) extends Area with Scr {
   val reg = Reg(PackedCapability()).init(PackedCapability.Null)
 
   override val needAsr: Boolean = true

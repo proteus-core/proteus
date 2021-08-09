@@ -9,7 +9,7 @@ trait PccService {
   def jump(stage: Stage, pcc: Capability, capIdx: CapIdx): Unit
 }
 
-trait Scr extends Area {
+trait Scr {
   val needAsr: Boolean
 
   def read(): Capability
