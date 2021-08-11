@@ -7,31 +7,12 @@ import spinal.lib._
 import scala.collection.mutable
 
 class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipeline] with ScrService {
-  private var ddcVar: RegCapability = _
-  private var writingDdc: Bool = _
+  private class ScrComponent extends Component {
+    val io = master(ScrIo())
 
-  private def ddc = {
-    if (ddcVar == null) {
-      scrStage plug new Area {
-        val ddc = out(Reg(RegCapability()).init(RegCapability.Root))
-        ddcVar = ddc
-      }
-    }
-
-    ddcVar
-  }
-
-  object Data {
-    object SCR_RW extends PipelineData(Bool())
-  }
-
-  private val scrs = mutable.Map[Int, Scr]()
-
-  override def registerScr[T <: Scr](id: Int, scr: => T): T = {
-    assert(!scrs.contains(id))
-    val pluggesScr = scrStage.plug(scr)
-    scrs(id) = pluggesScr
-    pluggesScr
+    // We treat DDC specially to make getDdc easier to implement. This should probably bd done using
+    // registerScr like all other SCRs to make getScr also work for DDC.
+    val ddc = out(Reg(RegCapability()).init(RegCapability.Root))
   }
 
   private class CapOffsetIo extends Bundle with IMasterSlave {
@@ -45,11 +26,28 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
     }
   }
 
+  object Data {
+    object SCR_RW extends PipelineData(Bool())
+  }
+
+  private lazy val scrFile = pipeline plug new ScrComponent
+  private val scrStageIos = mutable.Map[Stage, ScrIo]()
+  private var writingDdc: Bool = _
+  private val ddcStageInputs = mutable.Map[Stage, Capability]()
+  private val scrs = mutable.Map[Int, Scr]()
+
+  override def registerScr[T <: Scr](id: Int, scr: => T): T = {
+    assert(!scrs.contains(id))
+    val pluggedScr = scrFile.plug(scr)
+    scrs(id) = pluggedScr
+    pluggedScr
+  }
+
   override def registerScr[T <: Scr](id: Int, offsetCsr: Int, scr: => T): T = {
     val pluggedScr = registerScr(id, scr)
     val ioName = s"capOffset_$id"
 
-    val scrArea = scrStage plug new Area {
+    val scrArea = scrFile plug new Area {
       val io = slave(new CapOffsetIo).setPartialName(ioName)
       io.rdata := pluggedScr.read().offset
 
@@ -85,9 +83,70 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
   }
 
   override def getScr(stage: Stage, id: Int): Scr = {
-    assert(stage == scrStage)
     assert(scrs.contains(id))
-    scrs(id)
+
+    // IO interface to directly access a single SCR.
+    case class FixedScrIo() extends Bundle with IMasterSlave {
+      val write = Bool()
+      val wdata = PackedCapability()
+      val rdata = PackedCapability()
+
+      override def asMaster(): Unit = {
+        in(write, wdata)
+        out(rdata)
+      }
+    }
+
+    val scr = scrs(id)
+    val ioName = s"scr_$id"
+
+    val scrArea = scrFile plug new Area {
+      val io = master(FixedScrIo()).setPartialName(ioName)
+      io.rdata.assignFrom(scr.read())
+
+      when (io.write) {
+        scr.write(io.wdata)
+      }
+    }
+
+    val stageArea = stage plug new Area {
+      val io = slave(FixedScrIo()).setPartialName(ioName)
+
+      // To allow getScr to be called inside a conditional scope.
+      Utils.outsideConditionScope {
+        io.write := False
+        io.wdata.assignDontCare()
+      }
+    }
+
+    pipeline plug new Area {
+      scrArea.io <> stageArea.io
+    }
+
+    new Scr {
+      override val needAsr: Boolean = scr.needAsr
+      override def read(): Capability = stageArea.io.rdata
+
+      override def write(value: Capability): Unit = {
+        stageArea.io.write := True
+        stageArea.io.wdata.assignFrom(value)
+      }
+    }
+  }
+
+  override def getIo(stage: Stage): ScrIo = {
+    scrStageIos.getOrElseUpdate(stage, {
+      val area = stage plug new Area {
+        val scrIo = slave(ScrIo())
+        scrIo.valid := False
+        scrIo.hasAsr := False
+        scrIo.id.assignDontCare()
+        scrIo.write.assignDontCare()
+        scrIo.wdata.assignDontCare()
+      }
+
+      area.scrIo
+    })
   }
 
   override def getPcc(stage: Stage): Capability = {
@@ -95,19 +154,17 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
   }
 
   override def getDdc(stage: Stage): Capability = {
-    if (stage == scrStage) {
-      ddc
-    } else {
+    ddcStageInputs.getOrElseUpdate(stage, {
       val area = stage plug new Area {
         val ddc = in(RegCapability())
       }
 
       pipeline plug {
-        area.ddc := ddc
+        area.ddc := scrFile.ddc
       }
 
       area.ddc
-    }
+    })
   }
 
   override def setup(): Unit = {
@@ -125,8 +182,51 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
   }
 
   override def build(): Unit = {
+    // Implementation of the ScrFile component.
+    scrFile plug new Area {
+      import scrFile._
+
+      io.unknownId := False
+      io.needAsr := False
+      io.rdata.assignFrom(PackedCapability.Null)
+
+      when (io.valid) {
+        switch (io.id) {
+          is (ScrIndex.DDC) {
+            io.rdata.assignFrom(ddc)
+            io.needAsr := False
+
+            when(io.write) {
+              ddc.assignFrom(io.wdata)
+            }
+          }
+
+          for ((id, scr) <- scrs) {
+            is (id) {
+              io.needAsr := Bool(scr.needAsr)
+
+              when (io.hasAsr || !io.needAsr) {
+                io.rdata.assignFrom(scr.read())
+
+                when (io.write) {
+                  scr.write(io.wdata)
+                }
+              }
+            }
+          }
+
+          default {
+            io.unknownId := True
+          }
+        }
+      }
+    }
+
+    // Implementation of the CSpecialRW instruction.
     scrStage plug new Area {
       import scrStage._
+
+      val scrIo = getIo(scrStage)
 
       val writingDdc = out(False)
       ScrFile.this.writingDdc = writingDdc
@@ -142,51 +242,23 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
       val cd = RegCapability.Null
 
       when (arbitration.isValid && value(Data.SCR_RW)) {
-        when(!ignoreRead) {
-          switch (scrId) {
-            is (ScrIndex.PCC) {
-              cd.assignFrom(pcc)
-              needAsr := False
-            }
-            is (ScrIndex.DDC) {
-              cd.assignFrom(getDdc(scrStage))
-              needAsr := False
-            }
+        scrIo.valid := True
+        scrIo.id := scrId
+        scrIo.write := !ignoreWrite
+        scrIo.wdata.assignFrom(cs1)
+        scrIo.hasAsr := hasAsr
 
-            for ((id, scr) <- scrs) {
-              is (id) {
-                cd.assignFrom(scr.read())
-                needAsr := Bool(scr.needAsr)
-              }
-            }
+        illegalScrId := scrIo.unknownId
+        cd.assignFrom(scrIo.rdata)
+        needAsr := scrIo.needAsr
 
-            default {
-              illegalScrId := True
-            }
-          }
-        }
-
-        when (!ignoreWrite) {
-          switch (scrId) {
-            is (ScrIndex.PCC) {
-              needAsr := False
-            }
-            is (ScrIndex.DDC) {
-              ddc := cs1
-              writingDdc := True
-            }
-
-            for ((id, scr) <- scrs) {
-              is (id) {
-                scr.write(cs1)
-                needAsr := Bool(scr.needAsr)
-              }
-            }
-
-            default {
-              illegalScrId := True
-            }
-          }
+        // ScrFile doesn't store PCC (it's in pipeline registers).
+        when (scrId === ScrIndex.PCC) {
+          cd.assignFrom(pcc)
+          needAsr := False
+          illegalScrId := False
+        } elsewhen (scrId === ScrIndex.DDC) {
+          writingDdc := !ignoreWrite
         }
 
         when (illegalScrId) {
@@ -203,6 +275,25 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
         } elsewhen (!ignoreRead) {
           output(context.data.CD_DATA) := cd
           output(pipeline.data.RD_VALID) := True
+        }
+      }
+    }
+
+    // Connect the ScrFile IO to all stages using it.
+    pipeline plug new Area {
+      scrFile.io.valid := False
+      scrFile.io.id.assignDontCare()
+      scrFile.io.write := False
+      scrFile.io.wdata.assignDontCare()
+      scrFile.io.hasAsr := False
+
+      for (stageIo <- scrStageIos.values) {
+        stageIo.rdata.assignDontCare()
+        stageIo.unknownId := False
+        stageIo.needAsr := False
+
+        when (stageIo.valid) {
+          scrFile.io <> stageIo
         }
       }
     }

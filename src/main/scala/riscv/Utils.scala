@@ -31,4 +31,14 @@ object Utils {
 
     delayCounter.increment()
   }
+
+  def outsideConditionScope[T](rtl: => T): T = {
+    val body = Component.current.dslBody
+    body.push()
+    val swapContext = body.swap()
+    val ret = rtl
+    body.pop()
+    swapContext.appendBack()
+    ret
+  }
 }
