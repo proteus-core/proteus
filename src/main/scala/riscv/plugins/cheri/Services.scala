@@ -55,6 +55,7 @@ trait ScrService {
     */
   def registerScr[T <: Scr](id: Int, offsetCsr: Int, scr: => T): T
   def getScr(stage: Stage, id: Int): Scr
+  def getRegisteredScrs: Seq[Int]
 }
 
 trait ExceptionService {

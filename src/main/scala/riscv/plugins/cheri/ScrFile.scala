@@ -134,6 +134,8 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
     }
   }
 
+  override def getRegisteredScrs: Seq[Int] = scrs.keys.toSeq
+
   override def getIo(stage: Stage): ScrIo = {
     scrStageIos.getOrElseUpdate(stage, {
       val area = stage plug new Area {
