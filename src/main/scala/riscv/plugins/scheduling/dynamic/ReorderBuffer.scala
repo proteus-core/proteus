@@ -26,7 +26,7 @@ case class RobEntry(implicit config: Config) extends Bundle {
   val ready = Bool()
 }
 
-class ReorderBuffer(pipeline: DynamicPipeline, registerFile: Scheduler#RegisterFile, robCapacity: Int)(implicit config: Config) extends Area with CdbListener {
+class ReorderBuffer(pipeline: DynamicPipeline, robCapacity: Int)(implicit config: Config) extends Area with CdbListener {
   def capacity: Int = robCapacity
   def indexBits: BitCount = log2Up(capacity) bits
 
@@ -131,14 +131,28 @@ class ReorderBuffer(pipeline: DynamicPipeline, registerFile: Scheduler#RegisterF
     updatedOldestIndex := oldestIndex
     val isEmpty = oldestIndex === newestIndex && !isFull
 
+    // FIXME it would probably be "cleaner" to connect the ROB to the retirement stage in the
+    // scheduler.
+    val ret = pipeline.retirementStage
+    ret.arbitration.isValid := False
+    ret.arbitration.isStalled := False
+
+    // TODO generate ROB entries from stage inputs
+    ret.input(pipeline.data.RD) := oldestEntry.writeDestination.resized
+    ret.input(pipeline.data.RD_DATA) := oldestEntry.writeValue
+    ret.input(pipeline.data.RD_TYPE) :=
+      oldestEntry.actions.writesRegister ? RegisterType.GPR | RegisterType.NONE
+
+    // FIXME this doesn't seem the correct place to do this...
+    ret.connectOutputDefaults()
+    ret.connectLastValues()
+
     when (!isEmpty && oldestEntry.ready) {
+      ret.arbitration.isValid := True
+
       when (oldestEntry.actions.performsJump) {
         val jumpService = pipeline.getService[JumpService]
         jumpService.jump(oldestEntry.jumpTarget)
-      }
-
-      when (oldestEntry.actions.writesRegister) {
-        registerFile.updateValue(oldestEntry.writeDestination.resized, oldestEntry.writeValue)
       }
 
       // removing the oldest entry and potentially resetting the ROB in case of a jump

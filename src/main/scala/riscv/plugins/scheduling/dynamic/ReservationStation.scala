@@ -4,7 +4,7 @@ import riscv._
 import spinal.core._
 import spinal.lib.Stream
 
-class ReservationStation(exeStage: Stage, registerFile: Scheduler#RegisterFile, rob: ReorderBuffer, pipeline: DynamicPipeline)(implicit config: Config) extends Area with CdbListener {
+class ReservationStation(exeStage: Stage, rob: ReorderBuffer, pipeline: DynamicPipeline)(implicit config: Config) extends Area with CdbListener {
   setPartialName(s"RS_${exeStage.stageName}")
 
   private val rs1RobIndexNext, rs2RobIndexNext = UInt(rob.indexBits)
@@ -181,7 +181,7 @@ class ReservationStation(exeStage: Stage, registerFile: Scheduler#RegisterFile, 
       }
     } otherwise {
       rs1WaitingNext := False
-      regs.setReg(pipeline.data.RS1_DATA, registerFile.getValue(rs1Id))
+      regs.setReg(pipeline.data.RS1_DATA, dispatchStage.output(pipeline.data.RS1_DATA))
     }
 
     when (rs2Found) {
@@ -195,7 +195,7 @@ class ReservationStation(exeStage: Stage, registerFile: Scheduler#RegisterFile, 
       }
     } otherwise {
       rs2WaitingNext := False
-      regs.setReg(pipeline.data.RS2_DATA, registerFile.getValue(rs2Id))
+      regs.setReg(pipeline.data.RS2_DATA, dispatchStage.output(pipeline.data.RS2_DATA))
     }
   }
 }

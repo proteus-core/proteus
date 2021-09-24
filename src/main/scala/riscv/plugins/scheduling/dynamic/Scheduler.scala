@@ -4,23 +4,6 @@ import riscv._
 import spinal.core._
 
 class Scheduler(implicit val robCapacity: Int = 8) extends Plugin[DynamicPipeline] with IssueService {
-  class RegisterFile extends Area { // TODO: not needed?
-    val registerArray = Vec.fill(config.numRegs)(Reg(UInt(config.xlen bits)).init(0))
-
-    def getValue(regId: UInt): UInt = {
-      val ret = UInt(config.xlen bits)
-      ret := 0
-      when (regId =/= 0) {
-        ret := registerArray(regId)
-      }
-      ret
-    }
-
-    def updateValue(regId: UInt, value: UInt): Unit = {
-      registerArray(regId) := value
-    }
-  }
-
   class Data { // TODO: better name for this?
     object DEST_FU extends PipelineData(Bits(pipeline.exeStages.size bits))
   }
@@ -35,9 +18,8 @@ class Scheduler(implicit val robCapacity: Int = 8) extends Plugin[DynamicPipelin
 
   override def finish(): Unit = {
     pipeline plug new Area {
-      val registerFile = new RegisterFile
-      val rob = new ReorderBuffer(pipeline, registerFile, robCapacity)
-      val reservationStations = pipeline.exeStages.map(stage => new ReservationStation(stage, registerFile, rob, pipeline))
+      val rob = new ReorderBuffer(pipeline, robCapacity)
+      val reservationStations = pipeline.exeStages.map(stage => new ReservationStation(stage, rob, pipeline))
       val cdb = new CommonDataBus(reservationStations, rob)
       rob.build()
       cdb.build()

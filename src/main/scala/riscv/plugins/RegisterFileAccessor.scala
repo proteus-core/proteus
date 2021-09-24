@@ -7,14 +7,16 @@ import spinal.lib._
 class RegisterFileAccessor(readStage: Stage, writeStage: Stage) extends Plugin[Pipeline] {
 
   override def setup(): Unit = {
-    val hazardInfo = DataHazardInfo(
-      RegisterType.GPR,
-      pipeline.data.RS1_DATA,
-      pipeline.data.RS2_DATA,
-      pipeline.data.RD_DATA
-    )
+    if (pipeline.hasService[DataHazardService]) {
+      val hazardInfo = DataHazardInfo(
+        RegisterType.GPR,
+        pipeline.data.RS1_DATA,
+        pipeline.data.RS2_DATA,
+        pipeline.data.RD_DATA
+      )
 
-    pipeline.getService[DataHazardService].addHazard(hazardInfo)
+      pipeline.getService[DataHazardService].addHazard(hazardInfo)
+    }
   }
 
   override def build(): Unit = {
@@ -39,8 +41,12 @@ class RegisterFileAccessor(readStage: Stage, writeStage: Stage) extends Plugin[P
       regFileIo.rd := value(pipeline.data.RD)
       regFileIo.data := value(pipeline.data.RD_DATA)
 
-      val trapHandler = pipeline.getService[TrapService]
-      val hasTrapped = trapHandler.hasTrapped(writeStage)
+      val hasTrapped = if (pipeline.hasService[TrapService]) {
+        pipeline.getService[TrapService].hasTrapped(writeStage)
+      } else {
+        False
+      }
+
       regFileIo.write :=
         value(pipeline.data.RD_TYPE) === RegisterType.GPR &&
         arbitration.isDone &&

@@ -12,7 +12,6 @@ trait DynamicPipeline extends Pipeline {
 
 
   override def fetchStage: Stage = null
-  override val retirementStage: Stage = null
 
   override def build(): Unit = {
     issuePipeline.initBuild()
