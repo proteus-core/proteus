@@ -66,6 +66,11 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
     globalTarget.push(target)
   }
 
+  override def jumpRequested(stage: Stage): Bool = {
+    // FIXME https://gitlab.com/ProteusCore/ProteusCore/-/issues/9
+    stage.arbitration.jumpRequested
+  }
+
   override def setFetchPc(pc: UInt): Unit = {
     pcOverride.push(pc)
   }

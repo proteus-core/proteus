@@ -142,6 +142,8 @@ class ReorderBuffer(pipeline: DynamicPipeline, robCapacity: Int)(implicit config
     ret.input(pipeline.data.RD_DATA) := oldestEntry.writeValue
     ret.input(pipeline.data.RD_TYPE) :=
       oldestEntry.actions.writesRegister ? RegisterType.GPR | RegisterType.NONE
+    ret.input(pipeline.data.JUMP_REQUESTED) := oldestEntry.actions.performsJump
+    ret.input(pipeline.data.NEXT_PC) := oldestEntry.jumpTarget
 
     // FIXME this doesn't seem the correct place to do this...
     ret.connectOutputDefaults()
@@ -149,11 +151,6 @@ class ReorderBuffer(pipeline: DynamicPipeline, robCapacity: Int)(implicit config
 
     when (!isEmpty && oldestEntry.ready) {
       ret.arbitration.isValid := True
-
-      when (oldestEntry.actions.performsJump) {
-        val jumpService = pipeline.getService[JumpService]
-        jumpService.jump(oldestEntry.jumpTarget)
-      }
 
       // removing the oldest entry and potentially resetting the ROB in case of a jump
       // TODO: how do we keep track of the predicted jump address? a pipeline register maybe?

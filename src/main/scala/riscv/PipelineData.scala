@@ -24,4 +24,8 @@ class StandardPipelineData(config: Config) {
   object RD_VALID extends PipelineData(Bool())
   object IMM extends PipelineData(UInt(32 bits))
   object IMM_USED extends PipelineData(Bool())
+
+  // FIXME remove once the manual connection code in ReorderBuffer.scala and
+  // ReservationStation.scala is gone.
+  object JUMP_REQUESTED extends PipelineData(Bool())
 }

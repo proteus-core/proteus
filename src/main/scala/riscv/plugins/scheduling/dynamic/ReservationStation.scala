@@ -123,7 +123,9 @@ class ReservationStation(exeStage: Stage, rob: ReorderBuffer, pipeline: DynamicP
         cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
       }
 
-      when (exeStage.arbitration.jumpRequested) {
+      val jumpService = pipeline.getService[JumpService]
+
+      when (jumpService.jumpRequested(exeStage)) {
         cdbStream.payload.actions.performsJump := True
         cdbStream.payload.jumpTarget := exeStage.output(pipeline.data.NEXT_PC)
       }
