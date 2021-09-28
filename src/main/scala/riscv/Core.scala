@@ -44,7 +44,7 @@ object createStaticPipeline {
       new MemoryBackbone,
       new Fetcher(pipeline.fetch),
       new Decoder(pipeline.decode),
-      new RegisterFile(pipeline.decode, pipeline.writeback),
+      new RegisterFileAccessor(pipeline.decode, pipeline.writeback),
       new IntAlu(pipeline.execute),
       new Shifter(pipeline.execute),
       new Lsu(pipeline.memory),

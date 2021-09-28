@@ -33,7 +33,7 @@ object createCheriPipeline {
       new rvp.MemoryBackbone,
       new rvp.Fetcher(pipeline.fetch),
       new rvp.Decoder(pipeline.decode),
-      new rvp.RegisterFile(pipeline.decode, pipeline.writeback),
+      new rvp.RegisterFileAccessor(pipeline.decode, pipeline.writeback),
       new rvp.IntAlu(pipeline.execute),
       new rvp.Shifter(pipeline.execute),
       new rvp.Lsu(pipeline.memory),
