@@ -22,11 +22,15 @@ case class RobEntry(implicit config: Config) extends Bundle {
   val actions = InstructionActions()
   val writeDestination = UInt(config.xlen bits)
   val writeValue = UInt(config.xlen bits)
-  val jumpTarget = UInt(config.xlen bits)
+  val actualJumpTarget = UInt(config.xlen bits)
+  val predictedJumpTarget = UInt(config.xlen bits)
   val ready = Bool()
 }
 
-class ReorderBuffer(pipeline: DynamicPipeline, registerFile: Scheduler#RegisterFile, robCapacity: Int)(implicit config: Config) extends Area with CdbListener {
+class ReorderBuffer(pipeline: DynamicPipeline,
+                    registerFile: Scheduler#RegisterFile,
+                    robCapacity: Int)
+                   (implicit config: Config) extends Area with CdbListener {
   def capacity: Int = robCapacity
   def indexBits: BitCount = log2Up(capacity) bits
 
@@ -121,7 +125,8 @@ class ReorderBuffer(pipeline: DynamicPipeline, registerFile: Scheduler#RegisterF
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
     robEntries(cdbMessage.robIndex).writeValue := cdbMessage.writeValue
     robEntries(cdbMessage.robIndex).actions := cdbMessage.actions
-    robEntries(cdbMessage.robIndex).jumpTarget := cdbMessage.jumpTarget
+    robEntries(cdbMessage.robIndex).actualJumpTarget := cdbMessage.actualJumpTarget
+    robEntries(cdbMessage.robIndex).predictedJumpTarget := cdbMessage.predictedJumpTarget
     robEntries(cdbMessage.robIndex).ready := True
   }
 
@@ -131,10 +136,11 @@ class ReorderBuffer(pipeline: DynamicPipeline, registerFile: Scheduler#RegisterF
     updatedOldestIndex := oldestIndex
     val isEmpty = oldestIndex === newestIndex && !isFull
 
+    // TODO: is the performsJump flag even necessary?
     when (!isEmpty && oldestEntry.ready) {
-      when (oldestEntry.actions.performsJump) {
+      when (oldestEntry.actualJumpTarget =/= oldestEntry.predictedJumpTarget) {
         val jumpService = pipeline.getService[JumpService]
-        jumpService.jump(oldestEntry.jumpTarget)
+        jumpService.jump(oldestEntry.actualJumpTarget)
       }
 
       when (oldestEntry.actions.writesRegister) {
@@ -142,8 +148,7 @@ class ReorderBuffer(pipeline: DynamicPipeline, registerFile: Scheduler#RegisterF
       }
 
       // removing the oldest entry and potentially resetting the ROB in case of a jump
-      // TODO: how do we keep track of the predicted jump address? a pipeline register maybe?
-      when (oldestEntry.actions.performsJump) {
+      when (oldestEntry.actualJumpTarget =/= oldestEntry.predictedJumpTarget) {
         reset()
       } otherwise {
         updatedOldestIndex := nextIndex(oldestIndex)

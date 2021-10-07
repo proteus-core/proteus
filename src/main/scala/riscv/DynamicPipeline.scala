@@ -29,14 +29,14 @@ trait DynamicPipeline extends Pipeline {
   }
 
   override def init(): Unit = {
-  }
-
-  override def connectStages(): Unit = {
     pipelineRegs = exeStages.map(stage => {
       val regs = new PipelineRegs(stage)
       regs.setName(s"pipelineRegs_${stage.stageName}")
       stage -> regs
     }).toMap
+  }
+
+  override def connectStages(): Unit = {
 
     for (stage <- exeStages) {
       stage.input(data.PC)
