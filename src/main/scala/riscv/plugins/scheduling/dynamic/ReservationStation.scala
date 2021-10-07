@@ -4,7 +4,11 @@ import riscv._
 import spinal.core._
 import spinal.lib.Stream
 
-class ReservationStation(exeStage: Stage, registerFile: Scheduler#RegisterFile, rob: ReorderBuffer, pipeline: DynamicPipeline)(implicit config: Config) extends Area with CdbListener {
+class ReservationStation(exeStage: Stage,
+                         registerFile: Scheduler#RegisterFile,
+                         rob: ReorderBuffer,
+                         pipeline: DynamicPipeline)
+                        (implicit config: Config) extends Area with CdbListener {
   setPartialName(s"RS_${exeStage.stageName}")
 
   private val rs1RobIndexNext, rs2RobIndexNext = UInt(rob.indexBits)
@@ -94,7 +98,8 @@ class ReservationStation(exeStage: Stage, registerFile: Scheduler#RegisterFile, 
     resultCdbMessage.robIndex := robEntryIndex
     resultCdbMessage.actions := InstructionActions.none
     resultCdbMessage.writeValue.assignDontCare
-    resultCdbMessage.jumpTarget.assignDontCare
+    resultCdbMessage.actualJumpTarget.assignDontCare
+    resultCdbMessage.predictedJumpTarget.assignDontCare
 
     cdbStream.valid := False
     cdbStream.payload := resultCdbMessage
@@ -118,14 +123,19 @@ class ReservationStation(exeStage: Stage, registerFile: Scheduler#RegisterFile, 
 
     // when waiting for the result, and it is ready, put in on the bus
     when (state === State.EXECUTING && exeStage.arbitration.isDone) {
+      // unconditionally forwarding pipeline registers
+      cdbStream.payload.actualJumpTarget := exeStage.output(pipeline.data.NEXT_PC)
+      // TODO: breaks if no predictor (do we want to fix?)
+      cdbStream.payload.predictedJumpTarget :=
+        pipeline.getService[BranchTargetPredictorService].getPredictedPc(exeStage)
+      cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
+
       when (exeStage.output(pipeline.data.RD_VALID)) {
         cdbStream.payload.actions.writesRegister := True
-        cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
       }
 
       when (exeStage.arbitration.jumpRequested) {
         cdbStream.payload.actions.performsJump := True
-        cdbStream.payload.jumpTarget := exeStage.output(pipeline.data.NEXT_PC)
       }
 
       cdbStream.payload.robIndex := robEntryIndex

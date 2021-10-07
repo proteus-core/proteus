@@ -50,6 +50,7 @@ object createStaticPipeline {
       new Lsu(pipeline.memory),
       new BranchUnit(pipeline.execute),
       new PcManager(0x80000000L),
+      new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
       new CsrFile(pipeline.writeback),
       new Timers,
       new MachineMode(pipeline.execute),
@@ -199,6 +200,7 @@ object createDynamicPipeline {
     pipeline.addPlugins(Seq(
       new scheduling.dynamic.Scheduler,
       new scheduling.dynamic.PcManager,
+      new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.intAlu, 8, conf.xlen),
       new IntAlu(pipeline.intAlu),
       new MulDiv(pipeline.intMul),
       new BranchUnit(pipeline.intAlu)

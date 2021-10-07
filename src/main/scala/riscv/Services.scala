@@ -289,6 +289,12 @@ trait JumpService {
     * instructions are invalidated by this method.
     */
   def setFetchPc(pc: UInt): Unit
+
+  def disableJump(stage: Stage): Unit
+}
+
+trait BranchTargetPredictorService {
+  def getPredictedPc(stage: Stage): UInt
 }
 
 trait TrapService {
