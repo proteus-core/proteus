@@ -23,6 +23,10 @@ class NoPredictionPredictor(fetchStage: Stage, executeStage: Stage)
     stage.output(Data.PREDICTED_PC)
   }
 
+  override def setPredictedPc(stage: Stage, pc: UInt): Unit = {
+    stage.input(Data.PREDICTED_PC) := pc
+  }
+
   def predictionWasCorrect(pc: UInt, nextPc: UInt, predictedPc: UInt): Bool = {
     nextPc === predictedPc
   }

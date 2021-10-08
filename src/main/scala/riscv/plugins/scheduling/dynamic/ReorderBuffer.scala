@@ -20,6 +20,7 @@ object InstructionActions {
 // TODO: revisit how these signals are used for different instruction types
 case class RobEntry(implicit config: Config) extends Bundle {
   val actions = InstructionActions()
+  val pc = UInt(config.xlen bits)
   val writeDestination = UInt(config.xlen bits)
   val writeValue = UInt(config.xlen bits)
   val actualJumpTarget = UInt(config.xlen bits)
@@ -87,9 +88,10 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     adjusted
   }
 
-  def pushEntry(destination: UInt): UInt = {
+  def pushEntry(destination: UInt, pc: UInt): UInt = {
     pushInCycle := True
     pushedEntry.ready := False
+    pushedEntry.pc := pc
     pushedEntry.actions := InstructionActions.none
     pushedEntry.writeDestination := destination.resized
     newestIndex
@@ -146,8 +148,10 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     ret.input(pipeline.data.RD_DATA) := oldestEntry.writeValue
     ret.input(pipeline.data.RD_TYPE) :=
       oldestEntry.actions.writesRegister ? RegisterType.GPR | RegisterType.NONE
-    ret.input(pipeline.data.JUMP_REQUESTED) := oldestEntry.actualJumpTarget =/= oldestEntry.predictedJumpTarget
+    ret.input(pipeline.data.JUMP_REQUESTED) := oldestEntry.actions.performsJump
     ret.input(pipeline.data.NEXT_PC) := oldestEntry.actualJumpTarget
+    ret.input(pipeline.data.PC) := oldestEntry.pc
+    pipeline.getService[BranchTargetPredictorService].setPredictedPc(ret, oldestEntry.predictedJumpTarget)
 
     // FIXME this doesn't seem the correct place to do this...
     ret.connectOutputDefaults()

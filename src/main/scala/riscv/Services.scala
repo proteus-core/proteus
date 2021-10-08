@@ -300,6 +300,7 @@ trait JumpService {
 
 trait BranchTargetPredictorService {
   def getPredictedPc(stage: Stage): UInt
+  def setPredictedPc(stage: Stage, pc: UInt): Unit
 }
 
 trait TrapService {

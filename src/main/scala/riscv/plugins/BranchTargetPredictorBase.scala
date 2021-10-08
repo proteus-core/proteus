@@ -73,6 +73,10 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
     stage.output(Data.PREDICTED_PC)
   }
 
+  override def setPredictedPc(stage: Stage, pc: UInt): Unit = {
+    stage.input(Data.PREDICTED_PC) := pc
+  }
+
   override def setup(): Unit = {
     jumpArea = jumpStage plug new JumpArea {
       import jumpStage._

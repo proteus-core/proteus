@@ -167,7 +167,7 @@ class ReservationStation(exeStage: Stage,
   def execute(): Unit = {
     val dispatchStage = pipeline.issuePipeline.stages.last
 
-    val robIndex = rob.pushEntry(dispatchStage.output(pipeline.data.RD))
+    val robIndex = rob.pushEntry(dispatchStage.output(pipeline.data.RD), dispatchStage.output(pipeline.data.PC))
     robEntryIndex := robIndex
 
     stateNext := State.EXECUTING

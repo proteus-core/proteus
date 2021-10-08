@@ -209,7 +209,7 @@ object createDynamicPipeline {
         readStage  = pipeline.issuePipeline.decode,
         writeStage = pipeline.retirementStage
       ),
-      new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.intAlu, 8, conf.xlen),
+      new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage, 8, conf.xlen),
       new IntAlu(pipeline.intAlu),
       new MulDiv(pipeline.intMul),
       new BranchUnit(pipeline.intAlu)
