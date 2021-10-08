@@ -4,18 +4,29 @@ import riscv._
 import spinal.core._
 import spinal.lib.Flow
 
+import scala.collection.mutable
+
 class PcManager extends Plugin[DynamicPipeline] with JumpService {
+  private val jumpObservers = mutable.Buffer[JumpObserver]()
+
   override def jump(stage: Stage, target: UInt, jumpType: JumpType, checkAlignment: Boolean): Unit = {
     stage.output(pipeline.data.NEXT_PC) := target
     stage.output(pipeline.data.JUMP_REQUESTED) := True
+
+    jumpObservers.foreach(_(stage, stage.value(pipeline.data.PC), target, jumpType))
+
+    // TODO: jump in static manager?
   }
 
-  // TODO: should the following functions have a body? would it maybe make sense to inherit from PcManager and use those? decent amount of duplication already
+  // TODO: should the following functions have a body? would it maybe make sense to inherit
+  //  from PcManager and use those? decent amount of duplication already
   override def addPcPayload[T <: Data](pcPayload: PcPayload[T]): Unit = ???
 
   override def onPcUpdate(observer: PcUpdateObserver): Unit = ???
 
-  override def onJump(observer: JumpObserver): Unit = ???
+  override def onJump(observer: JumpObserver): Unit = {
+    jumpObservers += observer
+  }
 
   override def jump(target: UInt): Unit = ???
 
@@ -23,7 +34,10 @@ class PcManager extends Plugin[DynamicPipeline] with JumpService {
     stage.output(pipeline.data.JUMP_REQUESTED)
   }
 
-  override def setFetchPc(pc: UInt): Unit = ???
+  override def setFetchPc(pc: UInt): Unit = {
+    val staticPcManager = pipeline.issuePipeline.getService[JumpService]
+    staticPcManager.setFetchPc(pc)
+  }
 
   override def setup(): Unit = {
     pipeline.getService[DecoderService].configure {config =>
@@ -41,6 +55,7 @@ class PcManager extends Plugin[DynamicPipeline] with JumpService {
       val jumpStage = pipeline.retirementStage
 
       when (jumpStage.arbitration.isDone && jumpRequested(jumpStage)) {
+        // TODO: invalidate other exeStages when non-global jump?
         val staticPcManager = pipeline.issuePipeline.getService[JumpService]
         staticPcManager.jump(jumpStage.output(pipeline.data.NEXT_PC))
 
@@ -49,5 +64,10 @@ class PcManager extends Plugin[DynamicPipeline] with JumpService {
         }
       }
     }
+  }
+
+  override def disableJump(stage: Stage): Unit = {
+    val staticPcManager = pipeline.issuePipeline.getService[JumpService]
+    staticPcManager.disableJump(stage)
   }
 }
