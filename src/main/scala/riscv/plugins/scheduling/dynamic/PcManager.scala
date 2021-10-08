@@ -69,5 +69,6 @@ class PcManager extends Plugin[DynamicPipeline] with JumpService {
   override def disableJump(stage: Stage): Unit = {
     val staticPcManager = pipeline.issuePipeline.getService[JumpService]
     staticPcManager.disableJump(stage)
+    stage.output(pipeline.data.JUMP_REQUESTED) := False
   }
 }
