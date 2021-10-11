@@ -1,6 +1,7 @@
 package riscv
 
 import riscv.plugins._
+import riscv.plugins.scheduling.dynamic.ReorderBuffer
 import riscv.soc._
 import spinal.core._
 import spinal.core.sim._
@@ -189,6 +190,8 @@ object createDynamicPipeline {
       override val exeStages: Seq[Stage] = Seq(intAlu, intMul)
 
       override val retirementStage = new Stage("RET")
+
+      val rob = new ReorderBuffer(this, 8)
     }
 
     pipeline.issuePipeline.addPlugins(Seq(
@@ -200,8 +203,8 @@ object createDynamicPipeline {
     ))
 
     pipeline.addPlugins(Seq(
-      new scheduling.dynamic.Scheduler,
-      new scheduling.dynamic.PcManager,
+      new scheduling.dynamic.Scheduler(pipeline.rob),
+      new scheduling.dynamic.PcManager(pipeline.rob),
       new RegisterFileAccessor(
         // FIXME this works since there is no delay between ID and dispatch. It would probably be
         // safer to create an explicit dispatch stage in the dynamic pipeline and read the registers

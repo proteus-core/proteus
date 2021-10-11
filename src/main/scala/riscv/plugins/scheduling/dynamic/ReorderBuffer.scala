@@ -185,15 +185,11 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     when (!isEmpty && oldestEntry.ready) {
       ret.arbitration.isValid := True
 
-      // removing the oldest entry and potentially resetting the ROB in case of a jump
-      when (oldestEntry.actualJumpTarget =/= oldestEntry.predictedJumpTarget) {  // TODO: get these from registers?
-        reset()
-      } otherwise {
-        updatedOldestIndex := nextIndex(oldestIndex)
-        oldestIndex := updatedOldestIndex
-        willRetire := True
-        isFull := False
-      }
+      // removing the oldest entry
+      updatedOldestIndex := nextIndex(oldestIndex)
+      oldestIndex := updatedOldestIndex
+      willRetire := True
+      isFull := False
     }
 
     when (pushInCycle) {

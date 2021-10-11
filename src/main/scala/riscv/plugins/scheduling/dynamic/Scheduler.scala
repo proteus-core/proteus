@@ -3,7 +3,7 @@ package riscv.plugins.scheduling.dynamic
 import riscv._
 import spinal.core._
 
-class Scheduler(implicit val robCapacity: Int = 8) extends Plugin[DynamicPipeline] with IssueService {
+class Scheduler(rob: ReorderBuffer) extends Plugin[DynamicPipeline] with IssueService {
   class Data { // TODO: better name for this?
     object DEST_FU extends PipelineData(Bits(pipeline.exeStages.size bits))
   }
@@ -18,7 +18,6 @@ class Scheduler(implicit val robCapacity: Int = 8) extends Plugin[DynamicPipelin
 
   override def finish(): Unit = {
     pipeline plug new Area {
-      val rob = new ReorderBuffer(pipeline, robCapacity)
       val reservationStations = pipeline.exeStages.map(stage => new ReservationStation(stage, rob, pipeline))
       val cdb = new CommonDataBus(reservationStations, rob)
       rob.build()

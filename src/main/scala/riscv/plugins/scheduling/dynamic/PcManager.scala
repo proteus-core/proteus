@@ -6,7 +6,7 @@ import spinal.lib.Flow
 
 import scala.collection.mutable
 
-class PcManager extends Plugin[DynamicPipeline] with JumpService {
+class PcManager(rob: ReorderBuffer) extends Plugin[DynamicPipeline] with JumpService {
   private val jumpObservers = mutable.Buffer[JumpObserver]()
 
   override def jump(stage: Stage, target: UInt, jumpType: JumpType, checkAlignment: Boolean): Unit = {
@@ -58,6 +58,8 @@ class PcManager extends Plugin[DynamicPipeline] with JumpService {
         // TODO: invalidate other exeStages when non-global jump?
         val staticPcManager = pipeline.issuePipeline.getService[JumpService]
         staticPcManager.jump(jumpStage.output(pipeline.data.NEXT_PC))
+
+        rob.reset()
 
         for (exeStage <- pipeline.exeStages) {
           exeStage.arbitration.isValid := False
