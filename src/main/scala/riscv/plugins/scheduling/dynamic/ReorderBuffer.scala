@@ -5,9 +5,49 @@ import spinal.core._
 
 import scala.collection.mutable
 
+trait DynBundleAccess {
+  def element[T <: Data](name: String): T
+}
+
+class DynBundle {
+  private val elementsMap = mutable.Map[String, Data]()
+
+  def addElement[T <: Data](name: String, hardType: HardType[T]) = {
+    val data = hardType()
+    elementsMap(name) = data
+  }
+
+  def createBundle: Bundle with DynBundleAccess = {
+    class NewBundle extends Bundle with DynBundleAccess {
+      private val elementsMap = DynBundle.this.elementsMap.map {case (name, data) =>
+        val clonedData = cloneOf(data)
+        clonedData.parent = this
+
+        if (OwnableRef.proposal(clonedData, this)) {
+          clonedData.setPartialName(name, Nameable.DATAMODEL_WEAK)
+        }
+
+        (name, clonedData)
+      }
+
+      override val elements = elementsMap.toSeq.to[mutable.ArrayBuffer]
+
+      override def element[T <: Data](name: String): T = {
+        elementsMap(name).asInstanceOf[T]
+      }
+
+      override def clone(): Bundle = {
+        new NewBundle
+      }
+    }
+
+    new NewBundle
+  }
+}
+
 case class RobRegisterBox() extends Bundle {
   val robIndex = UInt(32 bits) // TODO
-  val map: Map[PipelineData[Data], Data] = Map()
+  val map: Bundle with DynBundleAccess = null // TODO?
 }
 
 // TODO: revisit how these signals are used for different instruction types
@@ -31,7 +71,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   private val willRetire = False
   val isAvailable = !isFull || willRetire
 
-  val requiredRegisters = mutable.Buffer[PipelineData[Data]]()
+  val registerBundle = new DynBundle
 
   val pushInCycle = Bool()
   pushInCycle := False
@@ -134,8 +174,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     ret.arbitration.isValid := False
     ret.arbitration.isStalled := False
 
-    for (register <- requiredRegisters) {
-      ret.input(register) := oldestEntry.box.map(register)
+    for (register <- ret.inputs.keys) { // TODO: can we add a way to iterate over the bundle?
+      ret.input(register) := oldestEntry.box.map.element(register.name)
     }
 
     // FIXME this doesn't seem the correct place to do this...
@@ -168,6 +208,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
   def finish(): Unit = {
     val ret = pipeline.retirementStage
-    requiredRegisters.appendAll(ret.inputs.keys)
+    for (register <- ret.inputs.keys) {
+      registerBundle.addElement(register.name, register.dataType)
+    }
   }
 }

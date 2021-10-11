@@ -107,6 +107,7 @@ class ReservationStation(exeStage: Stage,
     resultCdbMessage.writeValue.assignDontCare
 
     resultUdbMessage.robIndex.assignDontCare()
+    resultUdbMessage.map.assignDontCare()
 
     udbStream.valid := False
     udbStream.payload := resultUdbMessage
@@ -135,13 +136,13 @@ class ReservationStation(exeStage: Stage,
     when (state === State.EXECUTING && exeStage.arbitration.isDone) {
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
 
-      val jumpService = pipeline.getService[JumpService]
-
       cdbStream.payload.robIndex := robEntryIndex
       udbStream.payload.robIndex := robEntryIndex.resized
 
-      for (register <- rob.requiredRegisters) {
-        udbStream.payload.map(register) := exeStage.output(register)
+      resultUdbMessage.map := rob.registerBundle.createBundle
+
+      for (register <- pipeline.retirementStage.inputs.keys) {
+        udbStream.payload.map.element(register.name) := exeStage.output(register)
       }
 
       cdbStream.valid := True
