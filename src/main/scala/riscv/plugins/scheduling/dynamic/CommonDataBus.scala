@@ -9,10 +9,7 @@ import spinal.lib.{Stream, StreamArbiterFactory}
 //  structure? (seems to make more and more sense as we have more and more signals)
 case class CdbMessage(robIndexBits: BitCount)(implicit config: Config) extends Bundle {
   val robIndex: UInt = UInt(robIndexBits)
-  val actions: InstructionActions = InstructionActions()
   val writeValue: UInt = UInt(config.xlen bits)
-  val actualJumpTarget: UInt = UInt(config.xlen bits)
-  val predictedJumpTarget: UInt = UInt(config.xlen bits)
 }
 
 trait CdbListener {
@@ -33,6 +30,20 @@ class CommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBu
       for (listener <- listeners) {
         listener.onCdbMessage(arbitratedInputs.payload)
       }
+    } otherwise {
+      arbitratedInputs.ready := False
+    }
+  }
+}
+
+class UncommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBuffer) extends Area {
+  val inputs: Vec[Stream[RobRegisterBox]] = Vec(Stream(HardType(RobRegisterBox())), reservationStations.size)
+  private val arbitratedInputs = StreamArbiterFactory.roundRobin.on(inputs)
+
+  def build(): Unit = {
+    when (arbitratedInputs.valid) {
+      arbitratedInputs.ready := True
+      rob.onUdbMessage(arbitratedInputs.payload)
     } otherwise {
       arbitratedInputs.ready := False
     }

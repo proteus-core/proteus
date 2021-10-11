@@ -27,9 +27,15 @@ class ReservationStation(exeStage: Stage,
   private val stateNext = State()
   private val state = RegNext(stateNext).init(State.IDLE)
 
+  private val cdbWaitingNext, udbWaitingNext = Bool() // TODO: is this necessary?
+  private val cdbWaiting = RegNext(cdbWaitingNext).init(False)
+  private val udbWaiting = RegNext(udbWaitingNext).init(False)
+
   private val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
+  private val resultUdbMessage = Reg(RobRegisterBox())
 
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
+  val udbStream: Stream[RobRegisterBox] = Stream(HardType(RobRegisterBox()))
 
   private val regs = pipeline.pipelineRegs(exeStage)
 
@@ -92,13 +98,18 @@ class ReservationStation(exeStage: Stage,
     rs1WaitingNext := rs1Waiting
     rs2WaitingNext := rs2Waiting
 
+    cdbWaitingNext := cdbWaiting
+    udbWaitingNext := udbWaiting
+
     stateNext := state
 
-    resultCdbMessage.robIndex := robEntryIndex
-    resultCdbMessage.actions := InstructionActions.none
+    resultCdbMessage.robIndex := robEntryIndex  // TODO: needed?
     resultCdbMessage.writeValue.assignDontCare
-    resultCdbMessage.actualJumpTarget.assignDontCare
-    resultCdbMessage.predictedJumpTarget.assignDontCare
+
+    resultUdbMessage.robIndex.assignDontCare()
+
+    udbStream.valid := False
+    udbStream.payload := resultUdbMessage
 
     cdbStream.valid := False
     cdbStream.payload := resultCdbMessage
@@ -122,43 +133,51 @@ class ReservationStation(exeStage: Stage,
 
     // when waiting for the result, and it is ready, put in on the bus
     when (state === State.EXECUTING && exeStage.arbitration.isDone) {
-      // unconditionally forwarding pipeline registers
-      cdbStream.payload.actualJumpTarget := exeStage.output(pipeline.data.NEXT_PC)
-      // TODO: breaks if no predictor (do we want to fix?)
-      cdbStream.payload.predictedJumpTarget :=
-        pipeline.getService[BranchTargetPredictorService].getPredictedPc(exeStage)
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
-
-      when (exeStage.output(pipeline.data.RD_VALID)) {
-        cdbStream.payload.actions.writesRegister := True
-      }
 
       val jumpService = pipeline.getService[JumpService]
 
-      when (jumpService.jumpRequested(exeStage)) {
-        cdbStream.payload.actions.performsJump := True
+      cdbStream.payload.robIndex := robEntryIndex
+      udbStream.payload.robIndex := robEntryIndex.resized
+
+      for (register <- rob.requiredRegisters) {
+        udbStream.payload.map(register) := exeStage.output(register)
       }
 
-      cdbStream.payload.robIndex := robEntryIndex
       cdbStream.valid := True
+      udbStream.valid := True
 
       // Override the assignment of resultCdbMessage to make sure data can be sent in later cycles
       // in case of contention in this cycle
       resultCdbMessage := cdbStream.payload
+      resultUdbMessage := udbStream.payload
 
       when (cdbStream.ready) {
+        cdbWaitingNext := False
+      }
+      when (udbStream.ready) {
+        udbWaitingNext := False
+      }
+
+      when (cdbStream.ready && udbStream.ready) {
         reset()
       } otherwise {
         stateNext := State.BROADCASTING_RESULT
       }
     }
 
-    // if the result is on the bus and it has been acknowledged, make the RS
+    // if the result is on the buses and it has been acknowledged, make the RS
     // available again
     when (state === State.BROADCASTING_RESULT) {
-      cdbStream.valid := True
+      when (cdbStream.ready && cdbWaiting) {
+        cdbWaitingNext := False
+      }
 
-      when (cdbStream.ready) {
+      when (udbStream.ready && udbWaiting) {
+        udbWaitingNext := False
+      }
+
+      when (!cdbWaiting && !udbWaiting) {
         reset()
       }
     }

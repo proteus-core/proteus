@@ -3,28 +3,18 @@ package riscv.plugins.scheduling.dynamic
 import riscv._
 import spinal.core._
 
-case class InstructionActions() extends Bundle {
-  val writesRegister = Bool()
-  val performsJump = Bool()
-}
+import scala.collection.mutable
 
-object InstructionActions {
-  def none(): InstructionActions = {
-    val actions = InstructionActions()
-    actions.writesRegister := False
-    actions.performsJump := False
-    actions
-  }
+case class RobRegisterBox() extends Bundle {
+  val robIndex = UInt(32 bits) // TODO
+  val map: Map[PipelineData[Data], Data] = Map()
 }
 
 // TODO: revisit how these signals are used for different instruction types
 case class RobEntry(implicit config: Config) extends Bundle {
-  val actions = InstructionActions()
-  val pc = UInt(config.xlen bits)
+  val box = RobRegisterBox()  // TODO: possible redundancy between RD and RD_DATA, and the next two variables
   val writeDestination = UInt(config.xlen bits)
   val writeValue = UInt(config.xlen bits)
-  val actualJumpTarget = UInt(config.xlen bits)
-  val predictedJumpTarget = UInt(config.xlen bits)
   val ready = Bool()
 }
 
@@ -40,6 +30,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   private val isFull = RegInit(False)
   private val willRetire = False
   val isAvailable = !isFull || willRetire
+
+  val requiredRegisters = mutable.Buffer[PipelineData[Data]]()
 
   val pushInCycle = Bool()
   pushInCycle := False
@@ -91,8 +83,6 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   def pushEntry(destination: UInt, pc: UInt): UInt = {
     pushInCycle := True
     pushedEntry.ready := False
-    pushedEntry.pc := pc
-    pushedEntry.actions := InstructionActions.none
     pushedEntry.writeDestination := destination.resized
     newestIndex
   }
@@ -125,10 +115,11 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
     robEntries(cdbMessage.robIndex).writeValue := cdbMessage.writeValue
-    robEntries(cdbMessage.robIndex).actions := cdbMessage.actions
-    robEntries(cdbMessage.robIndex).actualJumpTarget := cdbMessage.actualJumpTarget
-    robEntries(cdbMessage.robIndex).predictedJumpTarget := cdbMessage.predictedJumpTarget
     robEntries(cdbMessage.robIndex).ready := True
+  }
+
+  def onUdbMessage(udbMessage: RobRegisterBox): Unit = {
+    robEntries(udbMessage.robIndex.resized).box := udbMessage
   }
 
   def build(): Unit = {
@@ -143,15 +134,9 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     ret.arbitration.isValid := False
     ret.arbitration.isStalled := False
 
-    // TODO generate ROB entries from stage inputs
-    ret.input(pipeline.data.RD) := oldestEntry.writeDestination.resized
-    ret.input(pipeline.data.RD_DATA) := oldestEntry.writeValue
-    ret.input(pipeline.data.RD_TYPE) :=
-      oldestEntry.actions.writesRegister ? RegisterType.GPR | RegisterType.NONE
-    ret.input(pipeline.data.JUMP_REQUESTED) := oldestEntry.actions.performsJump
-    ret.input(pipeline.data.NEXT_PC) := oldestEntry.actualJumpTarget
-    ret.input(pipeline.data.PC) := oldestEntry.pc
-    pipeline.getService[BranchTargetPredictorService].setPredictedPc(ret, oldestEntry.predictedJumpTarget)
+    for (register <- requiredRegisters) {
+      ret.input(register) := oldestEntry.box.map(register)
+    }
 
     // FIXME this doesn't seem the correct place to do this...
     ret.connectOutputDefaults()
@@ -161,7 +146,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       ret.arbitration.isValid := True
 
       // removing the oldest entry and potentially resetting the ROB in case of a jump
-      when (oldestEntry.actualJumpTarget =/= oldestEntry.predictedJumpTarget) {
+      when (oldestEntry.actualJumpTarget =/= oldestEntry.predictedJumpTarget) {  // TODO: get these from registers?
         reset()
       } otherwise {
         updatedOldestIndex := nextIndex(oldestIndex)
@@ -179,5 +164,10 @@ class ReorderBuffer(pipeline: DynamicPipeline,
         isFull := True
       }
     }
+  }
+
+  def finish(): Unit = {
+    val ret = pipeline.retirementStage
+    requiredRegisters.appendAll(ret.inputs.keys)
   }
 }

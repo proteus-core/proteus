@@ -28,6 +28,13 @@ class Scheduler(implicit val robCapacity: Int = 8) extends Plugin[DynamicPipelin
         rs.cdbStream >> cdb.inputs(index)
       }
 
+      rob.finish()
+      val udb = new UncommonDataBus(reservationStations, rob)
+      udb.build()
+      for ((rs, index) <- reservationStations.zipWithIndex) {
+        rs.udbStream >> udb.inputs(index)
+      }
+
       // Dispatch
       val dispatchStage = pipeline.issuePipeline.stages.last
       dispatchStage.arbitration.isStalled := False
