@@ -108,6 +108,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
 
         // HACK this forces the jump service to restart the pipeline from NEXT_PC
         arbitration.jumpRequested := True
+        output(pipeline.data.JUMP_REQUESTED) := True
       }
     }
   }
