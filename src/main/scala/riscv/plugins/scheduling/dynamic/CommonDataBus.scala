@@ -36,8 +36,8 @@ class CommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBu
   }
 }
 
-class UncommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBuffer) extends Area {
-  val inputs: Vec[Stream[RobRegisterBox]] = Vec(Stream(HardType(RobRegisterBox())), reservationStations.size)
+class UncommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBuffer, dynBundle: DynBundle) extends Area {
+  val inputs: Vec[Stream[RobRegisterBox]] = Vec(Stream(HardType(RobRegisterBox(dynBundle))), reservationStations.size)
   private val arbitratedInputs = StreamArbiterFactory.roundRobin.on(inputs)
 
   def build(): Unit = {

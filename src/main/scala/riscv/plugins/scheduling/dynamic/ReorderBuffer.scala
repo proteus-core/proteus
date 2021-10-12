@@ -49,38 +49,42 @@ class DynBundle {
   }
 }
 
-case class RobRegisterBox() extends Bundle {
+case class RobRegisterBox(dynBundle: DynBundle) extends Bundle {
   val robIndex = UInt(32 bits) // TODO
-  val map: Bundle with DynBundleAccess = null // TODO?
+  val map: Bundle with DynBundleAccess = dynBundle.createBundle
 }
 
 // TODO: revisit how these signals are used for different instruction types
-case class RobEntry(implicit config: Config) extends Bundle {
-  val box = RobRegisterBox()  // TODO: possible redundancy between RD and RD_DATA, and the next two variables
+case class RobEntry(dynBundle: DynBundle)(implicit config: Config) extends Bundle {
+  val box = RobRegisterBox(dynBundle)  // TODO: possible redundancy between RD and RD_DATA, and the next two variables
   val writeDestination = UInt(config.xlen bits)
   val writeValue = UInt(config.xlen bits)
   val ready = Bool()
+
+  override def clone(): RobEntry = {
+    RobEntry(dynBundle)
+  }
 }
 
 class ReorderBuffer(pipeline: DynamicPipeline,
-                    robCapacity: Int)
+                    robCapacity: Int,
+                    dynBundle: DynBundle)
                    (implicit config: Config) extends Area with CdbListener {
   def capacity: Int = robCapacity
   def indexBits: BitCount = log2Up(capacity) bits
 
-  val robEntries = Vec.fill(capacity)(RegInit(RobEntry().getZero))
+  val robEntries = Vec.fill(capacity)(RegInit(RobEntry(dynBundle).getZero))
   val oldestIndex = Reg(UInt(indexBits)).init(0)
   val newestIndex = Reg(UInt(indexBits)).init(0) // TODO: use built-in counter class for these?
   private val isFull = RegInit(False)
   private val willRetire = False
   val isAvailable = !isFull || willRetire
 
-  val registerBundle = new DynBundle
 
   val pushInCycle = Bool()
   pushInCycle := False
-  val pushedEntry = RobEntry()
-  pushedEntry := RobEntry().getZero
+  val pushedEntry = RobEntry(dynBundle)
+  pushedEntry := RobEntry(dynBundle).getZero
 
   def reset(): Unit = {
     oldestIndex := 0
@@ -178,13 +182,13 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     ret.arbitration.isValid := False
     ret.arbitration.isStalled := False
 
+    for (register <- ret.lastValues.keys) { // TODO: can we add a way to iterate over the bundle?
+      ret.input(register) := oldestEntry.box.map.element(register.name)
+    }
+
     // FIXME this doesn't seem the correct place to do this...
     ret.connectOutputDefaults()
     ret.connectLastValues()
-
-    for (register <- ret.inputs.keys) { // TODO: can we add a way to iterate over the bundle?
-      ret.input(register) := oldestEntry.box.map.element(register.name)
-    }
 
     when (!isEmpty && oldestEntry.ready) {
       ret.arbitration.isValid := True
@@ -207,9 +211,5 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   }
 
   def finish(): Unit = {
-    val ret = pipeline.retirementStage
-    for (register <- ret.inputs.keys) {
-      registerBundle.addElement(register.name, register.dataType)
-    }
   }
 }

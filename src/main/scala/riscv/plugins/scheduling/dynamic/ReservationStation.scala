@@ -6,7 +6,8 @@ import spinal.lib.Stream
 
 class ReservationStation(exeStage: Stage,
                          rob: ReorderBuffer,
-                         pipeline: DynamicPipeline)
+                         pipeline: DynamicPipeline,
+                         dynBundle: DynBundle)
                         (implicit config: Config) extends Area with CdbListener {
   setPartialName(s"RS_${exeStage.stageName}")
 
@@ -32,10 +33,10 @@ class ReservationStation(exeStage: Stage,
   private val udbWaiting = RegNext(udbWaitingNext).init(False)
 
   private val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
-  private val resultUdbMessage = Reg(RobRegisterBox())
+  private val resultUdbMessage = Reg(RobRegisterBox(dynBundle))
 
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
-  val udbStream: Stream[RobRegisterBox] = Stream(HardType(RobRegisterBox()))
+  val udbStream: Stream[RobRegisterBox] = Stream(HardType(RobRegisterBox(dynBundle)))
 
   private val regs = pipeline.pipelineRegs(exeStage)
 
@@ -106,9 +107,6 @@ class ReservationStation(exeStage: Stage,
     resultCdbMessage.robIndex := robEntryIndex  // TODO: needed?
     resultCdbMessage.writeValue.assignDontCare
 
-    resultUdbMessage.robIndex.assignDontCare()
-    resultUdbMessage.map.assignDontCare()
-
     udbStream.valid := False
     udbStream.payload := resultUdbMessage
 
@@ -139,10 +137,8 @@ class ReservationStation(exeStage: Stage,
       cdbStream.payload.robIndex := robEntryIndex
       udbStream.payload.robIndex := robEntryIndex.resized
 
-      resultUdbMessage.map := rob.registerBundle.createBundle
-
       for (register <- pipeline.retirementStage.inputs.keys) {
-        udbStream.payload.map.element(register.name) := exeStage.output(register)  // TODO: not always UInt
+        udbStream.payload.map.element(register.name) := exeStage.output(register)
       }
 
       cdbStream.valid := True

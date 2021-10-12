@@ -190,9 +190,8 @@ object createDynamicPipeline {
       override val exeStages: Seq[Stage] = Seq(intAlu, intMul)
 
       override val retirementStage = new Stage("RET")
-
-      val rob = new ReorderBuffer(this, 8)
     }
+
 
     pipeline.issuePipeline.addPlugins(Seq(
       new scheduling.static.Scheduler(canStallExternally = true),
@@ -203,8 +202,8 @@ object createDynamicPipeline {
     ))
 
     pipeline.addPlugins(Seq(
-      new scheduling.dynamic.Scheduler(pipeline.rob),
-      new scheduling.dynamic.PcManager(pipeline.rob),
+      new scheduling.dynamic.Scheduler,
+      new scheduling.dynamic.PcManager,
       new RegisterFileAccessor(
         // FIXME this works since there is no delay between ID and dispatch. It would probably be
         // safer to create an explicit dispatch stage in the dynamic pipeline and read the registers

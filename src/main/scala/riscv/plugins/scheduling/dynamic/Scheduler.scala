@@ -3,7 +3,7 @@ package riscv.plugins.scheduling.dynamic
 import riscv._
 import spinal.core._
 
-class Scheduler(rob: ReorderBuffer) extends Plugin[DynamicPipeline] with IssueService {
+class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
   class Data { // TODO: better name for this?
     object DEST_FU extends PipelineData(Bits(pipeline.exeStages.size bits))
   }
@@ -18,17 +18,30 @@ class Scheduler(rob: ReorderBuffer) extends Plugin[DynamicPipeline] with IssueSe
 
   override def finish(): Unit = {
     pipeline plug new Area {
-      val reservationStations = pipeline.exeStages.map(stage => new ReservationStation(stage, rob, pipeline))
-      val cdb = new CommonDataBus(reservationStations, rob)
+      val registerBundle = new DynBundle
+
+      val ret = pipeline.retirementStage
+      for (register <- ret.lastValues.keys) {
+        registerBundle.addElement(register.name, register.dataType)
+      }
+
+      pipeline.rob = new ReorderBuffer(pipeline, 8, registerBundle)
+
+      val rob = pipeline.rob
+
       rob.build()
       rob.finish()
+
+
+      val reservationStations = pipeline.exeStages.map(stage => new ReservationStation(stage, rob, pipeline, registerBundle))
+      val cdb = new CommonDataBus(reservationStations, rob)
       cdb.build()
       for ((rs, index) <- reservationStations.zipWithIndex) {
         rs.build()
         rs.cdbStream >> cdb.inputs(index)
       }
 
-      val udb = new UncommonDataBus(reservationStations, rob)
+      val udb = new UncommonDataBus(reservationStations, rob, registerBundle)
       udb.build()
       for ((rs, index) <- reservationStations.zipWithIndex) {
         rs.udbStream >> udb.inputs(index)

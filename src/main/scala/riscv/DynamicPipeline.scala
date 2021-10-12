@@ -1,5 +1,6 @@
 package riscv
 
+import riscv.plugins.scheduling.dynamic.ReorderBuffer
 import spinal.core._
 
 import scala.reflect.ClassTag
@@ -7,6 +8,7 @@ import scala.reflect.ClassTag
 trait DynamicPipeline extends Pipeline {
   val issuePipeline: StaticPipeline
   val exeStages: Seq[Stage]
+  var rob: ReorderBuffer = null
 
   var pipelineRegs: Map[Stage, PipelineRegs] = null
 

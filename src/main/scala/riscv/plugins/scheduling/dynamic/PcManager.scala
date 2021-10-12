@@ -6,7 +6,7 @@ import spinal.lib.Flow
 
 import scala.collection.mutable
 
-class PcManager(rob: ReorderBuffer) extends Plugin[DynamicPipeline] with JumpService {
+class PcManager() extends Plugin[DynamicPipeline] with JumpService {
   private val jumpObservers = mutable.Buffer[JumpObserver]()
 
   override def jump(stage: Stage, target: UInt, jumpType: JumpType, checkAlignment: Boolean): Unit = {
@@ -59,7 +59,7 @@ class PcManager(rob: ReorderBuffer) extends Plugin[DynamicPipeline] with JumpSer
         val staticPcManager = pipeline.issuePipeline.getService[JumpService]
         staticPcManager.jump(jumpStage.output(pipeline.data.NEXT_PC))
 
-        rob.reset()
+        pipeline.rob.reset()
 
         for (exeStage <- pipeline.exeStages) {
           exeStage.arbitration.isValid := False
