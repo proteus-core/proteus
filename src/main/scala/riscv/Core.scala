@@ -88,7 +88,7 @@ object CoreSim {
     SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
-      val byteDevSim = new sim.StdioByteDev(dut.io.byteDev)
+      val byteDevSim = new riscv.sim.StdioByteDev(dut.io.byteDev)
 
       var done = false
 
