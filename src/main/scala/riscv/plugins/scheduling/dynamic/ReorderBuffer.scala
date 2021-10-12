@@ -6,7 +6,11 @@ import spinal.core._
 import scala.collection.mutable
 
 trait DynBundleAccess {
-  def element[T <: Data](name: String): T
+  def element(name: String): Data
+
+  def elementAs[T <: Data](name: String): T = {
+    element(name).asInstanceOf[T]
+  }
 }
 
 class DynBundle {
@@ -32,8 +36,8 @@ class DynBundle {
 
       override val elements = elementsMap.toSeq.to[mutable.ArrayBuffer]
 
-      override def element[T <: Data](name: String): T = {
-        elementsMap(name).asInstanceOf[T]
+      override def element(name: String): Data = {
+        elementsMap(name)
       }
 
       override def clone(): Bundle = {
@@ -174,13 +178,13 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     ret.arbitration.isValid := False
     ret.arbitration.isStalled := False
 
-    for (register <- ret.inputs.keys) { // TODO: can we add a way to iterate over the bundle?
-      ret.input(register) := oldestEntry.box.map.element(register.name)
-    }
-
     // FIXME this doesn't seem the correct place to do this...
     ret.connectOutputDefaults()
     ret.connectLastValues()
+
+    for (register <- ret.inputs.keys) { // TODO: can we add a way to iterate over the bundle?
+      ret.input(register) := oldestEntry.box.map.element(register.name)
+    }
 
     when (!isEmpty && oldestEntry.ready) {
       ret.arbitration.isValid := True

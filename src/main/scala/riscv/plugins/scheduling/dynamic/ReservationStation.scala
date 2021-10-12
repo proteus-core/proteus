@@ -142,7 +142,7 @@ class ReservationStation(exeStage: Stage,
       resultUdbMessage.map := rob.registerBundle.createBundle
 
       for (register <- pipeline.retirementStage.inputs.keys) {
-        udbStream.payload.map.element[UInt](register.name) := exeStage.output(register)  // TODO: not always UInt
+        udbStream.payload.map.element(register.name) := exeStage.output(register)  // TODO: not always UInt
       }
 
       cdbStream.valid := True
