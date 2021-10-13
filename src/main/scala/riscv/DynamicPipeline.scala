@@ -40,15 +40,21 @@ trait DynamicPipeline extends Pipeline {
   override def connectStages(): Unit = {
 
     for (stage <- exeStages) {
+      // TODO: are these two necessary? (later assigned anyway in the loop, right?)
       stage.input(data.PC)
       stage.input(data.IR)
+
       stage.output(data.PC)
       stage.output(data.IR)
+
+      // HACK!
+      stage.output(data.RD)
+      stage.output(data.RD_TYPE)
     }
 
     val issueStage = issuePipeline.stages.last
 
-    for (stage <- exeStages) {
+    for (stage <- exeStages :+ retirementStage) {
       // FIXME copy-pasted from StaticPipeline
       for (valueData <- stage.lastValues.keys) {
         if (!stage.outputs.contains(valueData)) {
@@ -60,7 +66,9 @@ trait DynamicPipeline extends Pipeline {
       for (outputData <- stage.outputs.keys) {
         stage.input(outputData)
       }
+    }
 
+    for (stage <- exeStages) {
       for ((inputData, input) <- stage.inputs) {
         val (regInput, regOutput) = pipelineRegs(stage).addReg(inputData)
         input := regOutput

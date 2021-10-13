@@ -21,7 +21,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       val registerBundle = new DynBundle
 
       val ret = pipeline.retirementStage
-      for (register <- ret.lastValues.keys) {
+      for (register <- ret.lastValues.keys) { // TODO: should it be (values U outputs).keys?
         registerBundle.addElement(register.name, register.dataType)
       }
 

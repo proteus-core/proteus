@@ -81,6 +81,8 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
     jumpArea = jumpStage plug new JumpArea {
       import jumpStage._
 
+      value(pipeline.data.JUMP_REQUESTED) // TODO: hack
+
       jumpIo.valid := False
       jumpIo.currentPc := output(pipeline.data.PC)
       jumpIo.target := output(pipeline.data.NEXT_PC)

@@ -137,9 +137,6 @@ class ReservationStation(exeStage: Stage,
       cdbStream.payload.robIndex := robEntryIndex
       udbStream.payload.robIndex := robEntryIndex.resized
 
-      exeStage.output(pipeline.data.RD) // ERROR: missing register value in this stage, even this doesn't solve it
-      exeStage.output(pipeline.data.RD_TYPE) // ERROR: missing register value in this stage, even this doesn't solve it
-
       for (register <- pipeline.retirementStage.lastValues.keys) {
         udbStream.payload.map.element(register.name) := exeStage.output(register)
       }
