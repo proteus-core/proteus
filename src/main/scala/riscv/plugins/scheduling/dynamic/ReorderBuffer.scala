@@ -161,6 +161,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     (found, ready, value, ix)
   }
 
+  // TODO: could we replace the writeValue with RD_VALUE received on the Udb?
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
     robEntries(cdbMessage.robIndex).writeValue := cdbMessage.writeValue
     robEntries(cdbMessage.robIndex).ready := True
