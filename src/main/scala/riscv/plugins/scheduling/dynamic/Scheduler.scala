@@ -41,10 +41,10 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
         rs.cdbStream >> cdb.inputs(index)
       }
 
-      val udb = new UncommonDataBus(reservationStations, rob, registerBundle)
+      val udb = new RobDataBus(reservationStations, rob, registerBundle)
       udb.build()
       for ((rs, index) <- reservationStations.zipWithIndex) {
-        rs.udbStream >> udb.inputs(index)
+        rs.rdbStream >> udb.inputs(index)
       }
 
       // Dispatch

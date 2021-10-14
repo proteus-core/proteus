@@ -3,6 +3,8 @@ package riscv
 import spinal.core._
 import spinal.lib._
 
+import scala.collection.mutable
+
 object Utils {
   def signExtend[T <: BitVector](data: T, width: Int): T = {
     val dataWidth = data.getBitsWidth
@@ -40,5 +42,49 @@ object Utils {
     body.pop()
     swapContext.appendBack()
     ret
+  }
+}
+
+trait DynBundleAccess {
+  def element(name: String): Data
+
+  def elementAs[T <: Data](name: String): T = {
+    element(name).asInstanceOf[T]
+  }
+}
+
+class DynBundle {
+  private val elementsMap = mutable.Map[String, Data]()
+
+  def addElement[T <: Data](name: String, hardType: HardType[T]) = {
+    val data = hardType()
+    elementsMap(name) = data
+  }
+
+  def createBundle: Bundle with DynBundleAccess = {
+    class NewBundle extends Bundle with DynBundleAccess {
+      private val elementsMap = DynBundle.this.elementsMap.map {case (name, data) =>
+        val clonedData = cloneOf(data)
+        clonedData.parent = this
+
+        if (OwnableRef.proposal(clonedData, this)) {
+          clonedData.setPartialName(name, Nameable.DATAMODEL_WEAK)
+        }
+
+        (name, clonedData)
+      }
+
+      override val elements = elementsMap.toSeq.to[mutable.ArrayBuffer]
+
+      override def element(name: String): Data = {
+        elementsMap(name)
+      }
+
+      override def clone(): Bundle = {
+        new NewBundle
+      }
+    }
+
+    new NewBundle
   }
 }

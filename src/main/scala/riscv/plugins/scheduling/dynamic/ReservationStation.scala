@@ -28,15 +28,15 @@ class ReservationStation(exeStage: Stage,
   private val stateNext = State()
   private val state = RegNext(stateNext).init(State.IDLE)
 
-  private val cdbWaitingNext, udbWaitingNext = Bool() // TODO: is this necessary?
+  private val cdbWaitingNext, rdbWaitingNext = Bool() // TODO: is this necessary?
   private val cdbWaiting = RegNext(cdbWaitingNext).init(False)
-  private val udbWaiting = RegNext(udbWaitingNext).init(False)
+  private val rdbWaiting = RegNext(rdbWaitingNext).init(False)
 
   private val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
-  private val resultUdbMessage = Reg(RobRegisterBox(dynBundle))
+  private val resultRdbMessage = Reg(RobRegisterBox(dynBundle))
 
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
-  val udbStream: Stream[RobRegisterBox] = Stream(HardType(RobRegisterBox(dynBundle)))
+  val rdbStream: Stream[RobRegisterBox] = Stream(HardType(RobRegisterBox(dynBundle)))
 
   private val regs = pipeline.pipelineRegs(exeStage)
 
@@ -100,15 +100,15 @@ class ReservationStation(exeStage: Stage,
     rs2WaitingNext := rs2Waiting
 
     cdbWaitingNext := cdbWaiting
-    udbWaitingNext := udbWaiting
+    rdbWaitingNext := rdbWaiting
 
     stateNext := state
 
     resultCdbMessage.robIndex := robEntryIndex  // TODO: needed?
     resultCdbMessage.writeValue.assignDontCare
 
-    udbStream.valid := False
-    udbStream.payload := resultUdbMessage
+    rdbStream.valid := False
+    rdbStream.payload := resultRdbMessage
 
     cdbStream.valid := False
     cdbStream.payload := resultCdbMessage
@@ -135,28 +135,28 @@ class ReservationStation(exeStage: Stage,
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
 
       cdbStream.payload.robIndex := robEntryIndex
-      udbStream.payload.robIndex := robEntryIndex.resized
+      rdbStream.payload.robIndex := robEntryIndex.resized
 
       for (register <- pipeline.retirementStage.lastValues.keys) {
-        udbStream.payload.map.element(register.name) := exeStage.output(register)
+        rdbStream.payload.map.element(register.name) := exeStage.output(register)
       }
 
       cdbStream.valid := True
-      udbStream.valid := True
+      rdbStream.valid := True
 
       // Override the assignment of resultCdbMessage to make sure data can be sent in later cycles
       // in case of contention in this cycle
       resultCdbMessage := cdbStream.payload
-      resultUdbMessage := udbStream.payload
+      resultRdbMessage := rdbStream.payload
 
       when (cdbStream.ready) {
         cdbWaitingNext := False
       }
-      when (udbStream.ready) {
-        udbWaitingNext := False
+      when (rdbStream.ready) {
+        rdbWaitingNext := False
       }
 
-      when (cdbStream.ready && udbStream.ready) {
+      when (cdbStream.ready && rdbStream.ready) {
         reset()
       } otherwise {
         stateNext := State.BROADCASTING_RESULT
@@ -170,11 +170,11 @@ class ReservationStation(exeStage: Stage,
         cdbWaitingNext := False
       }
 
-      when (udbStream.ready && udbWaiting) {
-        udbWaitingNext := False
+      when (rdbStream.ready && rdbWaiting) {
+        rdbWaitingNext := False
       }
 
-      when (!cdbWaiting && !udbWaiting) {
+      when (!cdbWaiting && !rdbWaiting) {
         reset()
       }
     }
@@ -183,7 +183,7 @@ class ReservationStation(exeStage: Stage,
   def execute(): Unit = {
     val dispatchStage = pipeline.issuePipeline.stages.last
 
-    val robIndex = rob.pushEntry(dispatchStage.output(pipeline.data.RD), dispatchStage.output(pipeline.data.PC))
+    val robIndex = rob.pushEntry(dispatchStage.output(pipeline.data.RD))
     robEntryIndex := robIndex
 
     stateNext := State.EXECUTING

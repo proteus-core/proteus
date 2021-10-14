@@ -3,52 +3,6 @@ package riscv.plugins.scheduling.dynamic
 import riscv._
 import spinal.core._
 
-import scala.collection.mutable
-
-trait DynBundleAccess {
-  def element(name: String): Data
-
-  def elementAs[T <: Data](name: String): T = {
-    element(name).asInstanceOf[T]
-  }
-}
-
-class DynBundle {
-  private val elementsMap = mutable.Map[String, Data]()
-
-  def addElement[T <: Data](name: String, hardType: HardType[T]) = {
-    val data = hardType()
-    elementsMap(name) = data
-  }
-
-  def createBundle: Bundle with DynBundleAccess = {
-    class NewBundle extends Bundle with DynBundleAccess {
-      private val elementsMap = DynBundle.this.elementsMap.map {case (name, data) =>
-        val clonedData = cloneOf(data)
-        clonedData.parent = this
-
-        if (OwnableRef.proposal(clonedData, this)) {
-          clonedData.setPartialName(name, Nameable.DATAMODEL_WEAK)
-        }
-
-        (name, clonedData)
-      }
-
-      override val elements = elementsMap.toSeq.to[mutable.ArrayBuffer]
-
-      override def element(name: String): Data = {
-        elementsMap(name)
-      }
-
-      override def clone(): Bundle = {
-        new NewBundle
-      }
-    }
-
-    new NewBundle
-  }
-}
-
 case class RobRegisterBox(dynBundle: DynBundle) extends Bundle {
   val robIndex = UInt(32 bits) // TODO
   val map: Bundle with DynBundleAccess = dynBundle.createBundle
@@ -128,7 +82,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     adjusted
   }
 
-  def pushEntry(destination: UInt, pc: UInt): UInt = {
+  def pushEntry(destination: UInt): UInt = {
     pushInCycle := True
     pushedEntry.ready := False
     pushedEntry.writeDestination := destination.resized
@@ -166,8 +120,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     robEntries(cdbMessage.robIndex).ready := True
   }
 
-  def onUdbMessage(udbMessage: RobRegisterBox): Unit = {
-    robEntries(udbMessage.robIndex.resized).box := udbMessage
+  def onRdbMessage(rdbMessage: RobRegisterBox): Unit = {
+    robEntries(rdbMessage.robIndex.resized).box := rdbMessage
   }
 
   def build(): Unit = {

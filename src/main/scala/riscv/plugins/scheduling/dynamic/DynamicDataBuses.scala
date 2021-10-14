@@ -1,6 +1,6 @@
 package riscv.plugins.scheduling.dynamic
 
-import riscv.Config
+import riscv.{Config, DynBundle}
 import spinal.core._
 import spinal.lib.{Stream, StreamArbiterFactory}
 
@@ -36,14 +36,14 @@ class CommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBu
   }
 }
 
-class UncommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBuffer, dynBundle: DynBundle) extends Area {
+class RobDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBuffer, dynBundle: DynBundle) extends Area {
   val inputs: Vec[Stream[RobRegisterBox]] = Vec(Stream(HardType(RobRegisterBox(dynBundle))), reservationStations.size)
   private val arbitratedInputs = StreamArbiterFactory.roundRobin.on(inputs)
 
   def build(): Unit = {
     when (arbitratedInputs.valid) {
       arbitratedInputs.ready := True
-      rob.onUdbMessage(arbitratedInputs.payload)
+      rob.onRdbMessage(arbitratedInputs.payload)
     } otherwise {
       arbitratedInputs.ready := False
     }
