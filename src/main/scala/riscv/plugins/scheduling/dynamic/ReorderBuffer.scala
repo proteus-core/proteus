@@ -3,31 +3,30 @@ package riscv.plugins.scheduling.dynamic
 import riscv._
 import spinal.core._
 
-case class RobRegisterBox(dynBundle: DynBundle) extends Bundle {
-  val robIndex = UInt(32 bits) // TODO
-  val map: Bundle with DynBundleAccess = dynBundle.createBundle
+case class RdbMessage(retirementRegisters: DynBundle, robIndexBits: BitCount) extends Bundle {
+  val robIndex = UInt(robIndexBits)
+  val registerMap: Bundle with DynBundleAccess = retirementRegisters.createBundle
 }
 
 // TODO: revisit how these signals are used for different instruction types
-case class RobEntry(dynBundle: DynBundle)(implicit config: Config) extends Bundle {
-  val box = RobRegisterBox(dynBundle)  // TODO: possible redundancy between RD and RD_DATA, and the next two variables
+case class RobEntry(retirementRegisters: DynBundle)(implicit config: Config) extends Bundle {
+  val registerMap: Bundle with DynBundleAccess = retirementRegisters.createBundle  // TODO: possible redundancy between RD and the next variable
   val writeDestination = UInt(config.xlen bits)
-  val writeValue = UInt(config.xlen bits)
   val ready = Bool()
 
   override def clone(): RobEntry = {
-    RobEntry(dynBundle)
+    RobEntry(retirementRegisters)
   }
 }
 
 class ReorderBuffer(pipeline: DynamicPipeline,
                     robCapacity: Int,
-                    dynBundle: DynBundle)
-                   (implicit config: Config) extends Area with CdbListener {
+                    retirementRegisters: DynBundle)
+                   (implicit config: Config) extends Area {
   def capacity: Int = robCapacity
   def indexBits: BitCount = log2Up(capacity) bits
 
-  val robEntries = Vec.fill(capacity)(RegInit(RobEntry(dynBundle).getZero))
+  val robEntries = Vec.fill(capacity)(RegInit(RobEntry(retirementRegisters).getZero))
   val oldestIndex = Reg(UInt(indexBits)).init(0)
   val newestIndex = Reg(UInt(indexBits)).init(0) // TODO: use built-in counter class for these?
   private val isFull = RegInit(False)
@@ -37,8 +36,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
   val pushInCycle = Bool()
   pushInCycle := False
-  val pushedEntry = RobEntry(dynBundle)
-  pushedEntry := RobEntry(dynBundle).getZero
+  val pushedEntry = RobEntry(retirementRegisters)
+  pushedEntry := RobEntry(retirementRegisters).getZero
 
   def reset(): Unit = {
     oldestIndex := 0
@@ -108,21 +107,16 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       when (isValidIndex(index) && entry.writeDestination === regId && regId =/= 0) {
         found := True
         ready := entry.ready
-        value := entry.writeValue
+        value := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.name)  // TODO: why didn't it work with `element`?
         ix := index.resized
       }
     }
     (found, ready, value, ix)
   }
 
-  // TODO: could we replace the writeValue with RD_VALUE received on the Udb?
-  override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
-    robEntries(cdbMessage.robIndex).writeValue := cdbMessage.writeValue
-    robEntries(cdbMessage.robIndex).ready := True
-  }
-
-  def onRdbMessage(rdbMessage: RobRegisterBox): Unit = {
-    robEntries(rdbMessage.robIndex.resized).box := rdbMessage
+  def onRdbMessage(rdbMessage: RdbMessage): Unit = {
+    robEntries(rdbMessage.robIndex).registerMap := rdbMessage.registerMap
+    robEntries(rdbMessage.robIndex).ready := True
   }
 
   def build(): Unit = {
@@ -138,7 +132,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     ret.arbitration.isStalled := False
 
     for (register <- ret.lastValues.keys) { // TODO: can we add a way to iterate over the bundle?
-      ret.input(register) := oldestEntry.box.map.element(register.name)
+      ret.input(register) := oldestEntry.registerMap.element(register.name)
     }
 
     // FIXME this doesn't seem the correct place to do this...
@@ -163,8 +157,5 @@ class ReorderBuffer(pipeline: DynamicPipeline,
         isFull := True
       }
     }
-  }
-
-  def finish(): Unit = {
   }
 }

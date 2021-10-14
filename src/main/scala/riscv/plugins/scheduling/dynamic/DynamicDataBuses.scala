@@ -26,7 +26,7 @@ class CommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBu
   def build(): Unit = {
     when (arbitratedInputs.valid) {
       arbitratedInputs.ready := True
-      val listeners = reservationStations :+ rob
+      val listeners = reservationStations
       for (listener <- listeners) {
         listener.onCdbMessage(arbitratedInputs.payload)
       }
@@ -36,8 +36,8 @@ class CommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBu
   }
 }
 
-class RobDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBuffer, dynBundle: DynBundle) extends Area {
-  val inputs: Vec[Stream[RobRegisterBox]] = Vec(Stream(HardType(RobRegisterBox(dynBundle))), reservationStations.size)
+class RobDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBuffer, retirementRegisters: DynBundle) extends Area {
+  val inputs: Vec[Stream[RdbMessage]] = Vec(Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits))), reservationStations.size)
   private val arbitratedInputs = StreamArbiterFactory.roundRobin.on(inputs)
 
   def build(): Unit = {

@@ -33,10 +33,10 @@ class ReservationStation(exeStage: Stage,
   private val rdbWaiting = RegNext(rdbWaitingNext).init(False)
 
   private val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
-  private val resultRdbMessage = Reg(RobRegisterBox(dynBundle))
+  private val resultRdbMessage = Reg(RdbMessage(dynBundle, rob.indexBits))
 
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
-  val rdbStream: Stream[RobRegisterBox] = Stream(HardType(RobRegisterBox(dynBundle)))
+  val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(dynBundle, rob.indexBits)))
 
   private val regs = pipeline.pipelineRegs(exeStage)
 
@@ -138,7 +138,7 @@ class ReservationStation(exeStage: Stage,
       rdbStream.payload.robIndex := robEntryIndex.resized
 
       for (register <- pipeline.retirementStage.lastValues.keys) {
-        rdbStream.payload.map.element(register.name) := exeStage.output(register)
+        rdbStream.payload.registerMap.element(register.name) := exeStage.output(register)
       }
 
       cdbStream.valid := True
