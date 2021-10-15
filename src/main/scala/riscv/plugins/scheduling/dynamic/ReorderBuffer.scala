@@ -10,8 +10,7 @@ case class RdbMessage(retirementRegisters: DynBundle, robIndexBits: BitCount) ex
 
 // TODO: revisit how these signals are used for different instruction types
 case class RobEntry(retirementRegisters: DynBundle)(implicit config: Config) extends Bundle {
-  val registerMap: Bundle with DynBundleAccess = retirementRegisters.createBundle  // TODO: possible redundancy between RD and the next variable
-  val writeDestination = UInt(config.xlen bits)
+  val registerMap: Bundle with DynBundleAccess = retirementRegisters.createBundle
   val ready = Bool()
 
   override def clone(): RobEntry = {
@@ -84,7 +83,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   def pushEntry(destination: UInt): UInt = {
     pushInCycle := True
     pushedEntry.ready := False
-    pushedEntry.writeDestination := destination.resized
+    pushedEntry.registerMap.element(pipeline.data.RD.name) := destination.resized
     newestIndex
   }
 
@@ -104,7 +103,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       val entry = robEntries(index.resized)
 
       // last condition: prevent dependencies on x0
-      when (isValidIndex(index) && entry.writeDestination === regId && regId =/= 0) {
+      when (isValidIndex(index) && entry.registerMap.element(pipeline.data.RD.name) === regId && regId =/= 0) {
         found := True
         ready := entry.ready
         value := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.name)  // TODO: why didn't it work with `element`?
