@@ -18,11 +18,11 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
 
   override def finish(): Unit = {
     pipeline plug new Area {
-      val registerBundle = new DynBundle
+      val registerBundle = new DynBundle[PipelineData[spinal.core.Data]]
 
       val ret = pipeline.retirementStage
       for (register <- ret.lastValues.keys) { // TODO: should it be (values U outputs).keys?
-        registerBundle.addElement(register.name, register.dataType)
+        registerBundle.addElement(register, register.dataType)
       }
 
       pipeline.rob = new ReorderBuffer(pipeline, 8, registerBundle)

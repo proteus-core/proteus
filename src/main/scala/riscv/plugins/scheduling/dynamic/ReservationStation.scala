@@ -7,7 +7,7 @@ import spinal.lib.Stream
 class ReservationStation(exeStage: Stage,
                          rob: ReorderBuffer,
                          pipeline: DynamicPipeline,
-                         dynBundle: DynBundle)
+                         retirementRegisters: DynBundle[PipelineData[Data]])
                         (implicit config: Config) extends Area with CdbListener {
   setPartialName(s"RS_${exeStage.stageName}")
 
@@ -33,10 +33,10 @@ class ReservationStation(exeStage: Stage,
   private val rdbWaiting = RegNext(rdbWaitingNext).init(False)
 
   private val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
-  private val resultRdbMessage = Reg(RdbMessage(dynBundle, rob.indexBits))
+  private val resultRdbMessage = Reg(RdbMessage(retirementRegisters, rob.indexBits))
 
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
-  val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(dynBundle, rob.indexBits)))
+  val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
 
   private val regs = pipeline.pipelineRegs(exeStage)
 
@@ -137,8 +137,8 @@ class ReservationStation(exeStage: Stage,
       cdbStream.payload.robIndex := robEntryIndex
       rdbStream.payload.robIndex := robEntryIndex.resized
 
-      for (register <- pipeline.retirementStage.lastValues.keys) {
-        rdbStream.payload.registerMap.element(register.name) := exeStage.output(register)
+      for (register <- retirementRegisters.keys) {
+        rdbStream.payload.registerMap.element(register) := exeStage.output(register)
       }
 
       cdbStream.valid := True

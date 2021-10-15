@@ -4,6 +4,7 @@ import spinal.core._
 import spinal.lib._
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 object Utils {
   def signExtend[T <: BitVector](data: T, width: Int): T = {
@@ -45,39 +46,41 @@ object Utils {
   }
 }
 
-trait DynBundleAccess {
-  def element(name: String): Data
+trait DynBundleAccess[KeyType] {
+  def element(key: KeyType): Data
 
-  def elementAs[T <: Data](name: String): T = {
-    element(name).asInstanceOf[T]
+  def elementAs[T <: Data](key: KeyType): T = {
+    element(key).asInstanceOf[T]
   }
 }
 
-class DynBundle {
-  private val elementsMap = mutable.Map[String, Data]()
+class DynBundle[KeyType] {
+  private val elementsMap = mutable.Map[KeyType, Data]()
 
-  def addElement[T <: Data](name: String, hardType: HardType[T]) = {
+  val keys: Iterable[KeyType] = elementsMap.keys
+
+  def addElement[T <: Data](key: KeyType, hardType: HardType[T]) = {
     val data = hardType()
-    elementsMap(name) = data
+    elementsMap(key) = data
   }
 
-  def createBundle: Bundle with DynBundleAccess = {
-    class NewBundle extends Bundle with DynBundleAccess {
-      private val elementsMap = DynBundle.this.elementsMap.map {case (name, data) =>
+  def createBundle: Bundle with DynBundleAccess[KeyType] = {
+    class NewBundle extends Bundle with DynBundleAccess[KeyType] {
+      private val elementsMap = DynBundle.this.elementsMap.map {case (key, data) =>
         val clonedData = cloneOf(data)
         clonedData.parent = this
 
         if (OwnableRef.proposal(clonedData, this)) {
-          clonedData.setPartialName(name, Nameable.DATAMODEL_WEAK)
+          clonedData.setPartialName(key.toString, Nameable.DATAMODEL_WEAK)
         }
 
-        (name, clonedData)
+        (key, clonedData)
       }
 
-      override val elements = elementsMap.toSeq.to[mutable.ArrayBuffer]
+      override val elements: ArrayBuffer[(String, Data)] = elementsMap.map{ case (key, data) => (key.toString, data) }.toSeq.to[mutable.ArrayBuffer]
 
-      override def element(name: String): Data = {
-        elementsMap(name)
+      override def element(key: KeyType): Data = {
+        elementsMap(key)
       }
 
       override def clone(): Bundle = {

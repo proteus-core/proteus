@@ -4,6 +4,8 @@ import spinal.core._
 
 class PipelineData[T <: Data](val dataType: HardType[T]) {
   def name: String = getClass.getSimpleName.takeWhile(_ != '$')
+
+  override def toString: String = name
 }
 
 class StandardPipelineData(config: Config) {

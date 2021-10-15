@@ -3,14 +3,14 @@ package riscv.plugins.scheduling.dynamic
 import riscv._
 import spinal.core._
 
-case class RdbMessage(retirementRegisters: DynBundle, robIndexBits: BitCount) extends Bundle {
+case class RdbMessage(retirementRegisters: DynBundle[PipelineData[Data]], robIndexBits: BitCount) extends Bundle {
   val robIndex = UInt(robIndexBits)
-  val registerMap: Bundle with DynBundleAccess = retirementRegisters.createBundle
+  val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] = retirementRegisters.createBundle
 }
 
 // TODO: revisit how these signals are used for different instruction types
-case class RobEntry(retirementRegisters: DynBundle)(implicit config: Config) extends Bundle {
-  val registerMap: Bundle with DynBundleAccess = retirementRegisters.createBundle
+case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])(implicit config: Config) extends Bundle {
+  val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] = retirementRegisters.createBundle
   val ready = Bool()
 
   override def clone(): RobEntry = {
@@ -20,7 +20,7 @@ case class RobEntry(retirementRegisters: DynBundle)(implicit config: Config) ext
 
 class ReorderBuffer(pipeline: DynamicPipeline,
                     robCapacity: Int,
-                    retirementRegisters: DynBundle)
+                    retirementRegisters: DynBundle[PipelineData[Data]])
                    (implicit config: Config) extends Area {
   def capacity: Int = robCapacity
   def indexBits: BitCount = log2Up(capacity) bits
@@ -83,7 +83,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   def pushEntry(destination: UInt): UInt = {
     pushInCycle := True
     pushedEntry.ready := False
-    pushedEntry.registerMap.element(pipeline.data.RD.name) := destination.resized
+    pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := destination.resized
     newestIndex
   }
 
@@ -103,10 +103,10 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       val entry = robEntries(index.resized)
 
       // last condition: prevent dependencies on x0
-      when (isValidIndex(index) && entry.registerMap.element(pipeline.data.RD.name) === regId && regId =/= 0) {
+      when (isValidIndex(index) && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId && regId =/= 0) {
         found := True
         ready := entry.ready
-        value := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.name)  // TODO: why didn't it work with `element`?
+        value := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])  // TODO: why didn't it work with `element`?
         ix := index.resized
       }
     }
@@ -130,8 +130,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     ret.arbitration.isValid := False
     ret.arbitration.isStalled := False
 
-    for (register <- ret.lastValues.keys) { // TODO: can we add a way to iterate over the bundle?
-      ret.input(register) := oldestEntry.registerMap.element(register.name)
+    for (register <- retirementRegisters.keys) {
+      ret.input(register) := oldestEntry.registerMap.element(register)
     }
 
     // FIXME this doesn't seem the correct place to do this...

@@ -1,8 +1,8 @@
 package riscv.plugins.scheduling.dynamic
 
-import riscv.{Config, DynBundle}
+import riscv._
 import spinal.core._
-import spinal.lib.{Stream, StreamArbiterFactory}
+import spinal.lib._
 
 // TODO: can we save area by making some signals ROB-exclusive?
 // TODO: would it make sense to move the signals common to CdbMessage and RobEntry into one
@@ -36,7 +36,7 @@ class CommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBu
   }
 }
 
-class RobDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBuffer, retirementRegisters: DynBundle) extends Area {
+class RobDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBuffer, retirementRegisters: DynBundle[PipelineData[Data]]) extends Area {
   val inputs: Vec[Stream[RdbMessage]] = Vec(Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits))), reservationStations.size)
   private val arbitratedInputs = StreamArbiterFactory.roundRobin.on(inputs)
 
