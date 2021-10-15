@@ -3,13 +3,15 @@ package riscv.plugins.scheduling.dynamic
 import riscv._
 import spinal.core._
 
-case class RdbMessage(retirementRegisters: DynBundle[PipelineData[Data]], robIndexBits: BitCount) extends Bundle {
+case class RdbMessage(retirementRegisters: DynBundle[PipelineData[Data]],
+                      robIndexBits: BitCount) extends Bundle {
   val robIndex = UInt(robIndexBits)
   val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] = retirementRegisters.createBundle
 }
 
 // TODO: revisit how these signals are used for different instruction types
-case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])(implicit config: Config) extends Bundle {
+case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])
+                   (implicit config: Config) extends Bundle {
   val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] = retirementRegisters.createBundle
   val ready = Bool()
 
@@ -103,10 +105,12 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       val entry = robEntries(index.resized)
 
       // last condition: prevent dependencies on x0
-      when (isValidIndex(index) && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId && regId =/= 0) {
+      when (isValidIndex(index)
+        && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId
+        && regId =/= 0) {
         found := True
         ready := entry.ready
-        value := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])  // TODO: why didn't it work with `element`?
+        value := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
         ix := index.resized
       }
     }

@@ -77,7 +77,8 @@ class DynBundle[KeyType] {
         (key, clonedData)
       }
 
-      override val elements: ArrayBuffer[(String, Data)] = elementsMap.map{ case (key, data) => (key.toString, data) }.toSeq.to[mutable.ArrayBuffer]
+      override val elements: ArrayBuffer[(String, Data)] = elementsMap.map{
+        case (key, data) => (key.toString, data) }.toSeq.to[mutable.ArrayBuffer]
 
       override def element(key: KeyType): Data = {
         elementsMap(key)

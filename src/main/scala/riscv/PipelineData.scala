@@ -29,5 +29,7 @@ class StandardPipelineData(config: Config) {
 
   // FIXME remove once the manual connection code in ReorderBuffer.scala and
   // ReservationStation.scala is gone.
+
+  // TODO: ^ can we do this now?
   object JUMP_REQUESTED extends PipelineData(Bool())
 }

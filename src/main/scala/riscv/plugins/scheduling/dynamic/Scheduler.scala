@@ -30,7 +30,9 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       val rob = pipeline.rob
       rob.build()
 
-      val reservationStations = pipeline.exeStages.map(stage => new ReservationStation(stage, rob, pipeline, registerBundle))
+      val reservationStations = pipeline.exeStages.map(
+        stage => new ReservationStation(stage, rob, pipeline, registerBundle))
+
       val cdb = new CommonDataBus(reservationStations, rob)
       cdb.build()
       for ((rs, index) <- reservationStations.zipWithIndex) {
