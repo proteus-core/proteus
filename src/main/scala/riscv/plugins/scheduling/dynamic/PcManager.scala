@@ -2,7 +2,6 @@ package riscv.plugins.scheduling.dynamic
 
 import riscv._
 import spinal.core._
-import spinal.lib.Flow
 
 import scala.collection.mutable
 

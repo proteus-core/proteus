@@ -1,7 +1,6 @@
 package riscv
 
 import riscv.plugins._
-import riscv.plugins.scheduling.dynamic.ReorderBuffer
 import riscv.soc._
 import spinal.core._
 import spinal.core.sim._
