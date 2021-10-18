@@ -256,6 +256,11 @@ trait JumpService {
            checkAlignment: Boolean = true): Unit
 
   /**
+    * Has a jump been requested by the instruction in `stage`?
+    */
+  def jumpRequested(stage: Stage): Bool
+
+  /**
    * Add a payload that travels through the pipeline along with PC.
    * A payload will typically be a pipeline register but PcPayload provides a
    * more abstract interface: whenever PC is updated, the payload is extracted
@@ -295,6 +300,7 @@ trait JumpService {
 
 trait BranchTargetPredictorService {
   def getPredictedPc(stage: Stage): UInt
+  def setPredictedPc(stage: Stage, pc: UInt): Unit
 }
 
 trait TrapService {

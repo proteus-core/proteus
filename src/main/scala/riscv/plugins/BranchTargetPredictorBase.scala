@@ -73,15 +73,19 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
     stage.output(Data.PREDICTED_PC)
   }
 
+  override def setPredictedPc(stage: Stage, pc: UInt): Unit = {
+    stage.input(Data.PREDICTED_PC) := pc
+  }
+
   override def setup(): Unit = {
     jumpArea = jumpStage plug new JumpArea {
       import jumpStage._
 
+      val jumpService = pipeline.getService[JumpService]
+
       jumpIo.valid := False
       jumpIo.currentPc := output(pipeline.data.PC)
       jumpIo.target := output(pipeline.data.NEXT_PC)
-
-      val jumpService = pipeline.getService[JumpService]
 
       jumpService.onJump { (stage, prevPc, nextPc, jumpType) =>
         jumpType match {
@@ -103,7 +107,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
         jumpIo.target := value(pipeline.data.NEXT_PC)
 
         // HACK this forces the jump service to restart the pipeline from NEXT_PC
-        arbitration.jumpRequested := True
+        jumpService.jumpRequested(jumpStage) := True
       }
     }
   }

@@ -187,7 +187,10 @@ object createDynamicPipeline {
       val intAlu = new Stage("EX_ALU")
       val intMul = new Stage("EX_MUL")
       override val exeStages: Seq[Stage] = Seq(intAlu, intMul)
+
+      override val retirementStage = new Stage("RET")
     }
+
 
     pipeline.issuePipeline.addPlugins(Seq(
       new scheduling.static.Scheduler(canStallExternally = true),
@@ -200,7 +203,14 @@ object createDynamicPipeline {
     pipeline.addPlugins(Seq(
       new scheduling.dynamic.Scheduler,
       new scheduling.dynamic.PcManager,
-      new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.intAlu, 8, conf.xlen),
+      new RegisterFileAccessor(
+        // FIXME this works since there is no delay between ID and dispatch. It would probably be
+        // safer to create an explicit dispatch stage in the dynamic pipeline and read the registers
+        // there. It could still be zero-delay of course.
+        readStage  = pipeline.issuePipeline.decode,
+        writeStage = pipeline.retirementStage
+      ),
+      new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage, 8, conf.xlen),
       new IntAlu(pipeline.intAlu),
       new MulDiv(pipeline.intMul),
       new BranchUnit(pipeline.intAlu)

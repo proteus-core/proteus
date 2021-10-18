@@ -1,5 +1,6 @@
 package riscv
 
+import riscv.plugins.scheduling.dynamic.ReorderBuffer
 import spinal.core._
 
 import scala.reflect.ClassTag
@@ -7,12 +8,12 @@ import scala.reflect.ClassTag
 trait DynamicPipeline extends Pipeline {
   val issuePipeline: StaticPipeline
   val exeStages: Seq[Stage]
+  var rob: ReorderBuffer = null
 
   var pipelineRegs: Map[Stage, PipelineRegs] = null
 
 
   override def fetchStage: Stage = null
-  override val retirementStage: Stage = null
 
   override def build(): Unit = {
     issuePipeline.initBuild()
@@ -39,15 +40,21 @@ trait DynamicPipeline extends Pipeline {
   override def connectStages(): Unit = {
 
     for (stage <- exeStages) {
+      // TODO: are these two necessary? (later assigned anyway in the loop, right?)
       stage.input(data.PC)
       stage.input(data.IR)
+
       stage.output(data.PC)
       stage.output(data.IR)
+
+      // HACK!
+      stage.output(data.RD)
+      stage.output(data.RD_TYPE)
     }
 
     val issueStage = issuePipeline.stages.last
 
-    for (stage <- exeStages) {
+    for (stage <- exeStages :+ retirementStage) {
       // FIXME copy-pasted from StaticPipeline
       for (valueData <- stage.lastValues.keys) {
         if (!stage.outputs.contains(valueData)) {
@@ -59,7 +66,9 @@ trait DynamicPipeline extends Pipeline {
       for (outputData <- stage.outputs.keys) {
         stage.input(outputData)
       }
+    }
 
+    for (stage <- exeStages) {
       for ((inputData, input) <- stage.inputs) {
         val (regInput, regOutput) = pipelineRegs(stage).addReg(inputData)
         input := regOutput

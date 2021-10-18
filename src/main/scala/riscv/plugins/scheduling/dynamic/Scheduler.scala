@@ -3,24 +3,7 @@ package riscv.plugins.scheduling.dynamic
 import riscv._
 import spinal.core._
 
-class Scheduler(implicit val robCapacity: Int = 8) extends Plugin[DynamicPipeline] with IssueService {
-  class RegisterFile extends Area { // TODO: not needed?
-    val registerArray = Vec.fill(config.numRegs)(Reg(UInt(config.xlen bits)).init(0))
-
-    def getValue(regId: UInt): UInt = {
-      val ret = UInt(config.xlen bits)
-      ret := 0
-      when (regId =/= 0) {
-        ret := registerArray(regId)
-      }
-      ret
-    }
-
-    def updateValue(regId: UInt, value: UInt): Unit = {
-      registerArray(regId) := value
-    }
-  }
-
+class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
   class Data { // TODO: better name for this?
     object DEST_FU extends PipelineData(Bits(pipeline.exeStages.size bits))
   }
@@ -35,15 +18,32 @@ class Scheduler(implicit val robCapacity: Int = 8) extends Plugin[DynamicPipelin
 
   override def finish(): Unit = {
     pipeline plug new Area {
-      val registerFile = new RegisterFile
-      val rob = new ReorderBuffer(pipeline, registerFile, robCapacity)
-      val reservationStations = pipeline.exeStages.map(stage => new ReservationStation(stage, registerFile, rob, pipeline))
-      val cdb = new CommonDataBus(reservationStations, rob)
+      val registerBundle = new DynBundle[PipelineData[spinal.core.Data]]
+
+      val ret = pipeline.retirementStage
+      for (register <- ret.lastValues.keys.toSet union ret.outputs.keys.toSet) {
+        registerBundle.addElement(register, register.dataType)
+      }
+
+      pipeline.rob = new ReorderBuffer(pipeline, 8, registerBundle)
+
+      val rob = pipeline.rob
       rob.build()
+
+      val reservationStations = pipeline.exeStages.map(
+        stage => new ReservationStation(stage, rob, pipeline, registerBundle))
+
+      val cdb = new CommonDataBus(reservationStations, rob)
       cdb.build()
       for ((rs, index) <- reservationStations.zipWithIndex) {
         rs.build()
         rs.cdbStream >> cdb.inputs(index)
+      }
+
+      val udb = new RobDataBus(reservationStations, rob, registerBundle)
+      udb.build()
+      for ((rs, index) <- reservationStations.zipWithIndex) {
+        rs.rdbStream >> udb.inputs(index)
       }
 
       // Dispatch

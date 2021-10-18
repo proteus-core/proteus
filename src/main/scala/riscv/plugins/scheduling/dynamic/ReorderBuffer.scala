@@ -3,48 +3,42 @@ package riscv.plugins.scheduling.dynamic
 import riscv._
 import spinal.core._
 
-case class InstructionActions() extends Bundle {
-  val writesRegister = Bool()
-  val performsJump = Bool()
-}
-
-object InstructionActions {
-  def none(): InstructionActions = {
-    val actions = InstructionActions()
-    actions.writesRegister := False
-    actions.performsJump := False
-    actions
-  }
+case class RdbMessage(retirementRegisters: DynBundle[PipelineData[Data]],
+                      robIndexBits: BitCount) extends Bundle {
+  val robIndex = UInt(robIndexBits)
+  val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] = retirementRegisters.createBundle
 }
 
 // TODO: revisit how these signals are used for different instruction types
-case class RobEntry(implicit config: Config) extends Bundle {
-  val actions = InstructionActions()
-  val writeDestination = UInt(config.xlen bits)
-  val writeValue = UInt(config.xlen bits)
-  val actualJumpTarget = UInt(config.xlen bits)
-  val predictedJumpTarget = UInt(config.xlen bits)
+case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])
+                   (implicit config: Config) extends Bundle {
+  val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] = retirementRegisters.createBundle
   val ready = Bool()
+
+  override def clone(): RobEntry = {
+    RobEntry(retirementRegisters)
+  }
 }
 
 class ReorderBuffer(pipeline: DynamicPipeline,
-                    registerFile: Scheduler#RegisterFile,
-                    robCapacity: Int)
-                   (implicit config: Config) extends Area with CdbListener {
+                    robCapacity: Int,
+                    retirementRegisters: DynBundle[PipelineData[Data]])
+                   (implicit config: Config) extends Area {
   def capacity: Int = robCapacity
   def indexBits: BitCount = log2Up(capacity) bits
 
-  val robEntries = Vec.fill(capacity)(RegInit(RobEntry().getZero))
+  val robEntries = Vec.fill(capacity)(RegInit(RobEntry(retirementRegisters).getZero))
   val oldestIndex = Reg(UInt(indexBits)).init(0)
   val newestIndex = Reg(UInt(indexBits)).init(0) // TODO: use built-in counter class for these?
   private val isFull = RegInit(False)
   private val willRetire = False
   val isAvailable = !isFull || willRetire
 
+
   val pushInCycle = Bool()
   pushInCycle := False
-  val pushedEntry = RobEntry()
-  pushedEntry := RobEntry().getZero
+  val pushedEntry = RobEntry(retirementRegisters)
+  pushedEntry := RobEntry(retirementRegisters).getZero
 
   def reset(): Unit = {
     oldestIndex := 0
@@ -91,8 +85,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   def pushEntry(destination: UInt): UInt = {
     pushInCycle := True
     pushedEntry.ready := False
-    pushedEntry.actions := InstructionActions.none
-    pushedEntry.writeDestination := destination.resized
+    pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := destination.resized
     newestIndex
   }
 
@@ -112,22 +105,21 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       val entry = robEntries(index.resized)
 
       // last condition: prevent dependencies on x0
-      when (isValidIndex(index) && entry.writeDestination === regId && regId =/= 0) {
+      when (isValidIndex(index)
+        && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId
+        && regId =/= 0) {
         found := True
         ready := entry.ready
-        value := entry.writeValue
+        value := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
         ix := index.resized
       }
     }
     (found, ready, value, ix)
   }
 
-  override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
-    robEntries(cdbMessage.robIndex).writeValue := cdbMessage.writeValue
-    robEntries(cdbMessage.robIndex).actions := cdbMessage.actions
-    robEntries(cdbMessage.robIndex).actualJumpTarget := cdbMessage.actualJumpTarget
-    robEntries(cdbMessage.robIndex).predictedJumpTarget := cdbMessage.predictedJumpTarget
-    robEntries(cdbMessage.robIndex).ready := True
+  def onRdbMessage(rdbMessage: RdbMessage): Unit = {
+    robEntries(rdbMessage.robIndex).registerMap := rdbMessage.registerMap
+    robEntries(rdbMessage.robIndex).ready := True
   }
 
   def build(): Unit = {
@@ -136,26 +128,28 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     updatedOldestIndex := oldestIndex
     val isEmpty = oldestIndex === newestIndex && !isFull
 
-    // TODO: is the performsJump flag even necessary?
+    // FIXME it would probably be "cleaner" to connect the ROB to the retirement stage in the
+    // scheduler.
+    val ret = pipeline.retirementStage
+    ret.arbitration.isValid := False
+    ret.arbitration.isStalled := False
+
+    for (register <- retirementRegisters.keys) {
+      ret.input(register) := oldestEntry.registerMap.element(register)
+    }
+
+    // FIXME this doesn't seem the correct place to do this...
+    ret.connectOutputDefaults()
+    ret.connectLastValues()
+
     when (!isEmpty && oldestEntry.ready) {
-      when (oldestEntry.actualJumpTarget =/= oldestEntry.predictedJumpTarget) {
-        val jumpService = pipeline.getService[JumpService]
-        jumpService.jump(oldestEntry.actualJumpTarget)
-      }
+      ret.arbitration.isValid := True
 
-      when (oldestEntry.actions.writesRegister) {
-        registerFile.updateValue(oldestEntry.writeDestination.resized, oldestEntry.writeValue)
-      }
-
-      // removing the oldest entry and potentially resetting the ROB in case of a jump
-      when (oldestEntry.actualJumpTarget =/= oldestEntry.predictedJumpTarget) {
-        reset()
-      } otherwise {
-        updatedOldestIndex := nextIndex(oldestIndex)
-        oldestIndex := updatedOldestIndex
-        willRetire := True
-        isFull := False
-      }
+      // removing the oldest entry
+      updatedOldestIndex := nextIndex(oldestIndex)
+      oldestIndex := updatedOldestIndex
+      willRetire := True
+      isFull := False
     }
 
     when (pushInCycle) {

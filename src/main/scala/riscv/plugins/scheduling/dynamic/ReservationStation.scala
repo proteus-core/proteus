@@ -5,9 +5,9 @@ import spinal.core._
 import spinal.lib.Stream
 
 class ReservationStation(exeStage: Stage,
-                         registerFile: Scheduler#RegisterFile,
                          rob: ReorderBuffer,
-                         pipeline: DynamicPipeline)
+                         pipeline: DynamicPipeline,
+                         retirementRegisters: DynBundle[PipelineData[Data]])
                         (implicit config: Config) extends Area with CdbListener {
   setPartialName(s"RS_${exeStage.stageName}")
 
@@ -28,9 +28,15 @@ class ReservationStation(exeStage: Stage,
   private val stateNext = State()
   private val state = RegNext(stateNext).init(State.IDLE)
 
+  private val cdbWaitingNext, rdbWaitingNext = Bool() // TODO: is this necessary?
+  private val cdbWaiting = RegNext(cdbWaitingNext).init(False)
+  private val rdbWaiting = RegNext(rdbWaitingNext).init(False)
+
   private val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
+  private val resultRdbMessage = Reg(RdbMessage(retirementRegisters, rob.indexBits))
 
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
+  val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
 
   private val regs = pipeline.pipelineRegs(exeStage)
 
@@ -93,13 +99,16 @@ class ReservationStation(exeStage: Stage,
     rs1WaitingNext := rs1Waiting
     rs2WaitingNext := rs2Waiting
 
+    cdbWaitingNext := cdbWaiting
+    rdbWaitingNext := rdbWaiting
+
     stateNext := state
 
-    resultCdbMessage.robIndex := robEntryIndex
-    resultCdbMessage.actions := InstructionActions.none
+    resultCdbMessage.robIndex := robEntryIndex  // TODO: needed?
     resultCdbMessage.writeValue.assignDontCare
-    resultCdbMessage.actualJumpTarget.assignDontCare
-    resultCdbMessage.predictedJumpTarget.assignDontCare
+
+    rdbStream.valid := False
+    rdbStream.payload := resultRdbMessage
 
     cdbStream.valid := False
     cdbStream.payload := resultCdbMessage
@@ -123,41 +132,49 @@ class ReservationStation(exeStage: Stage,
 
     // when waiting for the result, and it is ready, put in on the bus
     when (state === State.EXECUTING && exeStage.arbitration.isDone) {
-      // unconditionally forwarding pipeline registers
-      cdbStream.payload.actualJumpTarget := exeStage.output(pipeline.data.NEXT_PC)
-      // TODO: breaks if no predictor (do we want to fix?)
-      cdbStream.payload.predictedJumpTarget :=
-        pipeline.getService[BranchTargetPredictorService].getPredictedPc(exeStage)
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
 
-      when (exeStage.output(pipeline.data.RD_VALID)) {
-        cdbStream.payload.actions.writesRegister := True
-      }
-
-      when (exeStage.arbitration.jumpRequested) {
-        cdbStream.payload.actions.performsJump := True
-      }
-
       cdbStream.payload.robIndex := robEntryIndex
+      rdbStream.payload.robIndex := robEntryIndex.resized
+
+      for (register <- retirementRegisters.keys) {
+        rdbStream.payload.registerMap.element(register) := exeStage.output(register)
+      }
+
       cdbStream.valid := True
+      rdbStream.valid := True
 
       // Override the assignment of resultCdbMessage to make sure data can be sent in later cycles
       // in case of contention in this cycle
       resultCdbMessage := cdbStream.payload
+      resultRdbMessage := rdbStream.payload
 
       when (cdbStream.ready) {
+        cdbWaitingNext := False
+      }
+      when (rdbStream.ready) {
+        rdbWaitingNext := False
+      }
+
+      when (cdbStream.ready && rdbStream.ready) {
         reset()
       } otherwise {
         stateNext := State.BROADCASTING_RESULT
       }
     }
 
-    // if the result is on the bus and it has been acknowledged, make the RS
+    // if the result is on the buses and it has been acknowledged, make the RS
     // available again
     when (state === State.BROADCASTING_RESULT) {
-      cdbStream.valid := True
+      when (cdbStream.ready && cdbWaiting) {
+        cdbWaitingNext := False
+      }
 
-      when (cdbStream.ready) {
+      when (rdbStream.ready && rdbWaiting) {
+        rdbWaitingNext := False
+      }
+
+      when (!cdbWaiting && !rdbWaiting) {
         reset()
       }
     }
@@ -191,7 +208,7 @@ class ReservationStation(exeStage: Stage,
       }
     } otherwise {
       rs1WaitingNext := False
-      regs.setReg(pipeline.data.RS1_DATA, registerFile.getValue(rs1Id))
+      regs.setReg(pipeline.data.RS1_DATA, dispatchStage.output(pipeline.data.RS1_DATA))
     }
 
     when (rs2Found) {
@@ -205,7 +222,7 @@ class ReservationStation(exeStage: Stage,
       }
     } otherwise {
       rs2WaitingNext := False
-      regs.setReg(pipeline.data.RS2_DATA, registerFile.getValue(rs2Id))
+      regs.setReg(pipeline.data.RS2_DATA, dispatchStage.output(pipeline.data.RS2_DATA))
     }
   }
 }
