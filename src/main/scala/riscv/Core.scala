@@ -47,7 +47,7 @@ object createStaticPipeline {
       new RegisterFileAccessor(pipeline.decode, pipeline.writeback),
       new IntAlu(pipeline.execute),
       new Shifter(pipeline.execute),
-      new Lsu(pipeline.memory),
+      new Lsu(pipeline.memory, pipeline.memory, pipeline.memory),
       new BranchUnit(pipeline.execute),
       new PcManager(0x80000000L),
       new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
@@ -188,6 +188,8 @@ object createDynamicPipeline {
       val intMul = new Stage("EX_MUL")
       override val exeStages: Seq[Stage] = Seq(intAlu, intMul)
 
+      override val loadStage: Stage = new Stage("LOAD")
+
       override val retirementStage = new Stage("RET")
     }
 
@@ -210,6 +212,7 @@ object createDynamicPipeline {
         readStage  = pipeline.issuePipeline.decode,
         writeStage = pipeline.retirementStage
       ),
+      new Lsu(pipeline.intAlu, pipeline.loadStage, pipeline.retirementStage),
       new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage, 8, conf.xlen),
       new IntAlu(pipeline.intAlu),
       new MulDiv(pipeline.intMul),

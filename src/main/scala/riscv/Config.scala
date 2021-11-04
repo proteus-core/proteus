@@ -29,6 +29,11 @@ class Config(val baseIsa: BaseIsa, val debug: Boolean = true) {
     dataWidth = baseIsa.xlen,
     readWrite = false
   )
+  def readDbusConfig = MemBusConfig(
+    addressWidth = baseIsa.xlen,
+    dataWidth = baseIsa.xlen,
+    readWrite = false
+  )
   def dbusConfig = MemBusConfig(
     addressWidth = baseIsa.xlen,
     dataWidth = baseIsa.xlen

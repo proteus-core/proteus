@@ -4,7 +4,7 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
+class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plugin[Pipeline] with LsuService {
   private var addressTranslator = new LsuAddressTranslator {
     override def translate(stage: Stage,
                            address: UInt,
@@ -23,6 +23,8 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
     object LSU_ACCESS_WIDTH extends PipelineData(LsuAccessWidth())
     object LSU_IS_UNSIGNED extends PipelineData(Bool())
     object LSU_IS_EXTERNAL_OP extends PipelineData(Bool())
+    object LSU_TARGET_ADDRESS extends PipelineData(UInt(config.xlen bits))  // TODO: Flow?
+    object LSU_TARGET_VALID extends PipelineData(Bool())
   }
 
   class DummyFormalService extends FormalService {
@@ -40,11 +42,14 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
       config.addDecoding(opcode, Map(
         Data.LSU_OPERATION_TYPE -> LsuOperationType.STORE,
         Data.LSU_ACCESS_WIDTH -> width,
-        Data.LSU_IS_EXTERNAL_OP -> True
+        Data.LSU_IS_EXTERNAL_OP -> True,
+        Data.LSU_TARGET_VALID -> False
       ))
     }
 
     hasExternalOps = true
+
+    pipeline.getService[IssueService].setDestination(opcode, addressStage)
   }
 
   override def addLoad(opcode: MaskedLiteral,
@@ -55,21 +60,38 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
         Data.LSU_OPERATION_TYPE -> LsuOperationType.LOAD,
         Data.LSU_ACCESS_WIDTH -> width,
         Data.LSU_IS_UNSIGNED -> Bool(unsigned),
-        Data.LSU_IS_EXTERNAL_OP -> True
+        Data.LSU_IS_EXTERNAL_OP -> True,
+        Data.LSU_TARGET_VALID -> False
       ))
     }
 
     hasExternalOps = true
+
+    pipeline.getService[IssueService].setDestination(opcode, addressStage)
   }
 
   override def setAddress(address: UInt): Unit = {
     externalAddress := address
   }
 
-  override def stage: Stage = lsuStage
+  override def stage: Stage = addressStage // TODO: which one? needed?
 
   override def operation(stage: Stage): SpinalEnumCraft[LsuOperationType.type] = {
     stage.value(Data.LSU_OPERATION_TYPE)
+  }
+
+  // TODO: pretty hacky
+  override def operationOutput(stage: Stage): SpinalEnumCraft[LsuOperationType.type] = {
+    stage.output(Data.LSU_OPERATION_TYPE)
+  }
+  override def operationOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Data = {
+    bundle.element(Data.LSU_OPERATION_TYPE.asInstanceOf[PipelineData[Data]])
+  }
+  override def addressOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt = {
+    bundle.elementAs[UInt](Data.LSU_TARGET_ADDRESS.asInstanceOf[PipelineData[Data]])
+  }
+  override def addressValidOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
+    bundle.elementAs[Bool](Data.LSU_TARGET_VALID.asInstanceOf[PipelineData[Data]])
   }
 
   override def width(stage: Stage): SpinalEnumCraft[LsuAccessWidth.type] = {
@@ -77,7 +99,7 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
   }
 
   override def setup(): Unit = {
-    lsuStage plug new Area {
+    addressStage plug new Area {
       val externalAddress = UInt(config.xlen bits).assignDontCare()
       Lsu.this.externalAddress = externalAddress
     }
@@ -106,8 +128,11 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
         config.addDecoding(opcode, InstructionType.I, Map(
           Data.LSU_OPERATION_TYPE -> LsuOperationType.LOAD,
           Data.LSU_ACCESS_WIDTH -> width,
-          Data.LSU_IS_UNSIGNED -> unsigned
+          Data.LSU_IS_UNSIGNED -> unsigned,
+          Data.LSU_TARGET_VALID -> False
         ))
+
+        pipeline.getService[IssueService].setDestination(opcode, addressStage)
       }
 
       addLoad(Opcodes.LW,  LsuAccessWidth.W, False)
@@ -120,8 +145,11 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
                    width: SpinalEnumElement[LsuAccessWidth.type]) = {
         config.addDecoding(opcode, InstructionType.S, Map(
           Data.LSU_OPERATION_TYPE -> LsuOperationType.STORE,
-          Data.LSU_ACCESS_WIDTH -> width
+          Data.LSU_ACCESS_WIDTH -> width,
+          Data.LSU_TARGET_VALID -> False
         ))
+
+        pipeline.getService[IssueService].setDestination(opcode, addressStage)
       }
 
       addStore(Opcodes.SW, LsuAccessWidth.W)
@@ -131,15 +159,12 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
   }
 
   override def build(): Unit = {
-    val lsuArea = lsuStage plug new Area {
-      import lsuStage._
-
-      val dbus = pipeline.getService[MemoryService].createInternalDBus(lsuStage)
-      val dbusCtrl = new MemBusControl(dbus)
+    addressStage plug new Area {
+      import addressStage._
 
       val operation = value(Data.LSU_OPERATION_TYPE)
       val accessWidth = value(Data.LSU_ACCESS_WIDTH)
-      val aluResult = input(pipeline.getService[IntAluService].resultData)
+      val aluResult = value(pipeline.getService[IntAluService].resultData)
 
       val inputAddress = if (hasExternalOps) {
         // We keep track of whether we have external loads/stores to 1) prevent LSU_IS_EXTERNAL_OP
@@ -151,15 +176,16 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
       }
 
       val address = addressTranslator.translate(
-        lsuStage, inputAddress, operation, accessWidth
+        addressStage, inputAddress, operation, accessWidth
       )
 
-      val busAddress = address & U(0xfffffffcL)
+      output(Data.LSU_TARGET_ADDRESS) := address
+      when (operation === LsuOperationType.LOAD || operation === LsuOperationType.STORE) {
+        output(Data.LSU_TARGET_VALID) := True
+      }
+    }
 
-      val isLoad = operation === LsuOperationType.LOAD
-      val isStore = operation === LsuOperationType.STORE
-      val isActive = isLoad || isStore
-
+    def checkAccessWidth(accessWidth: SpinalEnumCraft[LsuAccessWidth.type], address: UInt) = {
       val misaligned = Bool()
       val baseMask = Bits(config.xlen / 8 bits)
 
@@ -177,6 +203,32 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
           baseMask := B"1111"
         }
       }
+      (misaligned, baseMask)
+    }
+
+    def trap(cause: TrapCause, stage: Stage) = {
+      val trapHandler = pipeline.getService[TrapService]
+      trapHandler.trap(stage, cause)
+    }
+
+    val memService = pipeline.getService[MemoryService]
+    val (loadDBus, storeDBus) = memService.createInternalDBus(loadStage, storeStage)
+
+    val loadArea = loadStage plug new Area {
+      import loadStage._
+
+      val operation = value(Data.LSU_OPERATION_TYPE)
+      val accessWidth = value(Data.LSU_ACCESS_WIDTH)
+      val address = value(Data.LSU_TARGET_ADDRESS)
+      val valid = value(Data.LSU_TARGET_VALID) // needed as a hack either way
+
+      val dbusCtrl = new MemBusControl(loadDBus)
+
+      val isActive = operation === LsuOperationType.LOAD
+
+      val tuple = checkAccessWidth(accessWidth, address)
+      val misaligned = tuple._1
+      val baseMask = tuple._2
 
       val mask = baseMask |<< address(1 downto 0)
 
@@ -186,26 +238,19 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
         new DummyFormalService
       }
 
-      formal.lsuDefault(lsuStage)
+      formal.lsuDefault(loadStage)
 
       when (isActive && misaligned) {
-        val trapHandler = pipeline.getService[TrapService]
+        if (pipeline.hasService[TrapService]) {
+          trap(TrapCause.LoadAddressMisaligned(address), loadStage)
 
-        def trap(cause: TrapCause) = {
-          trapHandler.trap(lsuStage, cause)
+          formal.lsuOnMisaligned(loadStage)
         }
-
-        when (isLoad) {
-          trap(TrapCause.LoadAddressMisaligned(address))
-        } otherwise {
-          trap(TrapCause.StoreAddressMisaligned(address))
-        }
-
-        formal.lsuOnMisaligned(lsuStage)
       }
 
       when (arbitration.isValid && !misaligned) {
-        when (isLoad) {
+        when (isActive) {
+          val busAddress = address & U(0xfffffffcL)
           val (valid, wValue) = dbusCtrl.read(busAddress)
           arbitration.isReady := valid
           val result = UInt(config.xlen bits)
@@ -237,10 +282,51 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
           output(pipeline.data.RD_DATA) := result
           output(pipeline.data.RD_VALID) := True
 
-          formal.lsuOnLoad(lsuStage, busAddress, mask, wValue)
+          formal.lsuOnLoad(loadStage, busAddress, mask, wValue)
         }
+      }
+    }
 
-        when (isStore) {
+    storeStage plug new Area {
+      import storeStage._
+
+      val dbusCtrl = if (loadStage == storeStage) {
+        loadArea.dbusCtrl
+      } else {
+        new MemBusControl(storeDBus)
+      }
+
+      val operation = value(Data.LSU_OPERATION_TYPE)
+      val accessWidth = value(Data.LSU_ACCESS_WIDTH)
+      val address = value(Data.LSU_TARGET_ADDRESS)
+      val busAddress = address & U(0xfffffffcL)
+
+      val isActive = operation === LsuOperationType.STORE
+
+      val tuple = checkAccessWidth(accessWidth, address)
+      val misaligned = tuple._1
+      val baseMask = tuple._2
+
+      val mask = baseMask |<< address(1 downto 0)
+
+      val formal = if (pipeline.hasService[FormalService]) {
+        pipeline.getService[FormalService]
+      } else {
+        new DummyFormalService
+      }
+
+      formal.lsuDefault(storeStage)
+
+      when (isActive && misaligned) {
+        if (pipeline.hasService[TrapService]) {
+          trap(TrapCause.StoreAddressMisaligned(address), storeStage)
+
+          formal.lsuOnMisaligned(storeStage)
+        }
+      }
+
+      when (arbitration.isValid && !misaligned) {
+        when (isActive) {
           val wValue = value(pipeline.data.RS2_DATA)
           arbitration.rs2Needed := True
           val data = UInt(config.xlen bits)
@@ -279,7 +365,7 @@ class Lsu(lsuStage: Stage) extends Plugin[Pipeline] with LsuService {
           val accepted = dbusCtrl.write(busAddress, data, mask)
           arbitration.isReady := accepted
 
-          formal.lsuOnStore(lsuStage, busAddress, mask, data)
+          formal.lsuOnStore(storeStage, busAddress, mask, data)
         }
       }
     }

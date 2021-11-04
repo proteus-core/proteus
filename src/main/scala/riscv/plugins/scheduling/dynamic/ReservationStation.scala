@@ -28,17 +28,17 @@ class ReservationStation(exeStage: Stage,
   private val stateNext = State()
   private val state = RegNext(stateNext).init(State.IDLE)
 
-  private val cdbWaitingNext, rdbWaitingNext = Bool() // TODO: is this necessary?
-  private val cdbWaiting = RegNext(cdbWaitingNext).init(False)
-  private val rdbWaiting = RegNext(rdbWaitingNext).init(False)
+  private val cdbWaitingNext, dispatchWaitingNext = Bool() // TODO: is this necessary?
+  private val cdbWaiting = RegNext(cdbWaitingNext).init(False) // TODO: am i using this? can there be a problem if only one bus has to wait?
+  private val dispatchWaiting = RegNext(dispatchWaitingNext).init(False)
 
   private val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
-  private val resultRdbMessage = Reg(RdbMessage(retirementRegisters, rob.indexBits))
+  private val resultDispatchMessage = Reg(RdbMessage(retirementRegisters, rob.indexBits))
 
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
-  val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
+  val dispatchStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
 
-  private val regs = pipeline.pipelineRegs(exeStage)
+  private val regs = pipeline.pipelineRegs(exeStage) // TODO: do we need this?
 
   val isAvailable: Bool = Bool()
 
@@ -100,15 +100,15 @@ class ReservationStation(exeStage: Stage,
     rs2WaitingNext := rs2Waiting
 
     cdbWaitingNext := cdbWaiting
-    rdbWaitingNext := rdbWaiting
+    dispatchWaitingNext := dispatchWaiting
 
     stateNext := state
 
     resultCdbMessage.robIndex := robEntryIndex  // TODO: needed?
     resultCdbMessage.writeValue.assignDontCare
 
-    rdbStream.valid := False
-    rdbStream.payload := resultRdbMessage
+    dispatchStream.valid := False
+    dispatchStream.payload := resultDispatchMessage
 
     cdbStream.valid := False
     cdbStream.payload := resultCdbMessage
@@ -135,28 +135,26 @@ class ReservationStation(exeStage: Stage,
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
 
       cdbStream.payload.robIndex := robEntryIndex
-      rdbStream.payload.robIndex := robEntryIndex.resized
+      dispatchStream.payload.robIndex := robEntryIndex.resized
 
       for (register <- retirementRegisters.keys) {
-        rdbStream.payload.registerMap.element(register) := exeStage.output(register)
+        dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
       }
 
-      cdbStream.valid := True
-      rdbStream.valid := True
+      when (exeStage.output(pipeline.data.RD_VALID)) {
+        cdbStream.valid := True
+      }
+      dispatchStream.valid := True
 
       // Override the assignment of resultCdbMessage to make sure data can be sent in later cycles
       // in case of contention in this cycle
       resultCdbMessage := cdbStream.payload
-      resultRdbMessage := rdbStream.payload
+      resultDispatchMessage := dispatchStream.payload
 
-      when (cdbStream.ready) {
-        cdbWaitingNext := False
-      }
-      when (rdbStream.ready) {
-        rdbWaitingNext := False
-      }
+      cdbWaitingNext := (!cdbStream.ready && cdbStream.valid)
+      dispatchWaitingNext := !dispatchStream.ready
 
-      when (cdbStream.ready && rdbStream.ready) {
+      when ((cdbStream.ready || !cdbStream.valid) && dispatchStream.ready) {
         reset()
       } otherwise {
         stateNext := State.BROADCASTING_RESULT
@@ -166,15 +164,18 @@ class ReservationStation(exeStage: Stage,
     // if the result is on the buses and it has been acknowledged, make the RS
     // available again
     when (state === State.BROADCASTING_RESULT) {
+      cdbStream.valid := cdbWaiting
+      dispatchStream.valid := dispatchWaiting
+
       when (cdbStream.ready && cdbWaiting) {
         cdbWaitingNext := False
       }
 
-      when (rdbStream.ready && rdbWaiting) {
-        rdbWaitingNext := False
+      when (dispatchStream.ready && dispatchWaiting) {
+        dispatchWaitingNext := False
       }
 
-      when (!cdbWaiting && !rdbWaiting) {
+      when (!cdbWaiting && !dispatchWaiting) {
         reset()
       }
     }
@@ -183,8 +184,9 @@ class ReservationStation(exeStage: Stage,
   def execute(): Unit = {
     val dispatchStage = pipeline.issuePipeline.stages.last
 
-    val robIndex = rob.pushEntry(dispatchStage.output(pipeline.data.RD))
-    robEntryIndex := robIndex
+    robEntryIndex := rob.pushEntry(
+      dispatchStage.output(pipeline.data.RD),
+      pipeline.getService[LsuService].operationOutput(dispatchStage))
 
     stateNext := State.EXECUTING
     regs.shift := True
