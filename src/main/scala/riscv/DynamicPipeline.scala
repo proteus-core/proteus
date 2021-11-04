@@ -9,6 +9,7 @@ trait DynamicPipeline extends Pipeline {
   val issuePipeline: StaticPipeline
   val exeStages: Seq[Stage]
   var rob: ReorderBuffer = null
+  val loadStage: Stage
 
   var pipelineRegs: Map[Stage, PipelineRegs] = null
 
@@ -39,22 +40,20 @@ trait DynamicPipeline extends Pipeline {
 
   override def connectStages(): Unit = {
 
-    for (stage <- exeStages) {
-      // TODO: are these two necessary? (later assigned anyway in the loop, right?)
-      stage.input(data.PC)
-      stage.input(data.IR)
-
+    for (stage <- exeStages :+ retirementStage :+ loadStage) {
       stage.output(data.PC)
       stage.output(data.IR)
 
       // HACK!
       stage.output(data.RD)
+      stage.output(data.RD_VALID)
       stage.output(data.RD_TYPE)
+      stage.output(data.NEXT_PC)
     }
 
     val issueStage = issuePipeline.stages.last
 
-    for (stage <- exeStages :+ retirementStage) {
+    for (stage <- exeStages :+ retirementStage :+ loadStage) {
       // FIXME copy-pasted from StaticPipeline
       for (valueData <- stage.lastValues.keys) {
         if (!stage.outputs.contains(valueData)) {
@@ -65,6 +64,12 @@ trait DynamicPipeline extends Pipeline {
       // Make sure we get the input from the issue stage for all requested outputs.
       for (outputData <- stage.outputs.keys) {
         stage.input(outputData)
+      }
+    }
+
+    for (stage <- exeStages) {
+      for (reg <- retirementStage.inputs.keys.toSet union loadStage.inputs.keys.toSet) {
+        stage.output(reg)
       }
     }
 

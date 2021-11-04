@@ -96,7 +96,7 @@ class SoC(ramType: RamType, createPipeline: Config => Pipeline) extends Componen
 
     axiCrossbar.addConnections(
       ibusAxi -> List(ramAxi),
-      core.dbus.toAxi4Shared()   -> List(ramAxi, apbBridge.io.axi)
+      core.dbus.toAxi4Shared() -> List(ramAxi, apbBridge.io.axi)
     )
 
     // This pipelining is used to cut combinatorial loops caused by lowLatency=true. It is based on

@@ -22,7 +22,7 @@ trait MemoryService {
   /**
     * Creates a new data bus to be used in stage.
     */
-  def createInternalDBus(stage: Stage): MemBus
+  def createInternalDBus(readStage: Stage, writeStage: Stage): (MemBus, MemBus)
 
   /**
    * Return all stages that have an internal DBUS. I.e., the stages that are
@@ -198,6 +198,14 @@ trait LsuService {
    * Get the [[LsuAccessWidth]] of the instruction in `stage`.
    */
   def width(stage: Stage): SpinalEnumCraft[LsuAccessWidth.type]
+
+  def operationOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Data
+
+  def addressValidOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+
+  def addressOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt
+
+  def operationOutput(stage: Stage): SpinalEnumCraft[LsuOperationType.type]
 }
 
 trait ScheduleService {

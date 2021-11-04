@@ -21,7 +21,8 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       val registerBundle = new DynBundle[PipelineData[spinal.core.Data]]
 
       val ret = pipeline.retirementStage
-      for (register <- ret.lastValues.keys.toSet union ret.outputs.keys.toSet) {
+      val ls = pipeline.loadStage
+      for (register <- ret.lastValues.keys.toSet union ret.outputs.keys.toSet union ls.lastValues.keys.toSet union ls.outputs.keys.toSet) {
         registerBundle.addElement(register, register.dataType)
       }
 
@@ -40,11 +41,24 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
         rs.cdbStream >> cdb.inputs(index)
       }
 
-      val udb = new RobDataBus(reservationStations, rob, registerBundle)
-      udb.build()
+      val loadManager = new LoadManager(pipeline, pipeline.loadStage, rob, registerBundle)
+      loadManager.build()
+      loadManager.cdbStream >> cdb.inputs(reservationStations.size)
+
+      val dispatcher = new Dispatcher(pipeline, rob, loadManager, registerBundle) // TODO: confusing name regarding instruction dispatch later
+      dispatcher.build()
+
+      val dispatchBus = new DispatchBus(reservationStations, rob, dispatcher, registerBundle)
+      dispatchBus.build()
+
       for ((rs, index) <- reservationStations.zipWithIndex) {
-        rs.rdbStream >> udb.inputs(index)
+        rs.dispatchStream >> dispatchBus.inputs(index)
       }
+
+      val robDataBus = new RobDataBus(rob, registerBundle)
+      robDataBus.build()
+      dispatcher.rdbStream >> robDataBus.inputs(0)
+      loadManager.rdbStream >> robDataBus.inputs(1)
 
       // Dispatch
       val dispatchStage = pipeline.issuePipeline.stages.last

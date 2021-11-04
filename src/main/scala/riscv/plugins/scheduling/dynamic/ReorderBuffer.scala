@@ -9,7 +9,6 @@ case class RdbMessage(retirementRegisters: DynBundle[PipelineData[Data]],
   val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] = retirementRegisters.createBundle
 }
 
-// TODO: revisit how these signals are used for different instruction types
 case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])
                    (implicit config: Config) extends Bundle {
   val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] = retirementRegisters.createBundle
@@ -33,7 +32,6 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   private val isFull = RegInit(False)
   private val willRetire = False
   val isAvailable = !isFull || willRetire
-
 
   val pushInCycle = Bool()
   pushInCycle := False
@@ -70,6 +68,20 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     ret
   }
 
+  def isOlderThan(first: UInt, second: UInt): Bool = {
+    val ret = Bool()
+    when (!isValidIndex(first) || !isValidIndex(second)) {
+      ret := False
+    } elsewhen (first < second && !(oldestIndex >= first && oldestIndex <= second)) {
+      ret := True
+    } elsewhen (first > second && (oldestIndex <= first && oldestIndex > second)) {
+      ret := True
+    } otherwise {
+      ret := False
+    }
+    ret
+  }
+
   def indexForNth(nth: UInt): UInt = {
     val index = UInt(config.xlen bits)
     val adjusted = UInt(config.xlen bits)
@@ -82,10 +94,12 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     adjusted
   }
 
-  def pushEntry(destination: UInt): UInt = {
+  def pushEntry(rd: UInt, lsuOperationType: SpinalEnumCraft[LsuOperationType.type]): UInt = {
     pushInCycle := True
     pushedEntry.ready := False
-    pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := destination.resized
+    pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := rd
+    pipeline.getService[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
+    pipeline.getService[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
     newestIndex
   }
 
@@ -106,7 +120,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
       // last condition: prevent dependencies on x0
       when (isValidIndex(index)
-        && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId
+        && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId  // TODO: this assumes that non-RD instructions have RD == 0 (or an invalid value)
         && regId =/= 0) {
         found := True
         ready := entry.ready
@@ -115,6 +129,26 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       }
     }
     (found, ready, value, ix)
+  }
+
+  def hasPendingStore(robIndex: UInt, address: UInt): Bool = {
+    val found = Bool()
+    found := False
+
+    for (nth <- 0 until capacity) {
+      val index = indexForNth(nth)
+      val entry = robEntries(index.resized)
+
+      when (isValidIndex(index)
+        && isOlderThan(index, robIndex)
+        && pipeline.getService[LsuService].operationOfBundle(entry.registerMap) === LsuOperationType.STORE
+        && ((pipeline.getService[LsuService].addressValidOfBundle(entry.registerMap) === True
+            && pipeline.getService[LsuService].addressOfBundle(entry.registerMap) === address)
+          || pipeline.getService[LsuService].addressValidOfBundle(entry.registerMap) === False)) {
+        found := True
+      }
+    }
+    found
   }
 
   def onRdbMessage(rdbMessage: RdbMessage): Unit = {
@@ -128,8 +162,6 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     updatedOldestIndex := oldestIndex
     val isEmpty = oldestIndex === newestIndex && !isFull
 
-    // FIXME it would probably be "cleaner" to connect the ROB to the retirement stage in the
-    // scheduler.
     val ret = pipeline.retirementStage
     ret.arbitration.isValid := False
     ret.arbitration.isStalled := False
