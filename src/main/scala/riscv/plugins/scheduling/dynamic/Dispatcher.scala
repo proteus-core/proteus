@@ -48,6 +48,7 @@ class Dispatcher(pipeline: DynamicPipeline,
     stateNext := state
 
     when (state === State.BROADCASTING_RESULT) {
+      rdbStream.valid := True
       when (rdbStream.ready) {
         stateNext := State.IDLE
       }

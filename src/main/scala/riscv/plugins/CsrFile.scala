@@ -205,8 +205,9 @@ class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
         }
 
         when (csrIo.error) {
-          val trapHandler = pipeline.getService[TrapService]
-          trapHandler.trap(csrStage, TrapCause.IllegalInstruction(value(pipeline.data.IR)))
+          // TODO!
+//          val trapHandler = pipeline.getService[TrapService]
+//          trapHandler.trap(csrStage, TrapCause.IllegalInstruction(value(pipeline.data.IR)))
         }
       }
     }

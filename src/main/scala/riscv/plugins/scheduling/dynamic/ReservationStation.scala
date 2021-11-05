@@ -176,6 +176,7 @@ class ReservationStation(exeStage: Stage,
       }
 
       when (!cdbWaiting && !dispatchWaiting) {
+        // TODO: losing a cycle by only setting isAvailable here
         reset()
       }
     }

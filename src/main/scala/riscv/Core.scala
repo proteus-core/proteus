@@ -1,6 +1,7 @@
 package riscv
 
 import riscv.plugins._
+import riscv.plugins.scheduling.static.TrapHandler
 import riscv.soc._
 import spinal.core._
 import spinal.core.sim._
@@ -215,8 +216,11 @@ object createDynamicPipeline {
       new Lsu(pipeline.intAlu, pipeline.loadStage, pipeline.retirementStage),
       new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage, 8, conf.xlen),
       new IntAlu(pipeline.intAlu),
+      new Shifter(pipeline.intAlu),
       new MulDiv(pipeline.intMul),
-      new BranchUnit(pipeline.intAlu)
+      new BranchUnit(pipeline.intAlu),
+      new CsrFile(pipeline.retirementStage)
+//      new TrapHandler(pipeline.retirementStage)
     ))
 
     if (build) {

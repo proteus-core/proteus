@@ -14,6 +14,8 @@ class Shifter(exeStage: Stage) extends Plugin[Pipeline] {
   }
 
   override def setup(): Unit = {
+    val issuer = pipeline.getService[IssueService]
+
     pipeline.getService[DecoderService].configure {config =>
       config.addDefault(Map(
         Data.SHIFT_OP -> ShiftOp.NONE
@@ -32,6 +34,7 @@ class Shifter(exeStage: Stage) extends Plugin[Pipeline] {
         config.addDecoding(opcode, itype, Map(
           Data.SHIFT_OP -> op
         ))
+        issuer.setDestination(opcode, exeStage)
       }
     }
   }
