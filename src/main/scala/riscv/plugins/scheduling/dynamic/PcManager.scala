@@ -76,4 +76,8 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
     staticPcManager.disableJump(stage)
     stage.output(PrivateRegisters.JUMP_REQUESTED) := False
   }
+
+  override def jumpOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
+    bundle.elementAs[Bool](PrivateRegisters.JUMP_REQUESTED.asInstanceOf[PipelineData[Data]])
+  }
 }

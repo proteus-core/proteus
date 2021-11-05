@@ -126,7 +126,7 @@ class ReservationStation(exeStage: Stage,
     }
 
     // execution was invalidated while running
-    when (state === State.EXECUTING && !exeStage.arbitration.isValid) {
+    when ((state === State.EXECUTING || state === State.WAITING_FOR_ARGS) && !exeStage.arbitration.isValid) {
       reset()
     }
 

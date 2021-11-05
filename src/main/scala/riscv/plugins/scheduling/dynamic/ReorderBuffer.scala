@@ -121,7 +121,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
       // last condition: prevent dependencies on x0
       when (isValidIndex(index)
-        && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId  // TODO: this assumes that non-RD instructions have RD == 0 (or an invalid value)
+        && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId
         && regId =/= 0
         && entry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) === RegisterType.GPR) {
         found := True
@@ -155,6 +155,11 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
   def onRdbMessage(rdbMessage: RdbMessage): Unit = {
     robEntries(rdbMessage.robIndex).registerMap := rdbMessage.registerMap
+
+    when (pipeline.getService[CsrService].isCsrInstruction(rdbMessage.registerMap)) {
+      pipeline.getService[JumpService].jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
+    }
+
     robEntries(rdbMessage.robIndex).ready := True
   }
 
@@ -184,6 +189,11 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       oldestIndex := updatedOldestIndex
       willRetire := True
       isFull := False
+
+      // reset from the next instruction after CSR instructions
+      when (pipeline.getService[CsrService].isCsrInstruction(oldestEntry.registerMap)) {
+        reset()
+      }
     }
 
     when (pushInCycle) {

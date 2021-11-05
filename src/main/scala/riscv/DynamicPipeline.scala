@@ -11,8 +11,9 @@ trait DynamicPipeline extends Pipeline {
   var rob: ReorderBuffer = null
   val loadStage: Stage
 
-  var pipelineRegs: Map[Stage, PipelineRegs] = null
+  val dynamicStages: Seq[Stage]
 
+  var pipelineRegs: Map[Stage, PipelineRegs] = null
 
   override def fetchStage: Stage = null
 
@@ -40,7 +41,7 @@ trait DynamicPipeline extends Pipeline {
 
   override def connectStages(): Unit = {
 
-    for (stage <- exeStages :+ retirementStage :+ loadStage) {
+    for (stage <- dynamicStages) {
       stage.output(data.PC)
       stage.output(data.IR)
 
@@ -53,7 +54,7 @@ trait DynamicPipeline extends Pipeline {
 
     val issueStage = issuePipeline.stages.last
 
-    for (stage <- exeStages :+ retirementStage :+ loadStage) {
+    for (stage <- dynamicStages) {
       // FIXME copy-pasted from StaticPipeline
       for (valueData <- stage.lastValues.keys) {
         if (!stage.outputs.contains(valueData)) {

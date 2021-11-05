@@ -52,7 +52,7 @@ object createStaticPipeline {
       new BranchUnit(pipeline.execute),
       new PcManager(0x80000000L),
       new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
-      new CsrFile(pipeline.writeback),
+      new CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
       new Timers,
       new MachineMode(pipeline.execute),
       new TrapHandler(pipeline.writeback),
@@ -192,6 +192,8 @@ object createDynamicPipeline {
       override val loadStage: Stage = new Stage("LOAD")
 
       override val retirementStage = new Stage("RET")
+
+      override val dynamicStages: Seq[Stage] = exeStages :+ retirementStage :+ loadStage
     }
 
 
@@ -219,8 +221,8 @@ object createDynamicPipeline {
       new Shifter(pipeline.intAlu),
       new MulDiv(pipeline.intMul),
       new BranchUnit(pipeline.intAlu),
-      new CsrFile(pipeline.retirementStage)
-//      new TrapHandler(pipeline.retirementStage)
+      new CsrFile(pipeline.retirementStage, pipeline.intAlu),
+      new scheduling.dynamic.TrapHandler(pipeline.retirementStage)
     ))
 
     if (build) {

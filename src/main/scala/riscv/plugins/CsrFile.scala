@@ -36,7 +36,7 @@ private class CsrComponent(implicit config: Config) extends Component {
   val io = master(new CsrFileIo)
 }
 
-class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
+class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with CsrService {
   object CsrOp extends SpinalEnum {
     val NONE, RW, RS, RC = newElement()
   }
@@ -62,6 +62,7 @@ class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
   }
 
   override def getCsr(id: Int): CsrIo = {
+    println(id)
     assert(registers.contains(id))
 
     val area = component plug new Area {
@@ -81,6 +82,7 @@ class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
 
   override def setup(): Unit = {
     val decoder = pipeline.getService[DecoderService]
+    val issuer = pipeline.getService[IssueService]
 
     decoder.configure {config =>
       config.addDefault(Map(
@@ -102,12 +104,18 @@ class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
           Data.CSR_OP -> op,
           Data.CSR_USE_IMM -> useImm
         ))
+        issuer.setDestination(opcode, exeStage)
       }
     }
   }
 
   override def build(): Unit = {
     val csrComponent = component
+
+    exeStage plug new Area { // TODO: hack
+      exeStage.value(Data.CSR_OP)
+      exeStage.value(Data.CSR_USE_IMM)
+    }
 
     csrComponent plug new Area {
       import csrComponent._
@@ -205,9 +213,8 @@ class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
         }
 
         when (csrIo.error) {
-          // TODO!
-//          val trapHandler = pipeline.getService[TrapService]
-//          trapHandler.trap(csrStage, TrapCause.IllegalInstruction(value(pipeline.data.IR)))
+          val trapHandler = pipeline.getService[TrapService]
+          trapHandler.trap(csrStage, TrapCause.IllegalInstruction(value(pipeline.data.IR)))
         }
       }
     }
@@ -215,5 +222,9 @@ class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
     pipeline plug new Area {
       csrComponent.io <> csrArea.csrIo
     }
+  }
+
+  override def isCsrInstruction(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
+    bundle.element(Data.CSR_OP.asInstanceOf[PipelineData[Data]]) =/= CsrOp.NONE
   }
 }
