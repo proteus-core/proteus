@@ -94,10 +94,11 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     adjusted
   }
 
-  def pushEntry(rd: UInt, lsuOperationType: SpinalEnumCraft[LsuOperationType.type]): UInt = {
+  def pushEntry(rd: UInt, rdType: SpinalEnumCraft[RegisterType.type], lsuOperationType: SpinalEnumCraft[LsuOperationType.type]): UInt = {
     pushInCycle := True
     pushedEntry.ready := False
     pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := rd
+    pushedEntry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) := rdType
     pipeline.getService[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
     pipeline.getService[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
     newestIndex
@@ -121,7 +122,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       // last condition: prevent dependencies on x0
       when (isValidIndex(index)
         && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId  // TODO: this assumes that non-RD instructions have RD == 0 (or an invalid value)
-        && regId =/= 0) {
+        && regId =/= 0
+        && entry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) === RegisterType.GPR) {
         found := True
         ready := entry.ready
         value := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])

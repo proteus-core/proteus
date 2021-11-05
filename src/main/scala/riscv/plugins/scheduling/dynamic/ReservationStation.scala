@@ -187,6 +187,7 @@ class ReservationStation(exeStage: Stage,
 
     robEntryIndex := rob.pushEntry(
       dispatchStage.output(pipeline.data.RD),
+      dispatchStage.output(pipeline.data.RD_TYPE),
       pipeline.getService[LsuService].operationOutput(dispatchStage))
 
     stateNext := State.EXECUTING
