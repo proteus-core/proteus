@@ -31,6 +31,8 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
   private val trapCommitCallbacks = mutable.ArrayBuffer[TrapCommitCallback]()
 
   override def setup(): Unit = {
+    val issuer = pipeline.getService[IssueService]
+
     pipeline.getService[DecoderService].configure {decoder =>
       decoder.addDefault(Map(
         Data.MRET -> False
@@ -38,6 +40,8 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
 
       decoder.addDecoding(Opcodes.MRET, InstructionType.I,
         Map(Data.MRET -> True))
+
+      issuer.setDestination(Opcodes.MRET, pipeline.rsStages.head) // TODO: ugly?
     }
 
     for (stage <- pipeline.issuePipeline.stages ++ pipeline.unorderedStages :+ pipeline.retirementStage) {  // TODO?

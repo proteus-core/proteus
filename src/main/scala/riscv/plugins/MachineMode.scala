@@ -172,6 +172,8 @@ class MachineMode(ecallStage: Stage,
     csr.registerCsr(0x342, new Mcause)
     csr.registerCsr(0x343, new Mtval)
 
+    val issuer = pipeline.getService[IssueService]
+
     pipeline.getService[DecoderService].configure {config =>
       config.addDefault(Map(
         Data.ECALL  -> False,
@@ -182,6 +184,10 @@ class MachineMode(ecallStage: Stage,
                          Map(Data.ECALL -> True))
       config.addDecoding(Opcodes.EBREAK, InstructionType.I,
                          Map(Data.EBREAK -> True))
+
+      issuer.setDestination(Opcodes.ECALL, ecallStage)
+      issuer.setDestination(Opcodes.EBREAK, ecallStage)
+
     }
   }
 
