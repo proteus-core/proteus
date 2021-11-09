@@ -108,7 +108,7 @@ class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
 
       val immDecoder = ImmediateDecoder(ir.asBits)
 
-      switch (value(pipeline.data.IR)) {
+      switch (ir) {
         for ((key, action) <- decodings) {
           is (key) {
             applyAction(decodeStage, action)
