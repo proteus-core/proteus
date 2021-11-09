@@ -40,7 +40,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
         Map(Data.MRET -> True))
     }
 
-    for (stage <- pipeline.dynamicStages) {  // TODO?
+    for (stage <- pipeline.issuePipeline.stages ++ pipeline.unorderedStages :+ pipeline.retirementStage) {  // TODO?
       stageSignals(stage) = stage plug new StageTrapSignals
     }
   }
@@ -135,7 +135,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
 
       // FIXME Only this part is dependent on a StaticPipeline, the rest should
       // be part of a Pipeline plugin.
-      for (stage <- pipeline.issuePipeline.stages ++ pipeline.dynamicStages.init) {  // TODO
+      for (stage <- pipeline.issuePipeline.stages ++ pipeline.unorderedStages) {  // TODO?
         // Make isValid False whenever there is a later stage that has a trapped
         // instruction. This basically ensures the whole pipeline behind a
         // trapped instruction is flushed until the trapped instruction is
@@ -152,7 +152,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
         val laterStageTrapped = ret.arbitration.isValid && ret.output(Data.HAS_TRAPPED) // TODO: is it only the retirement stage that can trap?
 
         when (laterStageTrapped) {
-          stage.arbitration.isValid := False
+//          stage.arbitration.isValid := False
         }
       }
     }

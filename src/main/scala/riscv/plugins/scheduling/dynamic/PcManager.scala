@@ -64,7 +64,7 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
 
         pipeline.rob.reset()
 
-        for (exeStage <- pipeline.exeStages) {
+        for (exeStage <- pipeline.rsStages) {
           exeStage.arbitration.isValid := False
         }
       }

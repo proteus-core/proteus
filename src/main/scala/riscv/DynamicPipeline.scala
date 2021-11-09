@@ -7,11 +7,11 @@ import scala.reflect.ClassTag
 
 trait DynamicPipeline extends Pipeline {
   val issuePipeline: StaticPipeline
-  val exeStages: Seq[Stage]
+  val rsStages: Seq[Stage]
   var rob: ReorderBuffer = null
   val loadStage: Stage
 
-  val dynamicStages: Seq[Stage]
+  val unorderedStages: Seq[Stage]
 
   var pipelineRegs: Map[Stage, PipelineRegs] = null
 
@@ -32,7 +32,7 @@ trait DynamicPipeline extends Pipeline {
   }
 
   override def init(): Unit = {
-    pipelineRegs = exeStages.map(stage => {
+    pipelineRegs = rsStages.map(stage => {
       val regs = new PipelineRegs(stage)
       regs.setName(s"pipelineRegs_${stage.stageName}")
       stage -> regs
@@ -41,7 +41,7 @@ trait DynamicPipeline extends Pipeline {
 
   override def connectStages(): Unit = {
 
-    for (stage <- dynamicStages) {
+    for (stage <- unorderedStages :+ retirementStage) {
       stage.output(data.PC)
       stage.output(data.IR)
 
@@ -54,7 +54,7 @@ trait DynamicPipeline extends Pipeline {
 
     val issueStage = issuePipeline.stages.last
 
-    for (stage <- dynamicStages) {
+    for (stage <- unorderedStages :+ retirementStage) {
       // FIXME copy-pasted from StaticPipeline
       for (valueData <- stage.lastValues.keys) {
         if (!stage.outputs.contains(valueData)) {
@@ -68,13 +68,13 @@ trait DynamicPipeline extends Pipeline {
       }
     }
 
-    for (stage <- exeStages) {
+    for (stage <- rsStages) {
       for (reg <- retirementStage.inputs.keys.toSet union loadStage.inputs.keys.toSet) {
         stage.output(reg)
       }
     }
 
-    for (stage <- exeStages) {
+    for (stage <- rsStages) {
       for ((inputData, input) <- stage.inputs) {
         val (regInput, regOutput) = pipelineRegs(stage).addReg(inputData)
         input := regOutput
@@ -83,7 +83,7 @@ trait DynamicPipeline extends Pipeline {
     }
 
     // FIXME copy-pasted from StaticPipeline
-    for (stage <- exeStages) {
+    for (stage <- rsStages) {
       stage.connectOutputDefaults()
       stage.connectLastValues()
     }
