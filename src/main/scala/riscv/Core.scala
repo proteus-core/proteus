@@ -222,7 +222,9 @@ object createDynamicPipeline {
       new MulDiv(pipeline.intMul),
       new BranchUnit(pipeline.intAlu),
       new CsrFile(pipeline.retirementStage, pipeline.intAlu),
-      new scheduling.dynamic.TrapHandler(pipeline.retirementStage)
+      new scheduling.dynamic.TrapHandler(pipeline.retirementStage),
+      new MachineMode(pipeline.intAlu),
+      new Interrupts(pipeline.retirementStage)
     ))
 
     if (build) {

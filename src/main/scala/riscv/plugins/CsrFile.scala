@@ -62,7 +62,6 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
   }
 
   override def getCsr(id: Int): CsrIo = {
-    println(id)
     assert(registers.contains(id))
 
     val area = component plug new Area {
