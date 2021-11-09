@@ -85,6 +85,15 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
     val jumpService = pipeline.getService[JumpService]
     val csrService = pipeline.getService[CsrService]
 
+    pipeline.rsStages.head plug new Area {
+      // TODO: hacking again
+      pipeline.rsStages.head.value(Data.HAS_TRAPPED)
+      pipeline.rsStages.head.value(Data.TRAP_IS_INTERRUPT)
+      pipeline.rsStages.head.value(Data.TRAP_CAUSE)
+      pipeline.rsStages.head.value(Data.TRAP_VAL)
+      pipeline.rsStages.head.value(Data.MRET)
+    }
+
     val trapArea = trapStage plug new Area {
       import trapStage._
 

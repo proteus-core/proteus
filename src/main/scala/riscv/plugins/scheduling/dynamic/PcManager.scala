@@ -17,8 +17,6 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
     stage.output(PrivateRegisters.JUMP_REQUESTED) := True
 
     jumpObservers.foreach(_(stage, stage.value(pipeline.data.PC), target, jumpType))
-
-    // TODO: jump in static manager?
   }
 
   // TODO: should the following functions have a body? would it maybe make sense to inherit
@@ -31,7 +29,7 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
     jumpObservers += observer
   }
 
-  override def jump(target: UInt): Unit = ???
+  override def jump(target: UInt): Unit = ??? // TODO: can we remove this?
 
   override def jumpRequested(stage: Stage): Bool = {
     stage.output(PrivateRegisters.JUMP_REQUESTED)
