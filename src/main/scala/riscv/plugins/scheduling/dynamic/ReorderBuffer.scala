@@ -191,7 +191,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       isFull := False
 
       // reset from the next instruction after CSR instructions
-      when (pipeline.getService[CsrService].isCsrInstruction(oldestEntry.registerMap)) {
+      when (pipeline.getService[CsrService].isCsrInstruction(oldestEntry.registerMap)) { // TODO: change to service call: has it been updated?
         reset()
       }
     }

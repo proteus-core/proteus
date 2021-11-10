@@ -269,12 +269,12 @@ trait JumpService {
   def jumpRequested(stage: Stage): Bool
 
   /**
-    * Add a payload that travels through the pipeline along with PC.
-    * A payload will typically be a pipeline register but PcPayload provides a
-    * more abstract interface: whenever PC is updated, the payload is extracted
-    * from the stage using PcPayload.get() and later injected into the first
-    * stage of the target instruction using PcPayload.set().
-    */
+   * Add a payload that travels through the pipeline along with PC.
+   * A payload will typically be a pipeline register but PcPayload provides a
+   * more abstract interface: whenever PC is updated, the payload is extracted
+   * from the stage using PcPayload.get() and later injected into the first
+   * stage of the target instruction using PcPayload.set().
+   */
   def addPcPayload[T <: Data](pcPayload: PcPayload[T])
 
   type PcUpdateObserver = (Stage, UInt, UInt) => Unit
@@ -291,8 +291,8 @@ trait JumpService {
   type JumpObserver = (Stage, UInt, UInt, JumpType) => Unit
 
   /**
-    * Like onPcUpdate but only called for jumps.
-    */
+   * Like onPcUpdate but only called for jumps.
+   */
   def onJump(observer: JumpObserver): Unit
 
   /**
