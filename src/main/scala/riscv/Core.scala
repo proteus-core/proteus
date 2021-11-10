@@ -201,12 +201,12 @@ object createDynamicPipeline {
       new scheduling.static.Scheduler(canStallExternally = true),
       new scheduling.static.PcManager(0x80000000L),
       new MemoryBackbone,
-      new Fetcher(pipeline.issuePipeline.fetch),
-      new Decoder(pipeline.issuePipeline.decode)
+      new Fetcher(pipeline.issuePipeline.fetch)
     ))
 
     pipeline.addPlugins(Seq(
       new scheduling.dynamic.Scheduler,
+      new Decoder(pipeline.issuePipeline.decode), // TODO: ugly alert!!
       new scheduling.dynamic.PcManager,
       new RegisterFileAccessor(
         // FIXME this works since there is no delay between ID and dispatch. It would probably be

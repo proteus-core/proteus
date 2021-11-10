@@ -114,6 +114,7 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
     exeStage plug new Area { // TODO: hack
       exeStage.value(Data.CSR_OP)
       exeStage.value(Data.CSR_USE_IMM)
+      exeStage.value(pipeline.data.RS1)
     }
 
     csrComponent plug new Area {
