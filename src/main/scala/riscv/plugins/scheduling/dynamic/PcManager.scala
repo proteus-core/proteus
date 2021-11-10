@@ -13,10 +13,23 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
   private val jumpObservers = mutable.Buffer[JumpObserver]()
 
   override def jump(stage: Stage, target: UInt, jumpType: JumpType, checkAlignment: Boolean): Unit = {
-    stage.output(pipeline.data.NEXT_PC) := target
-    stage.output(PrivateRegisters.JUMP_REQUESTED) := True
+    def doJump() = {
+      stage.output(pipeline.data.NEXT_PC) := target
+      stage.output(PrivateRegisters.JUMP_REQUESTED) := True
 
-    jumpObservers.foreach(_(stage, stage.value(pipeline.data.PC), target, jumpType))
+      jumpObservers.foreach(_(stage, stage.value(pipeline.data.PC), target, jumpType))
+    }
+
+    if (!checkAlignment) {
+      doJump()
+    } else {
+      when (target(1 downto 0) =/= 0) {
+        val trapHandler = pipeline.getService[TrapService]
+        trapHandler.trap(stage, TrapCause.InstructionAddressMisaligned(target))
+      }.otherwise {
+        doJump()
+      }
+    }
   }
 
   // TODO: should the following functions have a body? would it maybe make sense to inherit
