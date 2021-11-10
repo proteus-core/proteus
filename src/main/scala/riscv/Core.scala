@@ -1,14 +1,9 @@
 package riscv
 
 import riscv.plugins._
-import riscv.plugins.scheduling.static.TrapHandler
 import riscv.soc._
 import spinal.core._
 import spinal.core.sim._
-import spinal.lib._
-import spinal.lib.bus.amba3.apb._
-import spinal.lib.bus.amba4.axi._
-import spinal.lib.com.uart._
 
 object createStaticPipeline {
   def apply(disablePipelining: Boolean = false,
@@ -27,6 +22,7 @@ object createStaticPipeline {
       val writeback = new Stage("WB")
 
       override val stages = Seq(fetch, decode, execute, memory, writeback)
+      override val passThroughStage: Stage = execute
       override val config: Config = conf
       override val data: StandardPipelineData = new StandardPipelineData(conf)
       override val pipelineComponent: Component = this
@@ -56,6 +52,7 @@ object createStaticPipeline {
       new Timers,
       new MachineMode(pipeline.execute),
       new TrapHandler(pipeline.writeback),
+      new TrapStageInvalidator,
       new Interrupts(pipeline.writeback),
       new MulDiv(pipeline.execute)
     ) ++ extraPlugins)
@@ -183,17 +180,17 @@ object createDynamicPipeline {
         override val config = dynamicPipeline.config
         override val data = dynamicPipeline.data
         override val pipelineComponent = dynamicPipeline.pipelineComponent
+        override val passThroughStage: Stage = decode // dummy
       }
 
       val intAlu = new Stage("EX_ALU")
       val intMul = new Stage("EX_MUL")
+      override val passThroughStage: Stage = intAlu
       override val rsStages: Seq[Stage] = Seq(intAlu, intMul)
-
       override val loadStage: Stage = new Stage("LOAD")
-
       override val retirementStage = new Stage("RET")
-
       override val unorderedStages: Seq[Stage] = rsStages :+ loadStage :+ retirementStage
+      override val stages = issuePipeline.stages ++ unorderedStages :+ retirementStage
     }
 
 
@@ -205,8 +202,8 @@ object createDynamicPipeline {
     ))
 
     pipeline.addPlugins(Seq(
-      new scheduling.dynamic.Scheduler,
       new Decoder(pipeline.issuePipeline.decode), // TODO: ugly alert!!
+      new scheduling.dynamic.Scheduler,
       new scheduling.dynamic.PcManager,
       new RegisterFileAccessor(
         // FIXME this works since there is no delay between ID and dispatch. It would probably be
@@ -222,7 +219,7 @@ object createDynamicPipeline {
       new MulDiv(pipeline.intMul),
       new BranchUnit(pipeline.intAlu),
       new CsrFile(pipeline.retirementStage, pipeline.intAlu),
-      new scheduling.dynamic.TrapHandler(pipeline.retirementStage),
+      new TrapHandler(pipeline.retirementStage),
       new MachineMode(pipeline.intAlu),
       new Interrupts(pipeline.retirementStage)
     ))

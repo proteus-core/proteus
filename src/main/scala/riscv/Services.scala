@@ -329,6 +329,10 @@ trait TrapService {
   def onTrapCommit(cb: TrapCommitCallback)
 }
 
+trait TrapStageInvalidatorService {
+  def invalidate(trappedRegister: PipelineData[Data]): Unit
+}
+
 trait Csr extends Area {
   def read(): UInt
 
