@@ -69,13 +69,12 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
       val jumpStage = pipeline.retirementStage
 
       when (jumpStage.arbitration.isDone && jumpRequested(jumpStage)) {
-        // TODO: invalidate other exeStages when non-global jump?
         val staticPcManager = pipeline.issuePipeline.getService[JumpService]
         staticPcManager.jump(jumpStage.output(pipeline.data.NEXT_PC))
 
         pipeline.rob.reset()
 
-        for (exeStage <- pipeline.rsStages) {
+        for (exeStage <- pipeline.unorderedStages) {
           exeStage.arbitration.isValid := False
         }
       }

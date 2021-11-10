@@ -30,10 +30,20 @@ private class CsrFileIo(implicit config: Config) extends Bundle with IMasterSlav
   }
 }
 
+private case class CsrWriteNotify() extends Bundle with IMasterSlave {
+  val write = Bool()
+
+  override def asMaster(): Unit = {
+    in(write)
+    out()
+  }
+}
+
 private class CsrComponent(implicit config: Config) extends Component {
   setDefinitionName("CsrFile")
 
   val io = master(new CsrFileIo)
+  val writeNotify = master(CsrWriteNotify())
 }
 
 class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with CsrService {
@@ -49,6 +59,7 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
   // lazy because pipeline is null at the time of construction.
   private lazy val component = pipeline plug new CsrComponent
   private val registers = mutable.Map[Int, Csr]()
+  private var writeInCycle: Bool = null
 
   private def isReadOnly(csrId: Int) = (csrId & 0xC00) == 0xC00
 
@@ -123,6 +134,8 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
       io.rdata := 0
       io.error := False
 
+      writeNotify.write := False
+
       when (io.read) {
         switch (io.rid) {
           for ((id, reg) <- registers) {
@@ -144,6 +157,7 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
                 io.error := True
               } else {
                 reg.swWrite(io.wdata)
+                writeNotify.write := True
               }
             }
           }
@@ -221,10 +235,21 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
 
     pipeline plug new Area {
       csrComponent.io <> csrArea.csrIo
+
+      val notifyIo = slave(CsrWriteNotify())
+
+      writeInCycle = Bool()
+      writeInCycle := notifyIo.write
+
+      csrComponent.writeNotify <> notifyIo
     }
   }
 
   override def isCsrInstruction(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
     bundle.element(Data.CSR_OP.asInstanceOf[PipelineData[Data]]) =/= CsrOp.NONE
+  }
+
+  override def csrWriteInCycle(): Bool = {
+    writeInCycle
   }
 }

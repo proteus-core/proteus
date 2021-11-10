@@ -376,6 +376,7 @@ class CsrIo(implicit config: Config) extends Bundle with IMasterSlave {
 trait CsrService {
   def registerCsr[T <: Csr](id: Int, reg: => T): T
   def getCsr(id: Int): CsrIo
+  def csrWriteInCycle(): Bool
   def isCsrInstruction(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
 }
 
