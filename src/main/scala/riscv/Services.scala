@@ -330,7 +330,7 @@ trait TrapService {
 }
 
 trait TrapStageInvalidatorService {
-  def invalidate(trappedRegister: PipelineData[Data]): Unit
+  def invalidate(): Unit
 }
 
 trait Csr extends Area {

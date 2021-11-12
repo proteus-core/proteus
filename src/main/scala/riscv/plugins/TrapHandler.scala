@@ -7,8 +7,8 @@ import spinal.lib._
 import scala.collection.mutable
 
 // This is only needed for static pipelines
-class TrapStageInvalidator() extends Plugin[Pipeline] with TrapStageInvalidatorService {
-  def invalidate(trappedRegister: PipelineData[Data]) = {
+class TrapStageInvalidator() extends Plugin[StaticPipeline] with TrapStageInvalidatorService {
+  def invalidate() = {
     for (stage <- pipeline.stages.init) {
       // Make isValid False whenever there is a later stage that has a trapped
       // instruction. This basically ensures the whole pipeline behind a
@@ -24,7 +24,7 @@ class TrapStageInvalidator() extends Plugin[Pipeline] with TrapStageInvalidatorS
       // before WB (which can trap).
       val laterStages = pipeline.stages.dropWhile(_ != stage).tail
       val laterStageTrapped = laterStages.map(s => {
-        s.arbitration.isValid && s.output(trappedRegister).asInstanceOf[Bool] // TODO: ugly
+        s.arbitration.isValid && pipeline.getService[TrapService].hasTrapped(s)
       }).orR
 
       when (laterStageTrapped) {
@@ -175,7 +175,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
       trapArea.mtval <> csrService.getCsr(0x343)
 
       if (pipeline.hasService[TrapStageInvalidatorService]) {
-        pipeline.getService[TrapStageInvalidatorService].invalidate(Data.HAS_TRAPPED.asInstanceOf[PipelineData[Data]])
+        pipeline.getService[TrapStageInvalidatorService].invalidate()
       }
     }
   }

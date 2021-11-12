@@ -34,8 +34,7 @@ private case class CsrWriteNotify() extends Bundle with IMasterSlave {
   val write = Bool()
 
   override def asMaster(): Unit = {
-    in(write)
-    out()
+    out(write)
   }
 }
 
@@ -235,13 +234,6 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
 
     pipeline plug new Area {
       csrComponent.io <> csrArea.csrIo
-
-      val notifyIo = slave(CsrWriteNotify())
-
-      writeInCycle = Bool()
-      writeInCycle := notifyIo.write
-
-      csrComponent.writeNotify <> notifyIo
     }
   }
 
@@ -250,6 +242,6 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
   }
 
   override def csrWriteInCycle(): Bool = {
-    writeInCycle
+    component.writeNotify.write
   }
 }
