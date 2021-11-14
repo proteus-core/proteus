@@ -155,6 +155,12 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
   def onRdbMessage(rdbMessage: RdbMessage): Unit = {
     robEntries(rdbMessage.robIndex).registerMap := rdbMessage.registerMap
+
+    when (pipeline.getService[CsrService].isCsrInstruction(rdbMessage.registerMap)) {
+      pipeline.getService[JumpService].jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
+    }
+
+
     robEntries(rdbMessage.robIndex).ready := True
   }
 
@@ -187,8 +193,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
       // reset from the next instruction after CSR instructions
       when (pipeline.getService[CsrService].csrWriteInCycle()) {
-        pipeline.getService[JumpService].jumpRequested(ret) := True // TODO: we need this, right?
-        reset()
+//        pipeline.getService[JumpService].flushPipeline(ret)
+//        reset()
       }
     }
 

@@ -145,4 +145,8 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
   override def jumpOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
     False
   }
+
+  override def flushPipeline(stage: Stage): Unit = {
+    jump(stage, stage.output(pipeline.data.NEXT_PC))
+  }
 }

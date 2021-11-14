@@ -74,7 +74,7 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
 
         pipeline.rob.reset()
 
-        for (exeStage <- pipeline.unorderedStages) {
+        for (exeStage <- pipeline.rsStages) {
           exeStage.arbitration.isValid := False
         }
       }
@@ -89,5 +89,9 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
 
   override def jumpOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
     bundle.elementAs[Bool](PrivateRegisters.JUMP_REQUESTED.asInstanceOf[PipelineData[Data]])
+  }
+
+  override def flushPipeline(stage: Stage): Unit = {
+    stage.input(PrivateRegisters.JUMP_REQUESTED) := True
   }
 }

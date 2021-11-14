@@ -263,6 +263,8 @@ trait JumpService {
   def jump(stage: Stage, target: UInt, jumpType: JumpType = JumpType.Normal,
            checkAlignment: Boolean = true): Unit
 
+  def flushPipeline(stage: Stage): Unit
+
   /**
     * Has a jump been requested by the instruction in `stage`?
     */
