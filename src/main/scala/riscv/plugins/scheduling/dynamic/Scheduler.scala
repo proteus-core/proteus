@@ -66,11 +66,12 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
 
       when (dispatchStage.arbitration.isValid && dispatchStage.arbitration.isReady) {
         val fuMask = dispatchStage.output(data.DEST_FU)
+        val illegalInstruction = fuMask === 0
 
         var context = when (False) {}
 
         for ((rs, index) <- reservationStations.zipWithIndex) {
-          context = context.elsewhen ((fuMask(index) || fuMask === 0 /* TODO: letting illegal instructions through */) && rs.isAvailable && rob.isAvailable) {
+          context = context.elsewhen ((fuMask(index) || illegalInstruction) && rs.isAvailable && rob.isAvailable) {
             rs.execute()
           }
         }

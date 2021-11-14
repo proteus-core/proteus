@@ -331,10 +331,6 @@ trait TrapService {
   def onTrapCommit(cb: TrapCommitCallback)
 }
 
-trait TrapStageInvalidatorService {
-  def invalidate(): Unit
-}
-
 trait Csr extends Area {
   def read(): UInt
 

@@ -7,28 +7,30 @@ import spinal.lib._
 import scala.collection.mutable
 
 // This is only needed for static pipelines
-class TrapStageInvalidator() extends Plugin[StaticPipeline] with TrapStageInvalidatorService {
-  def invalidate() = {
-    for (stage <- pipeline.stages.init) {
-      // Make isValid False whenever there is a later stage that has a trapped
-      // instruction. This basically ensures the whole pipeline behind a
-      // trapped instruction is flushed until the trapped instruction is
-      // committed.
-      // FIXME This setup could still go wrong in the following scenario: if
-      // there would be a stage that commits something to an architectural
-      // state and is more than one stage before a stage that could possible
-      // trap, then these architectural state changes could become visible
-      // even though the instruction never reaches WB. In the current static
-      // 5-stage pipeline this can never happen because the earliest stage
-      // that changes architectural state is MEM which is only one stage
-      // before WB (which can trap).
-      val laterStages = pipeline.stages.dropWhile(_ != stage).tail
-      val laterStageTrapped = laterStages.map(s => {
-        s.arbitration.isValid && pipeline.getService[TrapService].hasTrapped(s)
-      }).orR
+class TrapStageInvalidator() extends Plugin[StaticPipeline] {
+  override def build() = {
+    pipeline plug new Area {
+      for (stage <- pipeline.stages.init) {
+        // Make isValid False whenever there is a later stage that has a trapped
+        // instruction. This basically ensures the whole pipeline behind a
+        // trapped instruction is flushed until the trapped instruction is
+        // committed.
+        // FIXME This setup could still go wrong in the following scenario: if
+        // there would be a stage that commits something to an architectural
+        // state and is more than one stage before a stage that could possible
+        // trap, then these architectural state changes could become visible
+        // even though the instruction never reaches WB. In the current static
+        // 5-stage pipeline this can never happen because the earliest stage
+        // that changes architectural state is MEM which is only one stage
+        // before WB (which can trap).
+        val laterStages = pipeline.stages.dropWhile(_ != stage).tail
+        val laterStageTrapped = laterStages.map(s => {
+          s.arbitration.isValid && pipeline.getService[TrapService].hasTrapped(s)
+        }).orR
 
-      when (laterStageTrapped) {
-        stage.arbitration.isValid := False
+        when(laterStageTrapped) {
+          stage.arbitration.isValid := False
+        }
       }
     }
   }
@@ -173,10 +175,6 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
       trapArea.mcause <> csrService.getCsr(0x342)
       trapArea.mepc <> csrService.getCsr(0x341)
       trapArea.mtval <> csrService.getCsr(0x343)
-
-      if (pipeline.hasService[TrapStageInvalidatorService]) {
-        pipeline.getService[TrapStageInvalidatorService].invalidate()
-      }
     }
   }
 
