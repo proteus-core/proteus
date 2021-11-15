@@ -7,6 +7,10 @@ import spinal.lib._
 case class CdbMessage(robIndexBits: BitCount)(implicit config: Config) extends Bundle {
   val robIndex: UInt = UInt(robIndexBits)
   val writeValue: UInt = UInt(config.xlen bits)
+
+  override def clone(): CdbMessage = {
+    CdbMessage(robIndexBits)
+  }
 }
 
 trait CdbListener {

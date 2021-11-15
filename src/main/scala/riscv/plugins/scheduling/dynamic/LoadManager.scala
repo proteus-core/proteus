@@ -13,7 +13,7 @@ class LoadManager(pipeline: Pipeline,
   val outputCache: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
   val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
-  private val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
+  private val resultCdbMessage = RegInit(CdbMessage(rob.indexBits).getZero)
   val rdbWaitingNext, cdbWaitingNext = Bool()
   val rdbWaiting = RegNext(rdbWaitingNext).init(False)
   val cdbWaiting = RegNext(cdbWaitingNext).init(False)
@@ -57,11 +57,7 @@ class LoadManager(pipeline: Pipeline,
     loadStage.arbitration.isValid := (state === State.WAITING_FOR_STORE) || (state === State.EXECUTING)
 
     cdbStream.valid := False
-    cdbStream.payload.robIndex := storedMessage.robIndex
-    cdbStream.payload.writeValue.assignDontCare()
-
-    resultCdbMessage.robIndex := storedMessage.robIndex
-    resultCdbMessage.writeValue.assignDontCare
+    cdbStream.payload := resultCdbMessage
 
     for (register <- retirementRegisters.keys) {
       loadStage.input(register) := storedMessage.registerMap.element(register)
@@ -85,9 +81,10 @@ class LoadManager(pipeline: Pipeline,
       }
       outputCache := rdbStream.payload
 
+      cdbStream.valid := True
       cdbStream.payload.writeValue := loadStage.output(pipeline.data.RD_DATA)
       cdbStream.payload.robIndex := storedMessage.robIndex
-      cdbStream.valid := True
+      resultCdbMessage := cdbStream.payload
 
       rdbWaitingNext := !rdbStream.ready
       cdbWaitingNext := !cdbStream.ready
