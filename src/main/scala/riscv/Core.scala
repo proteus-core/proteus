@@ -263,7 +263,7 @@ object CoreDynamicSim {
         i += 1
 
         if (i == 100) {
-          done = true
+ //         done = true
         }
       }
     }

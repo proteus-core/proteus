@@ -13,7 +13,9 @@ class LoadManager(pipeline: Pipeline,
   val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
   private val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
-  val rdbWaiting, cdbWaiting = Bool()
+  val rdbWaitingNext, cdbWaitingNext = Bool()
+  val rdbWaiting = RegNext(rdbWaitingNext).init(False)
+  val cdbWaiting = RegNext(cdbWaitingNext).init(False)
 
   private object State extends SpinalEnum {
     val IDLE, WAITING_FOR_STORE, EXECUTING, BROADCASTING_RESULT = newElement()
@@ -47,8 +49,8 @@ class LoadManager(pipeline: Pipeline,
       isAvailable := True
     }
 
-    rdbWaiting := False
-    cdbWaiting := False
+    cdbWaitingNext := cdbWaiting
+    rdbWaitingNext := rdbWaiting
 
     loadStage.arbitration.isStalled := state === State.WAITING_FOR_STORE
     loadStage.arbitration.isValid := (state === State.WAITING_FOR_STORE) || (state === State.EXECUTING)
@@ -85,10 +87,10 @@ class LoadManager(pipeline: Pipeline,
       cdbStream.payload.robIndex := storedMessage.robIndex
       cdbStream.valid := True
 
-      rdbWaiting := !rdbStream.ready
-      cdbWaiting := !cdbStream.ready
+      rdbWaitingNext := !rdbStream.ready
+      cdbWaitingNext := !cdbStream.ready
 
-      when (rdbWaiting || cdbWaiting) {
+      when (!rdbStream.ready || !cdbStream.ready) {
         stateNext := State.BROADCASTING_RESULT
       } otherwise {
         stateNext := State.IDLE
@@ -97,11 +99,14 @@ class LoadManager(pipeline: Pipeline,
     }
 
     when (state === State.BROADCASTING_RESULT) {
+      rdbStream.valid := rdbWaiting
+      cdbStream.valid := cdbWaiting
+      
       when (rdbStream.ready) {
-        rdbWaiting := False
+        rdbWaitingNext := False
       }
       when (cdbStream.ready) {
-        cdbWaiting := False
+        cdbWaitingNext := False
       }
       when (!rdbWaiting && !cdbWaiting) {
         stateNext := State.IDLE

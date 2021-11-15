@@ -23,7 +23,7 @@ class CommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBu
   def build(): Unit = {
     when (arbitratedInputs.valid) {
       arbitratedInputs.ready := True
-      val listeners = reservationStations
+      val listeners = reservationStations :+ rob
       for (listener <- listeners) {
         listener.onCdbMessage(arbitratedInputs.payload)
       }

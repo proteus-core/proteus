@@ -13,6 +13,7 @@ case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])
                    (implicit config: Config) extends Bundle {
   val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] = retirementRegisters.createBundle
   val ready = Bool()
+  val hasValue = Bool()
 
   override def clone(): RobEntry = {
     RobEntry(retirementRegisters)
@@ -22,7 +23,7 @@ case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])
 class ReorderBuffer(pipeline: DynamicPipeline,
                     robCapacity: Int,
                     retirementRegisters: DynBundle[PipelineData[Data]])
-                   (implicit config: Config) extends Area {
+                   (implicit config: Config) extends Area with CdbListener {
   def capacity: Int = robCapacity
   def indexBits: BitCount = log2Up(capacity) bits
 
@@ -97,11 +98,17 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   def pushEntry(rd: UInt, rdType: SpinalEnumCraft[RegisterType.type], lsuOperationType: SpinalEnumCraft[LsuOperationType.type]): UInt = {
     pushInCycle := True
     pushedEntry.ready := False
+    pushedEntry.hasValue := False
     pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := rd
     pushedEntry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) := rdType
     pipeline.getService[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
     pipeline.getService[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
     newestIndex
+  }
+
+  override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
+    robEntries(cdbMessage.robIndex).hasValue := True
+    robEntries(cdbMessage.robIndex).registerMap.element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
   }
 
   def getValue(regId: UInt): (Bool, Bool, UInt, UInt) = {
@@ -125,7 +132,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
         && regId =/= 0
         && entry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) === RegisterType.GPR) {
         found := True
-        ready := entry.ready
+        ready := entry.hasValue
         value := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
         ix := index.resized
       }
@@ -160,7 +167,6 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       pipeline.getService[JumpService].jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
     }
 
-
     robEntries(rdbMessage.robIndex).ready := True
   }
 
@@ -185,17 +191,19 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     when (!isEmpty && oldestEntry.ready) {
       ret.arbitration.isValid := True
 
-      // removing the oldest entry
-      updatedOldestIndex := nextIndex(oldestIndex)
-      oldestIndex := updatedOldestIndex
-      willRetire := True
-      isFull := False
-
       // reset from the next instruction after CSR instructions
       when (pipeline.getService[CsrService].csrWriteInCycle()) {
 //        pipeline.getService[JumpService].flushPipeline(ret)
 //        reset()
       }
+    }
+
+    when (!isEmpty && oldestEntry.ready && ret.arbitration.isDone) {
+      // removing the oldest entry
+      updatedOldestIndex := nextIndex(oldestIndex)
+      oldestIndex := updatedOldestIndex
+      willRetire := True
+      isFull := False
     }
 
     when (pushInCycle) {
