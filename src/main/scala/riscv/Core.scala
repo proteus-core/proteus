@@ -221,7 +221,8 @@ object createDynamicPipeline {
       new CsrFile(pipeline.retirementStage, pipeline.intAlu),
       new TrapHandler(pipeline.retirementStage),
       new MachineMode(pipeline.intAlu),
-      new Interrupts(pipeline.retirementStage)
+      new Interrupts(pipeline.retirementStage),
+      new Timers
     ))
 
     if (build) {
