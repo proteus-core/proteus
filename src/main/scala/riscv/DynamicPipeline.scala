@@ -52,6 +52,17 @@ trait DynamicPipeline extends Pipeline {
       stage.output(data.NEXT_PC)
     }
 
+    // HACK make sure that all pipeline regs are routed through *all* exe stages.
+    // I'm embarrassed...
+    // https://gitlab.com/ProteusCore/ProteusCore/-/issues/17
+    for (stage <- rsStages) {
+      for (pipelineData <- stage.lastValues.keys) {
+        for (stage <- rsStages) {
+          stage.value(pipelineData)
+        }
+      }
+    }
+
     val issueStage = issuePipeline.stages.last
 
     for (stage <- unorderedStages :+ retirementStage) {
