@@ -10,6 +10,7 @@ class LoadManager(pipeline: Pipeline,
                   retirementRegisters: DynBundle[PipelineData[Data]])
                  (implicit config: Config) extends Area {
   val storedMessage: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
+  val outputCache: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
   val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
   private val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
@@ -55,9 +56,6 @@ class LoadManager(pipeline: Pipeline,
     loadStage.arbitration.isStalled := state === State.WAITING_FOR_STORE
     loadStage.arbitration.isValid := (state === State.WAITING_FOR_STORE) || (state === State.EXECUTING)
 
-    rdbStream.valid := False
-    rdbStream.payload := storedMessage
-
     cdbStream.valid := False
     cdbStream.payload.robIndex := storedMessage.robIndex
     cdbStream.payload.writeValue.assignDontCare()
@@ -69,6 +67,9 @@ class LoadManager(pipeline: Pipeline,
       loadStage.input(register) := storedMessage.registerMap.element(register)
     }
 
+    rdbStream.valid := False
+    rdbStream.payload := outputCache
+
     when (state === State.WAITING_FOR_STORE) {
       val address = pipeline.getService[LsuService].addressOfBundle(storedMessage.registerMap)
       when (!rob.hasPendingStore(storedMessage.robIndex, address)) {
@@ -77,11 +78,12 @@ class LoadManager(pipeline: Pipeline,
     }
 
     when (state === State.EXECUTING && loadStage.arbitration.isDone) {
-      rdbStream.payload.robIndex := storedMessage.robIndex
       rdbStream.valid := True
+      rdbStream.payload.robIndex := storedMessage.robIndex
       for (register <- retirementRegisters.keys) {
         rdbStream.payload.registerMap.element(register) := loadStage.output(register)
       }
+      outputCache := rdbStream.payload
 
       cdbStream.payload.writeValue := loadStage.output(pipeline.data.RD_DATA)
       cdbStream.payload.robIndex := storedMessage.robIndex

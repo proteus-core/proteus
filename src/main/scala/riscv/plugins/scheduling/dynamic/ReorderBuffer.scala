@@ -190,12 +190,6 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
     when (!isEmpty && oldestEntry.ready) {
       ret.arbitration.isValid := True
-
-      // reset from the next instruction after CSR instructions
-      when (pipeline.getService[CsrService].csrWriteInCycle()) {
-//        pipeline.getService[JumpService].flushPipeline(ret)
-//        reset()
-      }
     }
 
     when (!isEmpty && oldestEntry.ready && ret.arbitration.isDone) {
