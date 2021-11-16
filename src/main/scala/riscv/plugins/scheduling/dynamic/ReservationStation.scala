@@ -32,8 +32,8 @@ class ReservationStation(exeStage: Stage,
   private val cdbWaiting = RegNext(cdbWaitingNext).init(False) // TODO: am i using this? can there be a problem if only one bus has to wait?
   private val dispatchWaiting = RegNext(dispatchWaitingNext).init(False)
 
-  private val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
-  private val resultDispatchMessage = Reg(RdbMessage(retirementRegisters, rob.indexBits))
+  private val resultCdbMessage = RegInit(CdbMessage(rob.indexBits).getZero)
+  private val resultDispatchMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
 
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
   val dispatchStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
@@ -104,9 +104,6 @@ class ReservationStation(exeStage: Stage,
 
     stateNext := state
 
-    resultCdbMessage.robIndex := robEntryIndex  // TODO: needed?
-    resultCdbMessage.writeValue.assignDontCare
-
     dispatchStream.valid := False
     dispatchStream.payload := resultDispatchMessage
 
@@ -135,7 +132,7 @@ class ReservationStation(exeStage: Stage,
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
 
       cdbStream.payload.robIndex := robEntryIndex
-      dispatchStream.payload.robIndex := robEntryIndex.resized
+      dispatchStream.payload.robIndex := robEntryIndex
 
       for (register <- retirementRegisters.keys) {
         dispatchStream.payload.registerMap.element(register) := exeStage.output(register)

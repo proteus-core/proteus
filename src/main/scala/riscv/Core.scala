@@ -42,10 +42,10 @@ object createStaticPipeline {
       new Fetcher(pipeline.fetch),
       new Decoder(pipeline.decode),
       new RegisterFileAccessor(pipeline.decode, pipeline.writeback),
-      new IntAlu(pipeline.execute),
+      new IntAlu(Set(pipeline.execute)),
       new Shifter(pipeline.execute),
       new Lsu(pipeline.memory, pipeline.memory, pipeline.memory),
-      new BranchUnit(pipeline.execute),
+      new BranchUnit(Set(pipeline.execute)),
       new PcManager(0x80000000L),
       new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
       new CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
@@ -183,10 +183,11 @@ object createDynamicPipeline {
         override val passThroughStage: Stage = decode // dummy
       }
 
-      val intAlu = new Stage("EX_ALU")
+      val intAlu1 = new Stage("EX_ALU1")
+      val intAlu2 = new Stage("EX_ALU2")
       val intMul = new Stage("EX_MUL")
-      override val passThroughStage: Stage = intAlu
-      override val rsStages: Seq[Stage] = Seq(intAlu, intMul)
+      override val passThroughStage: Stage = intAlu1
+      override val rsStages: Seq[Stage] = Seq(intAlu1, intAlu2, intMul)
       override val loadStage: Stage = new Stage("LOAD")
       override val retirementStage = new Stage("RET")
       override val unorderedStages: Seq[Stage] = rsStages :+ loadStage
@@ -212,15 +213,15 @@ object createDynamicPipeline {
         readStage  = pipeline.issuePipeline.decode,
         writeStage = pipeline.retirementStage
       ),
-      new Lsu(pipeline.intAlu, pipeline.loadStage, pipeline.retirementStage),
+      new Lsu(pipeline.intAlu2, pipeline.loadStage, pipeline.retirementStage),
       new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage, 8, conf.xlen),
-      new IntAlu(pipeline.intAlu),
-      new Shifter(pipeline.intAlu),
+      new IntAlu(Set(pipeline.intAlu1, pipeline.intAlu2)),
+      new Shifter(pipeline.intAlu1),
       new MulDiv(pipeline.intMul),
-      new BranchUnit(pipeline.intAlu),
-      new CsrFile(pipeline.retirementStage, pipeline.intAlu),
+      new BranchUnit(Set(pipeline.intAlu1, pipeline.intAlu2)),
+      new CsrFile(pipeline.retirementStage, pipeline.intAlu1),
       new TrapHandler(pipeline.retirementStage),
-      new MachineMode(pipeline.intAlu),
+      new MachineMode(pipeline.intAlu1),
       new Interrupts(pipeline.retirementStage),
       new Timers
     ))
@@ -263,8 +264,8 @@ object CoreDynamicSim {
 
         i += 1
 
-        if (i == 100) {
- //         done = true
+        if (i == 200) {
+//          done = true
         }
       }
     }

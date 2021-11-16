@@ -51,6 +51,7 @@ trait DynamicPipeline extends Pipeline {
       stage.output(data.RD_TYPE)
       stage.output(data.NEXT_PC)
       getService[BranchTargetPredictorService].getPredictedPc(stage)
+      getService[JumpService].jumpRequested(stage)
     }
 
     // HACK make sure that all pipeline regs are routed through *all* exe stages.
