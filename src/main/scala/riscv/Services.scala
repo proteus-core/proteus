@@ -276,6 +276,8 @@ trait JumpService {
   def jump(stage: Stage, target: UInt, jumpType: JumpType = JumpType.Normal,
            checkAlignment: Boolean = true): Unit
 
+  def flushPipeline(stage: Stage): Unit
+
   /**
     * Has a jump been requested by the instruction in `stage`?
     */
@@ -317,6 +319,8 @@ trait JumpService {
   def setFetchPc(pc: UInt): Unit
 
   def disableJump(stage: Stage): Unit
+
+  def jumpOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
 }
 
 trait BranchTargetPredictorService {
@@ -383,6 +387,8 @@ class CsrIo(implicit config: Config) extends Bundle with IMasterSlave {
 trait CsrService {
   def registerCsr[T <: Csr](id: Int, reg: => T): T
   def getCsr(id: Int): CsrIo
+  def csrWriteInCycle(): Bool
+  def isCsrInstruction(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
 }
 
 class IrqIo extends Bundle with IMasterSlave {

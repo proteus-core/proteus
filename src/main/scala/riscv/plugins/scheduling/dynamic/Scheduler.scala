@@ -5,7 +5,7 @@ import spinal.core._
 
 class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
   class Data { // TODO: better name for this?
-    object DEST_FU extends PipelineData(Bits(pipeline.exeStages.size bits))
+    object DEST_FU extends PipelineData(Bits(pipeline.rsStages.size bits))
   }
 
   lazy val data = new Data // TODO: better name for this?
@@ -31,7 +31,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       val rob = pipeline.rob
       rob.build()
 
-      val reservationStations = pipeline.exeStages.map(
+      val reservationStations = pipeline.rsStages.map(
         stage => new ReservationStation(stage, rob, pipeline, registerBundle))
 
       val cdb = new CommonDataBus(reservationStations, rob)
@@ -66,14 +66,12 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
 
       when (dispatchStage.arbitration.isValid && dispatchStage.arbitration.isReady) {
         val fuMask = dispatchStage.output(data.DEST_FU)
+        val illegalInstruction = fuMask === 0
 
-        var context = when (fuMask === 0) {
-          // TODO Illegal instruction
-          dispatchStage.arbitration.isStalled := True
-        }
+        var context = when (False) {}
 
         for ((rs, index) <- reservationStations.zipWithIndex) {
-          context = context.elsewhen (fuMask(index) && rs.isAvailable && rob.isAvailable) {
+          context = context.elsewhen ((fuMask(index) || illegalInstruction) && rs.isAvailable && rob.isAvailable) {
             rs.execute()
           }
         }
@@ -87,14 +85,14 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
 
   override def setDestinations(opcode: MaskedLiteral, stages: Set[Stage]): Unit = {
     for (stage <- stages) {
-      assert(pipeline.exeStages.contains(stage),
+      assert(pipeline.rsStages.contains(stage),
         s"Stage ${stage.stageName} is not an execute stage")
     }
 
     pipeline.getService[DecoderService].configure { config =>
       var fuMask = 0
 
-      for (exeStage <- pipeline.exeStages.reverse) {
+      for (exeStage <- pipeline.rsStages.reverse) {
         val nextBit = if (stages.contains(exeStage)) 1 else 0
         fuMask = (fuMask << 1) | nextBit
       }

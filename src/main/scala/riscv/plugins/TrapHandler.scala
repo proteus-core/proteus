@@ -1,10 +1,40 @@
-package riscv.plugins.scheduling.static
+package riscv.plugins
 
 import riscv._
 import spinal.core._
 import spinal.lib._
 
 import scala.collection.mutable
+
+// This is only needed for static pipelines
+class TrapStageInvalidator() extends Plugin[StaticPipeline] {
+  override def build() = {
+    pipeline plug new Area {
+      for (stage <- pipeline.stages.init) {
+        // Make isValid False whenever there is a later stage that has a trapped
+        // instruction. This basically ensures the whole pipeline behind a
+        // trapped instruction is flushed until the trapped instruction is
+        // committed.
+        // FIXME This setup could still go wrong in the following scenario: if
+        // there would be a stage that commits something to an architectural
+        // state and is more than one stage before a stage that could possible
+        // trap, then these architectural state changes could become visible
+        // even though the instruction never reaches WB. In the current static
+        // 5-stage pipeline this can never happen because the earliest stage
+        // that changes architectural state is MEM which is only one stage
+        // before WB (which can trap).
+        val laterStages = pipeline.stages.dropWhile(_ != stage).tail
+        val laterStageTrapped = laterStages.map(s => {
+          s.arbitration.isValid && pipeline.getService[TrapService].hasTrapped(s)
+        }).orR
+
+        when(laterStageTrapped) {
+          stage.arbitration.isValid := False
+        }
+      }
+    }
+  }
+}
 
 private class TrapSignals(implicit config: Config) extends Bundle {
   val hasTrapped = False
@@ -18,7 +48,7 @@ private class StageTrapSignals(implicit config: Config) extends Area {
 }
 
 class TrapHandler(trapStage: Stage)(implicit config: Config)
-  extends Plugin[StaticPipeline] with TrapService {
+  extends Plugin[Pipeline] with TrapService {
   private object Data {
     object HAS_TRAPPED extends PipelineData(Bool())
     object TRAP_IS_INTERRUPT extends PipelineData(Bool())
@@ -31,6 +61,8 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
   private val trapCommitCallbacks = mutable.ArrayBuffer[TrapCommitCallback]()
 
   override def setup(): Unit = {
+    val issuer = pipeline.getService[IssueService]
+
     pipeline.getService[DecoderService].configure {decoder =>
       decoder.addDefault(Map(
         Data.MRET -> False
@@ -38,6 +70,8 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
 
       decoder.addDecoding(Opcodes.MRET, InstructionType.I,
                           Map(Data.MRET -> True))
+
+      issuer.setDestination(Opcodes.MRET, pipeline.passThroughStage)
     }
 
     for (stage <- pipeline.stages) {
@@ -80,6 +114,15 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
 
     val jumpService = pipeline.getService[JumpService]
     val csrService = pipeline.getService[CsrService]
+
+    // TODO: hacking again
+    pipeline.passThroughStage plug new Area {
+      pipeline.passThroughStage.value(Data.HAS_TRAPPED)
+      pipeline.passThroughStage.value(Data.TRAP_IS_INTERRUPT)
+      pipeline.passThroughStage.value(Data.TRAP_CAUSE)
+      pipeline.passThroughStage.value(Data.TRAP_VAL)
+      pipeline.passThroughStage.value(Data.MRET)
+    }
 
     val trapArea = trapStage plug new Area {
       import trapStage._
@@ -132,31 +175,6 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
       trapArea.mcause <> csrService.getCsr(0x342)
       trapArea.mepc <> csrService.getCsr(0x341)
       trapArea.mtval <> csrService.getCsr(0x343)
-
-      // FIXME Only this part is dependent on a StaticPipeline, the rest should
-      // be part of a Pipeline plugin.
-      for (stage <- pipeline.stages.init) {
-        // Make isValid False whenever there is a later stage that has a trapped
-        // instruction. This basically ensures the whole pipeline behind a
-        // trapped instruction is flushed until the trapped instruction is
-        // committed.
-        // FIXME This setup could still go wrong in the following scenario: if
-        // there would be a stage that commits something to an architectural
-        // state and is more than one stage before a stage that could possible
-        // trap, then these architectural state changes could become visible
-        // even though the instruction never reaches WB. In the current static
-        // 5-stage pipeline this can never happen because the earliest stage
-        // that changes architectural state is MEM which is only one stage
-        // before WB (which can trap).
-        val laterStages = pipeline.stages.dropWhile(_ != stage).tail
-        val laterStageTrapped = laterStages.map(s => {
-          s.arbitration.isValid && s.output(Data.HAS_TRAPPED)
-        }).orR
-
-        when (laterStageTrapped) {
-          stage.arbitration.isValid := False
-        }
-      }
     }
   }
 

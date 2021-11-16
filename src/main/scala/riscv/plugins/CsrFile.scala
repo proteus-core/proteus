@@ -30,13 +30,22 @@ private class CsrFileIo(implicit config: Config) extends Bundle with IMasterSlav
   }
 }
 
+private case class CsrWriteNotify() extends Bundle with IMasterSlave {
+  val write = Bool()
+
+  override def asMaster(): Unit = {
+    out(write)
+  }
+}
+
 private class CsrComponent(implicit config: Config) extends Component {
   setDefinitionName("CsrFile")
 
   val io = master(new CsrFileIo)
+  val writeNotify = master(CsrWriteNotify())
 }
 
-class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
+class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with CsrService {
   object CsrOp extends SpinalEnum {
     val NONE, RW, RS, RC = newElement()
   }
@@ -49,6 +58,7 @@ class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
   // lazy because pipeline is null at the time of construction.
   private lazy val component = pipeline plug new CsrComponent
   private val registers = mutable.Map[Int, Csr]()
+  private var writeInCycle: Bool = null
 
   private def isReadOnly(csrId: Int) = (csrId & 0xC00) == 0xC00
 
@@ -81,6 +91,7 @@ class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
 
   override def setup(): Unit = {
     val decoder = pipeline.getService[DecoderService]
+    val issuer = pipeline.getService[IssueService]
 
     decoder.configure {config =>
       config.addDefault(Map(
@@ -102,6 +113,7 @@ class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
           Data.CSR_OP -> op,
           Data.CSR_USE_IMM -> useImm
         ))
+        issuer.setDestination(opcode, exeStage)
       }
     }
   }
@@ -109,11 +121,19 @@ class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
   override def build(): Unit = {
     val csrComponent = component
 
+    exeStage plug new Area { // TODO: hack
+      exeStage.value(Data.CSR_OP)
+      exeStage.value(Data.CSR_USE_IMM)
+      exeStage.value(pipeline.data.RS1)
+    }
+
     csrComponent plug new Area {
       import csrComponent._
 
       io.rdata := 0
       io.error := False
+
+      writeNotify.write := False
 
       when (io.read) {
         switch (io.rid) {
@@ -136,6 +156,7 @@ class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
                 io.error := True
               } else {
                 reg.swWrite(io.wdata)
+                writeNotify.write := True
               }
             }
           }
@@ -214,5 +235,13 @@ class CsrFile(csrStage: Stage) extends Plugin[Pipeline] with CsrService {
     pipeline plug new Area {
       csrComponent.io <> csrArea.csrIo
     }
+  }
+
+  override def isCsrInstruction(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
+    bundle.element(Data.CSR_OP.asInstanceOf[PipelineData[Data]]) =/= CsrOp.NONE
+  }
+
+  override def csrWriteInCycle(): Bool = {
+    component.writeNotify.write
   }
 }

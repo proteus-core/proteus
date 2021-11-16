@@ -87,7 +87,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
       jumpIo.currentPc := output(pipeline.data.PC)
       jumpIo.target := output(pipeline.data.NEXT_PC)
 
-      jumpService.onJump { (stage, prevPc, nextPc, jumpType) =>
+      jumpService.onJump { (stage, _, nextPc, jumpType) =>
         jumpType match {
           case JumpType.Normal =>
             when (predictionWasCorrect(nextPc, getPredictedPc(stage))) {
