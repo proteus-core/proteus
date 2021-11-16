@@ -24,15 +24,12 @@ private class PipelineDataInfo {
 }
 
 trait StaticPipeline extends Pipeline {
-  def stages: Seq[Stage]
-
   private var pipelineRegsMap: Map[Stage, PipelineRegs] = null
 
   def pipelineRegs: Map[Stage, PipelineRegs] = {
     assert(pipelineRegsMap != null)
     pipelineRegsMap
   }
-
 
   override def fetchStage: Stage = stages.head
   override def retirementStage: Stage = stages.last

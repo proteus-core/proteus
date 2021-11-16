@@ -10,10 +10,13 @@ class LoadManager(pipeline: Pipeline,
                   retirementRegisters: DynBundle[PipelineData[Data]])
                  (implicit config: Config) extends Area {
   val storedMessage: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
+  val outputCache: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
   val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
-  private val resultCdbMessage = Reg(CdbMessage(rob.indexBits))
-  val rdbWaiting, cdbWaiting = Bool()
+  private val resultCdbMessage = RegInit(CdbMessage(rob.indexBits).getZero)
+  val rdbWaitingNext, cdbWaitingNext = Bool()
+  val rdbWaiting = RegNext(rdbWaitingNext).init(False)
+  val cdbWaiting = RegNext(cdbWaitingNext).init(False)
 
   private object State extends SpinalEnum {
     val IDLE, WAITING_FOR_STORE, EXECUTING, BROADCASTING_RESULT = newElement()
@@ -47,25 +50,21 @@ class LoadManager(pipeline: Pipeline,
       isAvailable := True
     }
 
-    rdbWaiting := False
-    cdbWaiting := False
+    cdbWaitingNext := cdbWaiting
+    rdbWaitingNext := rdbWaiting
 
     loadStage.arbitration.isStalled := state === State.WAITING_FOR_STORE
     loadStage.arbitration.isValid := (state === State.WAITING_FOR_STORE) || (state === State.EXECUTING)
 
-    rdbStream.valid := False
-    rdbStream.payload := storedMessage
-
     cdbStream.valid := False
-    cdbStream.payload.robIndex := storedMessage.robIndex
-    cdbStream.payload.writeValue.assignDontCare()
-
-    resultCdbMessage.robIndex := storedMessage.robIndex
-    resultCdbMessage.writeValue.assignDontCare
+    cdbStream.payload := resultCdbMessage
 
     for (register <- retirementRegisters.keys) {
       loadStage.input(register) := storedMessage.registerMap.element(register)
     }
+
+    rdbStream.valid := False
+    rdbStream.payload := outputCache
 
     when (state === State.WAITING_FOR_STORE) {
       val address = pipeline.getService[LsuService].addressOfBundle(storedMessage.registerMap)
@@ -75,20 +74,22 @@ class LoadManager(pipeline: Pipeline,
     }
 
     when (state === State.EXECUTING && loadStage.arbitration.isDone) {
-      rdbStream.payload.robIndex := storedMessage.robIndex
       rdbStream.valid := True
+      rdbStream.payload.robIndex := storedMessage.robIndex
       for (register <- retirementRegisters.keys) {
         rdbStream.payload.registerMap.element(register) := loadStage.output(register)
       }
+      outputCache := rdbStream.payload
 
+      cdbStream.valid := True
       cdbStream.payload.writeValue := loadStage.output(pipeline.data.RD_DATA)
       cdbStream.payload.robIndex := storedMessage.robIndex
-      cdbStream.valid := True
+      resultCdbMessage := cdbStream.payload
 
-      rdbWaiting := !rdbStream.ready
-      cdbWaiting := !cdbStream.ready
+      rdbWaitingNext := !rdbStream.ready
+      cdbWaitingNext := !cdbStream.ready
 
-      when (rdbWaiting || cdbWaiting) {
+      when (!rdbStream.ready || !cdbStream.ready) {
         stateNext := State.BROADCASTING_RESULT
       } otherwise {
         stateNext := State.IDLE
@@ -97,11 +98,14 @@ class LoadManager(pipeline: Pipeline,
     }
 
     when (state === State.BROADCASTING_RESULT) {
+      rdbStream.valid := rdbWaiting
+      cdbStream.valid := cdbWaiting
+      
       when (rdbStream.ready) {
-        rdbWaiting := False
+        rdbWaitingNext := False
       }
       when (cdbStream.ready) {
-        cdbWaiting := False
+        cdbWaitingNext := False
       }
       when (!rdbWaiting && !cdbWaiting) {
         stateNext := State.IDLE

@@ -3,7 +3,6 @@ package riscv.plugins.cheri
 import riscv._
 import riscv.sim._
 import riscv.soc._
-
 import spinal.core._
 import spinal.core.sim._
 
@@ -19,6 +18,7 @@ object createCheriPipeline {
       val writeback = new Stage("WB")
 
       override val stages = Seq(fetch, decode, execute, memory, writeback)
+      override val passThroughStage: Stage = execute // TODO: ?
       override val config: Config = conf
       override val data: StandardPipelineData = new StandardPipelineData(conf)
       override val pipelineComponent: Component = this
@@ -29,7 +29,8 @@ object createCheriPipeline {
     pipeline.addPlugins(Seq(
       new rvp.scheduling.static.Scheduler,
       new rvp.scheduling.static.DataHazardResolver(firstRsReadStage = pipeline.execute),
-      new rvp.scheduling.static.TrapHandler(pipeline.writeback),
+      new rvp.TrapHandler(pipeline.writeback),
+      new rvp.TrapStageInvalidator, // TODO: ?
       new rvp.MemoryBackbone,
       new rvp.Fetcher(pipeline.fetch),
       new rvp.Decoder(pipeline.decode),
@@ -39,7 +40,7 @@ object createCheriPipeline {
       new rvp.Lsu(pipeline.memory, pipeline.memory, pipeline.memory),
       new rvp.BranchUnit(pipeline.execute),
       new rvp.scheduling.static.PcManager(0x80000000L),
-      new rvp.CsrFile(pipeline.writeback),
+      new rvp.CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
       new rvp.Timers,
       new rvp.MachineMode(pipeline.execute, addMepc = false, addMtvec = false),
       new rvp.Interrupts(pipeline.writeback),

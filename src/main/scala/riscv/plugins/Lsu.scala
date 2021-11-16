@@ -164,6 +164,7 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
 
       val operation = value(Data.LSU_OPERATION_TYPE)
       val accessWidth = value(Data.LSU_ACCESS_WIDTH)
+      val unsigned = value(Data.LSU_IS_UNSIGNED) // TODO: another hack
       val aluResult = value(pipeline.getService[IntAluService].resultData)
 
       val inputAddress = if (hasExternalOps) {

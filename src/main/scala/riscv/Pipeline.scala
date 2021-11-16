@@ -14,7 +14,10 @@ trait Pipeline {
   // NOTE This is deliberately not just called "component" because that causes a
   // (silent) name-clash with one of the traits implemented by Component.
   def pipelineComponent: Component
+
+  def stages: Seq[Stage]
   def fetchStage: Stage
+  def passThroughStage: Stage // TODO: this only makes sense for the dynamic pipeline?
   def retirementStage: Stage
 
   def addPlugin(plugin: Plugin[this.type]): Unit = {

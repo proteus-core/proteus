@@ -4,10 +4,6 @@ import riscv.plugins._
 import riscv.soc._
 import spinal.core._
 import spinal.core.sim._
-import spinal.lib._
-import spinal.lib.bus.amba3.apb._
-import spinal.lib.bus.amba4.axi._
-import spinal.lib.com.uart._
 
 object createStaticPipeline {
   def apply(disablePipelining: Boolean = false,
@@ -26,6 +22,7 @@ object createStaticPipeline {
       val writeback = new Stage("WB")
 
       override val stages = Seq(fetch, decode, execute, memory, writeback)
+      override val passThroughStage: Stage = execute
       override val config: Config = conf
       override val data: StandardPipelineData = new StandardPipelineData(conf)
       override val pipelineComponent: Component = this
@@ -51,10 +48,11 @@ object createStaticPipeline {
       new BranchUnit(pipeline.execute),
       new PcManager(0x80000000L),
       new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
-      new CsrFile(pipeline.writeback),
+      new CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
       new Timers,
       new MachineMode(pipeline.execute),
       new TrapHandler(pipeline.writeback),
+      new TrapStageInvalidator,
       new Interrupts(pipeline.writeback),
       new MulDiv(pipeline.execute)
     ) ++ extraPlugins)
@@ -182,15 +180,17 @@ object createDynamicPipeline {
         override val config = dynamicPipeline.config
         override val data = dynamicPipeline.data
         override val pipelineComponent = dynamicPipeline.pipelineComponent
+        override val passThroughStage: Stage = decode // dummy
       }
 
       val intAlu = new Stage("EX_ALU")
       val intMul = new Stage("EX_MUL")
-      override val exeStages: Seq[Stage] = Seq(intAlu, intMul)
-
+      override val passThroughStage: Stage = intAlu
+      override val rsStages: Seq[Stage] = Seq(intAlu, intMul)
       override val loadStage: Stage = new Stage("LOAD")
-
       override val retirementStage = new Stage("RET")
+      override val unorderedStages: Seq[Stage] = rsStages :+ loadStage
+      override val stages = issuePipeline.stages ++ unorderedStages :+ retirementStage
     }
 
 
@@ -198,11 +198,11 @@ object createDynamicPipeline {
       new scheduling.static.Scheduler(canStallExternally = true),
       new scheduling.static.PcManager(0x80000000L),
       new MemoryBackbone,
-      new Fetcher(pipeline.issuePipeline.fetch),
-      new Decoder(pipeline.issuePipeline.decode)
+      new Fetcher(pipeline.issuePipeline.fetch)
     ))
 
     pipeline.addPlugins(Seq(
+      new Decoder(pipeline.issuePipeline.decode), // TODO: ugly alert!!
       new scheduling.dynamic.Scheduler,
       new scheduling.dynamic.PcManager,
       new RegisterFileAccessor(
@@ -215,8 +215,14 @@ object createDynamicPipeline {
       new Lsu(pipeline.intAlu, pipeline.loadStage, pipeline.retirementStage),
       new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage, 8, conf.xlen),
       new IntAlu(pipeline.intAlu),
+      new Shifter(pipeline.intAlu),
       new MulDiv(pipeline.intMul),
-      new BranchUnit(pipeline.intAlu)
+      new BranchUnit(pipeline.intAlu),
+      new CsrFile(pipeline.retirementStage, pipeline.intAlu),
+      new TrapHandler(pipeline.retirementStage),
+      new MachineMode(pipeline.intAlu),
+      new Interrupts(pipeline.retirementStage),
+      new Timers
     ))
 
     if (build) {
@@ -258,7 +264,7 @@ object CoreDynamicSim {
         i += 1
 
         if (i == 100) {
-          done = true
+ //         done = true
         }
       }
     }

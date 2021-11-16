@@ -126,7 +126,7 @@ class ReservationStation(exeStage: Stage,
     }
 
     // execution was invalidated while running
-    when (state === State.EXECUTING && !exeStage.arbitration.isValid) {
+    when ((state === State.EXECUTING || state === State.WAITING_FOR_ARGS) && !exeStage.arbitration.isValid) {
       reset()
     }
 
@@ -176,6 +176,7 @@ class ReservationStation(exeStage: Stage,
       }
 
       when (!cdbWaiting && !dispatchWaiting) {
+        // TODO: losing a cycle by only setting isAvailable here
         reset()
       }
     }
@@ -186,6 +187,7 @@ class ReservationStation(exeStage: Stage,
 
     robEntryIndex := rob.pushEntry(
       dispatchStage.output(pipeline.data.RD),
+      dispatchStage.output(pipeline.data.RD_TYPE),
       pipeline.getService[LsuService].operationOutput(dispatchStage))
 
     stateNext := State.EXECUTING

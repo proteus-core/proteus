@@ -7,6 +7,10 @@ import spinal.lib._
 case class CdbMessage(robIndexBits: BitCount)(implicit config: Config) extends Bundle {
   val robIndex: UInt = UInt(robIndexBits)
   val writeValue: UInt = UInt(config.xlen bits)
+
+  override def clone(): CdbMessage = {
+    CdbMessage(robIndexBits)
+  }
 }
 
 trait CdbListener {
@@ -23,7 +27,7 @@ class CommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBu
   def build(): Unit = {
     when (arbitratedInputs.valid) {
       arbitratedInputs.ready := True
-      val listeners = reservationStations
+      val listeners = reservationStations :+ rob
       for (listener <- listeners) {
         listener.onCdbMessage(arbitratedInputs.payload)
       }
