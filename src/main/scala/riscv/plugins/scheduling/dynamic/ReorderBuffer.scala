@@ -69,20 +69,6 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     ret
   }
 
-  def isOlderThan(first: UInt, second: UInt): Bool = {
-    val ret = Bool()
-    when (!isValidIndex(first) || !isValidIndex(second)) {
-      ret := False
-    } elsewhen (first < second && !(oldestIndex >= first && oldestIndex <= second)) {
-      ret := True
-    } elsewhen (first > second && (oldestIndex <= first && oldestIndex > second)) {
-      ret := True
-    } otherwise {
-      ret := False
-    }
-    ret
-  }
-
   def indexForNth(nth: UInt): UInt = {
     val index = UInt(config.xlen bits)
     val adjusted = UInt(config.xlen bits)
@@ -144,16 +130,24 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     val found = Bool()
     found := False
 
+    val wordAddress = config.dbusConfig.byte2WordAddress(address)
+
     for (nth <- 0 until capacity) {
       val index = indexForNth(nth)
       val entry = robEntries(index.resized)
 
+      val lsuService = pipeline.getService[LsuService]
+      val entryIsStore = lsuService.operationOfBundle(entry.registerMap) === LsuOperationType.STORE
+      val entryAddressValid = lsuService.addressValidOfBundle(entry.registerMap)
+      val entryAddress = lsuService.addressOfBundle(entry.registerMap)
+      val entryWordAddress = config.dbusConfig.byte2WordAddress(entryAddress)
+      val addressesMatch = entryWordAddress === wordAddress
+      val isOlder = index < robIndex
+
       when (isValidIndex(index)
-        && isOlderThan(index, robIndex)
-        && pipeline.getService[LsuService].operationOfBundle(entry.registerMap) === LsuOperationType.STORE
-        && ((pipeline.getService[LsuService].addressValidOfBundle(entry.registerMap) === True
-            && pipeline.getService[LsuService].addressOfBundle(entry.registerMap) === address)
-          || pipeline.getService[LsuService].addressValidOfBundle(entry.registerMap) === False)) {
+        && isOlder
+        && entryIsStore
+        && ((entryAddressValid && addressesMatch) || !entryAddressValid)) {
         found := True
       }
     }
