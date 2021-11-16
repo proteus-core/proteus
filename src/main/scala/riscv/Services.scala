@@ -69,9 +69,22 @@ trait FetchService {
 }
 
 trait DecoderService {
+  type IrMapper = (Stage, UInt) => UInt
+
   type Action = Map[PipelineData[_ <: Data], Data]
 
   trait DecoderConfig {
+
+    /**
+     * The IR mapper can be used to analyze and/or transform the value of the
+     * instruction register (IR) prior to the actual decoding. It is useful for
+     * adding logic that is common to a set of instructions. The passed
+     * arguments are 1) the stage in which the instruction is decoded, and 2)
+     * the value of the IR register. The return value is the new value of the
+     * IR register, or the old value if no transformation was performed.
+     */
+    def setIrMapper(map: IrMapper): Unit
+
     def addDecoding(opcode: MaskedLiteral,
                     itype: InstructionType,
                     action: Action): Unit
