@@ -28,8 +28,8 @@ class ReservationStation(exeStage: Stage,
   private val stateNext = State()
   private val state = RegNext(stateNext).init(State.IDLE)
 
-  private val cdbWaitingNext, dispatchWaitingNext = Bool() // TODO: is this necessary?
-  private val cdbWaiting = RegNext(cdbWaitingNext).init(False) // TODO: am i using this? can there be a problem if only one bus has to wait?
+  private val cdbWaitingNext, dispatchWaitingNext = Bool()
+  private val cdbWaiting = RegNext(cdbWaitingNext).init(False)
   private val dispatchWaiting = RegNext(dispatchWaitingNext).init(False)
 
   private val resultCdbMessage = RegInit(CdbMessage(rob.indexBits).getZero)
@@ -172,8 +172,7 @@ class ReservationStation(exeStage: Stage,
         dispatchWaitingNext := False
       }
 
-      when (!cdbWaiting && !dispatchWaiting) {
-        // TODO: losing a cycle by only setting isAvailable here
+      when ((cdbStream.ready || !cdbWaiting) && (dispatchStream.ready || !dispatchWaiting)) {
         reset()
       }
     }

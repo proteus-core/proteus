@@ -107,7 +107,7 @@ class LoadManager(pipeline: Pipeline,
       when (cdbStream.ready) {
         cdbWaitingNext := False
       }
-      when (!rdbWaiting && !cdbWaiting) {
+      when ((rdbStream.ready || !rdbWaiting) && (cdbStream.ready || !cdbWaiting)) {
         stateNext := State.IDLE
         isAvailable := True
       }
