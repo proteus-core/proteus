@@ -69,14 +69,13 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     ret
   }
 
-  def indexForNth(nth: UInt): UInt = {
-    val index = UInt(config.xlen bits)
-    val adjusted = UInt(config.xlen bits)
-    index := (nth + oldestIndex).resized
-    when (index >= capacity) {
-      adjusted := index - capacity
-    } otherwise {
+  def ageOfEntry(index: UInt): UInt = {
+    val adjusted = UInt(indexBits)
+    when (index >= oldestIndex) {
       adjusted := index
+    } otherwise {
+      val remainder = capacity - oldestIndex
+      adjusted := (index + remainder).resized
     }
     adjusted
   }
@@ -109,18 +108,17 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
     // loop through valid values and return the freshest if present
     for (nth <- 0 until capacity) {
-      val index = indexForNth(nth)
-      val entry = robEntries(index.resized)
+      val entry = robEntries(nth)
 
       // last condition: prevent dependencies on x0
-      when (isValidIndex(index)
+      when (isValidIndex(nth)
         && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId
         && regId =/= 0
         && entry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) === RegisterType.GPR) {
         found := True
         ready := entry.hasValue
         value := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
-        ix := index.resized
+        ix := nth
       }
     }
     (found, ready, value, ix)
@@ -133,8 +131,9 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     val wordAddress = config.dbusConfig.byte2WordAddress(address)
 
     for (nth <- 0 until capacity) {
-      val index = indexForNth(nth)
-      val entry = robEntries(index.resized)
+      val entry = robEntries(nth)
+      val index = UInt(indexBits)
+      index := nth
 
       val lsuService = pipeline.getService[LsuService]
       val entryIsStore = lsuService.operationOfBundle(entry.registerMap) === LsuOperationType.STORE
@@ -142,9 +141,9 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       val entryAddress = lsuService.addressOfBundle(entry.registerMap)
       val entryWordAddress = config.dbusConfig.byte2WordAddress(entryAddress)
       val addressesMatch = entryWordAddress === wordAddress
-      val isOlder = index < robIndex
+      val isOlder = ageOfEntry(index) < ageOfEntry(robIndex)
 
-      when (isValidIndex(index)
+      when (isValidIndex(nth)
         && isOlder
         && entryIsStore
         && ((entryAddressValid && addressesMatch) || !entryAddressValid)) {
