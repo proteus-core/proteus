@@ -40,6 +40,8 @@ Pipeline uut(
     .dbus_rsp_payload_rdata   (dbus_rsp_payload_rdata),
     .mtimer_update            (0),
     .mtimer_interruptPending  (0),
+    .external_update          (0),
+    .external_interruptPending(0),
     `RVFI_CONN
 );
 
