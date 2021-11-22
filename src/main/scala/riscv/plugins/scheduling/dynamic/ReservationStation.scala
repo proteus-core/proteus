@@ -184,7 +184,8 @@ class ReservationStation(exeStage: Stage,
     robEntryIndex := rob.pushEntry(
       dispatchStage.output(pipeline.data.RD),
       dispatchStage.output(pipeline.data.RD_TYPE),
-      pipeline.getService[LsuService].operationOutput(dispatchStage))
+      pipeline.getService[LsuService].operationOutput(dispatchStage),
+      dispatchStage.output(pipeline.data.PC))
 
     stateNext := State.EXECUTING
     regs.shift := True
