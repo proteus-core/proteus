@@ -28,9 +28,6 @@ import spinal.lib._
 abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
   extends Plugin[Pipeline] with BranchTargetPredictorService {
 
-  var mispredictionCount: UInt = null
-  var predictionCount: UInt = null
-
   case class PredictIo() extends Bundle with IMasterSlave {
     val currentPc = UInt(config.xlen bits)
     val predictedAddress = Flow(UInt(config.xlen bits))
@@ -71,6 +68,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
 
   private object Data {
     object PREDICTED_PC extends PipelineData(UInt(config.xlen bits))
+    object MISPREDICTED_JUMP extends PipelineData(Bool())
   }
 
   override def getPredictedPc(stage: Stage): UInt = {
@@ -82,9 +80,10 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
   }
 
   override def setup(): Unit = {
-    pipeline plug new Area {
-      mispredictionCount = RegInit(U(0, config.xlen bits))
-      predictionCount = RegInit(U(0, config.xlen bits))
+    pipeline.getService[DecoderService].configure { config =>
+      config.addDefault(Map(
+        Data.MISPREDICTED_JUMP -> False
+      ))
     }
 
     jumpArea = jumpStage plug new JumpArea {
@@ -104,7 +103,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
               // cancel jump if it was correctly predicted in the fetch stage
               pipeline.getService[JumpService].disableJump(stage)
 
-//              jumpIo.correctlyPredicted := True
+              stage.output(Data.MISPREDICTED_JUMP) := True
             }
           case _ =>
         }
@@ -120,6 +119,10 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
 
         // HACK this forces the jump service to restart the pipeline from NEXT_PC
         jumpService.jumpRequested(jumpStage) := True
+      }
+
+      when (arbitration.isDone && value(Data.MISPREDICTED_JUMP)) {
+        jumpIo.correctlyPredicted := True
       }
     }
   }
@@ -142,6 +145,9 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
 
   override def finish(): Unit = {
     pipeline plug new Area {
+      val mispredictionCount = RegInit(U(0, config.xlen bits))
+      val predictionCount = RegInit(U(0, config.xlen bits))
+
       predictorComponent.predictIo <> fetchArea.predictIo
       predictorComponent.jumpIo <> jumpArea.jumpIo
 
