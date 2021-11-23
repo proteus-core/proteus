@@ -29,7 +29,7 @@ class BranchTargetPredictor(fetchStage: Stage, jumpStage: Stage,
         counter.increment()
       }
 
-      when (jumpIo.valid) {
+      when (jumpIo.mispredicted) {
         recordJump(jumpIo.currentPc, jumpIo.target)
       }
 

@@ -28,6 +28,9 @@ import spinal.lib._
 abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
   extends Plugin[Pipeline] with BranchTargetPredictorService {
 
+  var mispredictionCount: UInt = null
+  var predictionCount: UInt = null
+
   case class PredictIo() extends Bundle with IMasterSlave {
     val currentPc = UInt(config.xlen bits)
     val predictedAddress = Flow(UInt(config.xlen bits))
@@ -43,12 +46,13 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
   }
 
   case class JumpIo() extends Bundle with IMasterSlave {
-    val valid = Bool()
+    val mispredicted = Bool()
     val currentPc = UInt(config.xlen bits)
     val target = UInt(config.xlen bits)
+    val correctlyPredicted = Bool()
 
     override def asMaster(): Unit = {
-      out(valid, currentPc, target)
+      out(mispredicted, currentPc, target, correctlyPredicted)
     }
   }
 
@@ -78,12 +82,18 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
   }
 
   override def setup(): Unit = {
+    pipeline plug new Area {
+      mispredictionCount = RegInit(U(0, config.xlen bits))
+      predictionCount = RegInit(U(0, config.xlen bits))
+    }
+
     jumpArea = jumpStage plug new JumpArea {
       import jumpStage._
 
       val jumpService = pipeline.getService[JumpService]
 
-      jumpIo.valid := False
+      jumpIo.mispredicted := False
+      jumpIo.correctlyPredicted := False
       jumpIo.currentPc := output(pipeline.data.PC)
       jumpIo.target := output(pipeline.data.NEXT_PC)
 
@@ -93,6 +103,8 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
             when (predictionWasCorrect(nextPc, getPredictedPc(stage))) {
               // cancel jump if it was correctly predicted in the fetch stage
               pipeline.getService[JumpService].disableJump(stage)
+
+//              jumpIo.correctlyPredicted := True
             }
           case _ =>
         }
@@ -102,7 +114,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
       // and notify the predictor
       when (arbitration.isDone &&
             !predictionWasCorrect(value(pipeline.data.NEXT_PC), value(Data.PREDICTED_PC))) {
-        jumpIo.valid := True
+        jumpIo.mispredicted := True
         jumpIo.currentPc := value(pipeline.data.PC)
         jumpIo.target := value(pipeline.data.NEXT_PC)
 
@@ -132,6 +144,14 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
     pipeline plug new Area {
       predictorComponent.predictIo <> fetchArea.predictIo
       predictorComponent.jumpIo <> jumpArea.jumpIo
+
+      when (predictorComponent.jumpIo.mispredicted) {
+        mispredictionCount := mispredictionCount + 1
+      }
+
+      when (predictorComponent.jumpIo.correctlyPredicted) {
+        predictionCount := predictionCount + 1
+      }
 
       val jumpService = pipeline.getService[JumpService]
 
