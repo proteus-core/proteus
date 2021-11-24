@@ -132,7 +132,7 @@ class MulDiv(exeStage: Stage) extends Plugin[Pipeline] {
 
           arbitration.isReady := True
           output(pipeline.data.RD_DATA) := value(Data.MUL_HIGH) ? productH | productL
-          output(pipeline.data.RD_VALID) := True
+          output(pipeline.data.RD_DATA_VALID) := True
         } otherwise {
           step.increment()
 
@@ -192,7 +192,7 @@ class MulDiv(exeStage: Stage) extends Plugin[Pipeline] {
           arbitration.isReady := True
           output(pipeline.data.RD_DATA) :=
             value(Data.REM) ? rs1 | S(-1, config.xlen bits).asUInt
-          output(pipeline.data.RD_VALID) := True
+          output(pipeline.data.RD_DATA_VALID) := True
         } elsewhen (initDiv) {
           quotient := dividend
           remainder := 0
@@ -213,7 +213,7 @@ class MulDiv(exeStage: Stage) extends Plugin[Pipeline] {
 
           output(pipeline.data.RD_DATA) :=
             value(Data.REM) ? correctedRemainder | correctedQuotient
-          output(pipeline.data.RD_VALID) := True
+          output(pipeline.data.RD_DATA_VALID) := True
           arbitration.isReady := True
           step.increment()
           initDiv := True

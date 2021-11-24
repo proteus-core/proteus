@@ -292,7 +292,7 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
           }
 
           output(pipeline.data.RD_DATA) := result
-          output(pipeline.data.RD_VALID) := True
+          output(pipeline.data.RD_DATA_VALID) := True
 
           formal.lsuOnLoad(loadStage, busAddress, mask, wValue)
         }

@@ -77,7 +77,7 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
             cd.otype.value := cs2Address.resized
 
             output(context.data.CD_DATA).assignFrom(cd)
-            output(pipeline.data.RD_VALID) := True
+            output(pipeline.data.RD_DATA_VALID) := True
           }
         }
       }
@@ -110,7 +110,7 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
             cd.otype.unseal()
 
             output(context.data.CD_DATA).assignFrom(cd)
-            output(pipeline.data.RD_VALID) := True
+            output(pipeline.data.RD_DATA_VALID) := True
           }
         }
       }
@@ -157,7 +157,7 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
             cd.otype.value.allowOverride
             cd.otype.unseal()
             output(context.data.CD_DATA).assignFrom(cd)
-            output(pipeline.data.RD_VALID) := True
+            output(pipeline.data.RD_DATA_VALID) := True
           }
         }
       }

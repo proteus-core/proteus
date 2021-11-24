@@ -23,7 +23,7 @@ class StandardPipelineData(config: Config) {
   object RD extends PipelineData(UInt(5 bits))
   object RD_DATA extends PipelineData(UInt(xlen bits))
   object RD_TYPE extends PipelineData(RegisterType())
-  object RD_VALID extends PipelineData(Bool())
+  object RD_DATA_VALID extends PipelineData(Bool())
   object IMM extends PipelineData(UInt(32 bits))
   object IMM_USED extends PipelineData(Bool())
 }

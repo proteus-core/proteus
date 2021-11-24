@@ -123,7 +123,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
 
             when (value(Data.BU_WRITE_RET_ADDR_TO_RD)) {
               output(pipeline.data.RD_DATA) := input(pipeline.data.NEXT_PC)
-              output(pipeline.data.RD_VALID) := True
+              output(pipeline.data.RD_DATA_VALID) := True
             }
           }
         }

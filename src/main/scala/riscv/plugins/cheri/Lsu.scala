@@ -250,7 +250,7 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
 
             when(cbus.rsp.valid) {
               output(context.data.CD_DATA).assignFrom(cbus.rsp.rdata)
-              output(pipeline.data.RD_VALID) := True
+              output(pipeline.data.RD_DATA_VALID) := True
               arbitration.isReady := True
             }
           }
