@@ -50,6 +50,10 @@ trait DynamicPipeline extends Pipeline {
       stage.output(data.RD_VALID)
       stage.output(data.RD_TYPE)
       stage.output(data.NEXT_PC)
+      stage.value(data.RS1)
+      stage.value(data.RS2)
+      stage.value(data.RS1_TYPE)
+      stage.value(data.RS2_TYPE)
     }
 
     // HACK make sure that all pipeline regs are routed through *all* exe stages.
