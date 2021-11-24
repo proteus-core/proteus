@@ -106,7 +106,8 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
       currentRvfi.rd_addr :=
         (currentRvfi.trap || stage.output(pipeline.data.RD_TYPE) === RegisterType.NONE) ?
           U(0) | stage.output(pipeline.data.RD)
-      currentRvfi.rd_wdata := zeroIfNone(pipeline.data.RD_TYPE, pipeline.data.RD_DATA)
+      currentRvfi.rd_wdata := (currentRvfi.rd_addr === 0) ?
+        U(0) | stage.output(pipeline.data.RD_DATA)
       currentRvfi.pc_rdata := stage.output(pipeline.data.PC)
       currentRvfi.mem_addr := stage.output(Data.FORMAL_MEM_ADDR)
       currentRvfi.mem_rmask := stage.output(Data.FORMAL_MEM_RMASK)
