@@ -2,11 +2,12 @@ BASE_DIR = $(shell pwd)
 RISCV_DIR = $(BASE_DIR)/..
 RISCV_FORMAL_DIR = $(BASE_DIR)/riscv-formal
 CORE_DIR = $(RISCV_FORMAL_DIR)/cores/riscv
+CORE ?= riscv.CoreFormal
 
 all: formal
 
 $(RISCV_DIR)/Core.v: FORCE
-	cd $(RISCV_DIR); sbt "runMain riscv.CoreFormal"
+	cd $(RISCV_DIR); sbt "runMain $(CORE)"
 
 setup: $(RISCV_DIR)/Core.v
 	mkdir -p $(CORE_DIR)

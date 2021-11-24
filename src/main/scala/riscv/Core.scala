@@ -224,7 +224,7 @@ object createDynamicPipeline {
       new MachineMode(pipeline.intAlu1),
       new Interrupts(pipeline.retirementStage),
       new Timers
-    ))
+    ) ++ extraPlugins)
 
     if (build) {
       pipeline.build()
@@ -275,5 +275,18 @@ object CoreDynamicSim {
 object CoreDynamicExtMem {
   def main(args: Array[String]) {
     SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB)))
+  }
+}
+
+class CoreDynamicFormal extends Component {
+  setDefinitionName("Core")
+
+  implicit val config = new Config(BaseIsa.RV32I)
+  val pipeline = createDynamicPipeline(extraPlugins = Seq(new RiscvFormal))
+}
+
+object CoreDynamicFormal {
+  def main(args: Array[String]) {
+    SpinalVerilog(new CoreDynamicFormal)
   }
 }

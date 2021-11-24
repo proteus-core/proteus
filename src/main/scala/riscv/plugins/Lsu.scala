@@ -215,6 +215,25 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
     val memService = pipeline.getService[MemoryService]
     val (loadDBus, storeDBus) = memService.createInternalDBus(loadStage, storeStage)
 
+    val formal = if (pipeline.hasService[FormalService]) {
+      pipeline.getService[FormalService]
+    } else {
+      new DummyFormalService
+    }
+
+    loadStage plug {
+      formal.lsuDefault(loadStage)
+    }
+
+    // Make sure we don't call lsuDefault twice when loadStage == storeStage (the second call will
+    // overwrite everything that was written to the formal signals in the first stage that was
+    // built).
+    if (storeStage != loadStage) {
+      storeStage plug {
+        formal.lsuDefault(storeStage)
+      }
+    }
+
     val loadArea = loadStage plug new Area {
       import loadStage._
 
@@ -232,14 +251,6 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
       val baseMask = tuple._2
 
       val mask = baseMask |<< address(1 downto 0)
-
-      val formal = if (pipeline.hasService[FormalService]) {
-        pipeline.getService[FormalService]
-      } else {
-        new DummyFormalService
-      }
-
-      formal.lsuDefault(loadStage)
 
       when (isActive && misaligned) {
         if (pipeline.hasService[TrapService]) {
@@ -309,14 +320,6 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
       val baseMask = tuple._2
 
       val mask = baseMask |<< address(1 downto 0)
-
-      val formal = if (pipeline.hasService[FormalService]) {
-        pipeline.getService[FormalService]
-      } else {
-        new DummyFormalService
-      }
-
-      formal.lsuDefault(storeStage)
 
       when (isActive && misaligned) {
         if (pipeline.hasService[TrapService]) {

@@ -75,6 +75,11 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
     val stage = pipeline.retirementStage
     val trapService = pipeline.getService[TrapService]
 
+    def zeroIfNone(regType: PipelineData[SpinalEnumCraft[RegisterType.type]],
+                   data: PipelineData[UInt]): UInt = {
+      (stage.output(regType) === RegisterType.NONE) ? U(0) | stage.output(data)
+    }
+
     val rvfiArea = pipeline plug new Area {
       // RVFI data for the instruction that is currently being retired. This
       // data is *not* used as the output because it is impossible to know the
@@ -93,17 +98,16 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
       currentRvfi.halt := False
       currentRvfi.mode := 3
       currentRvfi.ixl := 1
-      currentRvfi.rs1_addr := stage.output(pipeline.data.RS1)
-      currentRvfi.rs2_addr := stage.output(pipeline.data.RS2)
-      currentRvfi.rs1_rdata := (currentRvfi.rs1_addr === 0) ?
-                        U(0) | stage.output(pipeline.data.RS1_DATA)
-      currentRvfi.rs2_rdata := (currentRvfi.rs2_addr === 0) ?
-                        U(0) | stage.output(pipeline.data.RS2_DATA)
+      currentRvfi.rs1_addr := zeroIfNone(pipeline.data.RS1_TYPE, pipeline.data.RS1)
+      currentRvfi.rs2_addr := zeroIfNone(pipeline.data.RS2_TYPE, pipeline.data.RS2)
+      currentRvfi.rs1_rdata := zeroIfNone(pipeline.data.RS1_TYPE, pipeline.data.RS1_DATA)
+      currentRvfi.rs2_rdata := zeroIfNone(pipeline.data.RS2_TYPE, pipeline.data.RS2_DATA)
       // FIXME This will hide bugs that still write RD on traps
-      currentRvfi.rd_addr := currentRvfi.trap ?
-                        U(0) | stage.output(pipeline.data.RD)
+      currentRvfi.rd_addr :=
+        (currentRvfi.trap || stage.output(pipeline.data.RD_TYPE) === RegisterType.NONE) ?
+          U(0) | stage.output(pipeline.data.RD)
       currentRvfi.rd_wdata := (currentRvfi.rd_addr === 0) ?
-                       U(0) | stage.output(pipeline.data.RD_DATA)
+        U(0) | stage.output(pipeline.data.RD_DATA)
       currentRvfi.pc_rdata := stage.output(pipeline.data.PC)
       currentRvfi.mem_addr := stage.output(Data.FORMAL_MEM_ADDR)
       currentRvfi.mem_rmask := stage.output(Data.FORMAL_MEM_RMASK)
