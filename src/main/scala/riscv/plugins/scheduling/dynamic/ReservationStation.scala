@@ -141,7 +141,7 @@ class ReservationStation(exeStage: Stage,
         dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
       }
 
-      when (exeStage.output(pipeline.data.RD_VALID)) {
+      when (exeStage.output(pipeline.data.RD_DATA_VALID)) {
         cdbStream.valid := True
       }
       dispatchStream.valid := True

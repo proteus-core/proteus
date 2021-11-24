@@ -276,7 +276,7 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
           )
         } elsewhen (!ignoreRead) {
           output(context.data.CD_DATA) := cd
-          output(pipeline.data.RD_VALID) := True
+          output(pipeline.data.RD_DATA_VALID) := True
         }
       }
     }

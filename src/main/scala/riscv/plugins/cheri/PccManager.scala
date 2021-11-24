@@ -205,7 +205,7 @@ class PccManager(branchStage: Stage)(implicit context: Context)
           cd.assignFrom(getCurrentPcc(branchStage))
           cd.offset := input(pipeline.data.NEXT_PC)
           output(context.data.CD_DATA).assignFrom(cd)
-          output(pipeline.data.RD_VALID) := True
+          output(pipeline.data.RD_DATA_VALID) := True
         }
       }
     }

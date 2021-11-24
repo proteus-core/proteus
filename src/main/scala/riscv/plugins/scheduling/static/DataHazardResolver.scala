@@ -24,7 +24,7 @@ class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline]
       lastStage.output(pipeline.data.RS1_TYPE)
       lastStage.output(pipeline.data.RS2)
       lastStage.output(pipeline.data.RS2_TYPE)
-      lastStage.output(pipeline.data.RD_VALID)
+      lastStage.output(pipeline.data.RD_DATA_VALID)
       lastStage.output(pipeline.data.RD)
       lastStage.output(pipeline.data.RD_TYPE)
     }
@@ -47,8 +47,8 @@ class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline]
       //    and if a new value is found, it is used as input(RS*).
       //  - If a stage needs RS* in the current cycle (arbitration.rs*Needed)
       //    and a later stage is found that will produce a new value for RS* but
-      //    hasn't done so yet (input(WRITE_RD) && !input(RD_VALID)), the stage
-      //    is stalled until the value is produced.
+      //    hasn't done so yet (input(WRITE_RD) && !input(RD_DATA_VALID)), the
+      //    stage is stalled until the value is produced.
       //  - In this scheme, the if the output of an instruction in WB is needed
       //    by the instruction currently in ID, it cannot be properly forwarded
       //    since the value isn't in the pipeline anymore. Therefore, we add
@@ -63,7 +63,7 @@ class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline]
       //    it will still be available in the next cycle.
       val lastWrittenRd = new Bundle {
         val id = Reg(pipeline.data.RD.dataType())
-        val valid = Reg(pipeline.data.RD_VALID.dataType())
+        val valid = Reg(pipeline.data.RD_DATA_VALID.dataType())
         val data = Reg(hazardInfo.rdData.dataType())
       }
 
@@ -73,7 +73,7 @@ class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline]
             !trapHandler.hasTrapped(stages.last)) {
         lastWrittenRd.id := stages.last.output(pipeline.data.RD)
         lastWrittenRd.valid :=
-          stages.last.output(pipeline.data.RD_VALID) &&
+          stages.last.output(pipeline.data.RD_DATA_VALID) &&
           stages.last.output(pipeline.data.RD_TYPE) === hazardInfo.registerType
         lastWrittenRd.data := stages.last.output(hazardInfo.rdData)
       }
@@ -102,7 +102,7 @@ class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline]
                         !trapHandler.hasTrapped(nextStage) &&
                         nextStage.input(pipeline.data.RD_TYPE) === hazardInfo.registerType &&
                         nextStage.input(pipeline.data.RD) === neededRs) {
-                    when (nextStage.input(pipeline.data.RD_VALID)) {
+                    when (nextStage.input(pipeline.data.RD_DATA_VALID)) {
                       info.forwarded := True
                       info.value := nextStage.input(hazardInfo.rdData)
                     } elsewhen (rsNeeded) {

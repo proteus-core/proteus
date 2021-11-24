@@ -154,7 +154,7 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
 
       when (value(Data.ALU_COMMIT_RESULT)) {
         output(pipeline.data.RD_DATA) := result
-        output(pipeline.data.RD_VALID) := True
+        output(pipeline.data.RD_DATA_VALID) := True
       } otherwise {
         output(Data.ALU_RESULT) := result
       }

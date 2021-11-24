@@ -67,7 +67,7 @@ class Shifter(exeStage: Stage) extends Plugin[Pipeline] {
         arbitration.rs1Needed := True
         arbitration.rs2Needed := !useImm
         output(pipeline.data.RD_DATA) := result
-        output(pipeline.data.RD_VALID) := True
+        output(pipeline.data.RD_DATA_VALID) := True
       }
     }
   }

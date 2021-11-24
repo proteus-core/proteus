@@ -193,7 +193,7 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
 
       def outputRd(value: UInt) = {
         output(pipeline.data.RD_DATA) := value
-        output(pipeline.data.RD_VALID) := True
+        output(pipeline.data.RD_DATA_VALID) := True
       }
 
       when (arbitration.isValid && op =/= CsrOp.NONE) {
