@@ -100,7 +100,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
             )
 
             output(pipeline.data.RD_DATA) := rd
-            output(pipeline.data.RD_VALID) := True
+            output(pipeline.data.RD_DATA_VALID) := True
           }
         }
 
@@ -180,7 +180,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
             }
 
             output(context.data.CD_DATA) := cd
-            output(pipeline.data.RD_VALID) := True
+            output(pipeline.data.RD_DATA_VALID) := True
           }
         }
 
@@ -189,7 +189,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
 
           when (!arbitration.isStalled) {
             output(context.data.CD_DATA) := value(context.data.CS1_DATA)
-            output(pipeline.data.RD_VALID) := True
+            output(pipeline.data.RD_DATA_VALID) := True
           }
         }
       }

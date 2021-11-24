@@ -47,7 +47,7 @@ trait DynamicPipeline extends Pipeline {
 
       // HACK!
       stage.output(data.RD)
-      stage.output(data.RD_VALID)
+      stage.output(data.RD_DATA_VALID)
       stage.output(data.RD_TYPE)
       stage.output(data.NEXT_PC)
       stage.value(data.RS1)

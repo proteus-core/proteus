@@ -86,7 +86,7 @@ class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
   override def setup(): Unit = {
     configure {config =>
       config.addDefault(Map(
-        pipeline.data.RD_VALID -> False,
+        pipeline.data.RD_DATA_VALID -> False,
         pipeline.data.IMM -> U(0)
       ))
     }
