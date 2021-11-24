@@ -68,7 +68,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
 
   private object Data {
     object PREDICTED_PC extends PipelineData(UInt(config.xlen bits))
-    object MISPREDICTED_JUMP extends PipelineData(Bool())
+    object PREDICTED_JUMP extends PipelineData(Bool())
   }
 
   override def getPredictedPc(stage: Stage): UInt = {
@@ -82,7 +82,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
   override def setup(): Unit = {
     pipeline.getService[DecoderService].configure { config =>
       config.addDefault(Map(
-        Data.MISPREDICTED_JUMP -> False
+        Data.PREDICTED_JUMP -> False
       ))
     }
 
@@ -103,7 +103,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
               // cancel jump if it was correctly predicted in the fetch stage
               pipeline.getService[JumpService].disableJump(stage)
 
-              stage.output(Data.MISPREDICTED_JUMP) := True
+              stage.output(Data.PREDICTED_JUMP) := True
             }
           case _ =>
         }
@@ -121,7 +121,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
         jumpService.jumpRequested(jumpStage) := True
       }
 
-      when (arbitration.isDone && value(Data.MISPREDICTED_JUMP)) {
+      when (arbitration.isDone && value(Data.PREDICTED_JUMP)) {
         jumpIo.correctlyPredicted := True
       }
     }
