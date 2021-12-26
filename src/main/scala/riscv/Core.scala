@@ -215,6 +215,7 @@ object createDynamicPipeline {
       ),
       new Lsu(pipeline.intAlu2, pipeline.loadStage, pipeline.retirementStage),
       new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage, 8, conf.xlen),
+//      new NoPredictionPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage),
       new IntAlu(Set(pipeline.intAlu1, pipeline.intAlu2)),
       new Shifter(pipeline.intAlu1),
       new MulDiv(pipeline.intMul),

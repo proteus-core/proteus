@@ -4,11 +4,15 @@ import riscv._
 import spinal.core._
 import spinal.lib.Stream
 
+trait Resettable {
+  def pipelineReset(): Unit
+}
+
 class ReservationStation(exeStage: Stage,
                          rob: ReorderBuffer,
                          pipeline: DynamicPipeline,
                          retirementRegisters: DynBundle[PipelineData[Data]])
-                        (implicit config: Config) extends Area with CdbListener {
+                        (implicit config: Config) extends Area with CdbListener with Resettable {
   setPartialName(s"RS_${exeStage.stageName}")
 
   private val rs1RobIndexNext, rs2RobIndexNext = UInt(rob.indexBits)
@@ -41,6 +45,8 @@ class ReservationStation(exeStage: Stage,
   private val regs = pipeline.pipelineRegs(exeStage) // TODO: do we need this?
 
   val isAvailable: Bool = Bool()
+
+  val activeFlush: Bool = Bool()
 
   def reset(): Unit = {
     isAvailable := True
@@ -122,8 +128,10 @@ class ReservationStation(exeStage: Stage,
       isAvailable := True
     }
 
+    activeFlush := False
+
     // execution was invalidated while running
-    when ((state === State.EXECUTING || state === State.WAITING_FOR_ARGS) && !exeStage.arbitration.isValid) {
+    when (activeFlush) {
       reset()
     }
 
@@ -225,5 +233,9 @@ class ReservationStation(exeStage: Stage,
       rs2WaitingNext := False
       regs.setReg(pipeline.data.RS2_DATA, dispatchStage.output(pipeline.data.RS2_DATA))
     }
+  }
+
+  override def pipelineReset(): Unit = {
+    activeFlush := True
   }
 }

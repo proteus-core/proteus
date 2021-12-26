@@ -48,6 +48,8 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       val dispatcher = new Dispatcher(pipeline, rob, loadManager, registerBundle) // TODO: confusing name regarding instruction dispatch later
       dispatcher.build()
 
+      pipeline.components = reservationStations :+ loadManager
+
       val dispatchBus = new DispatchBus(reservationStations, rob, dispatcher, registerBundle)
       dispatchBus.build()
 

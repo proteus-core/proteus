@@ -1,6 +1,6 @@
 package riscv
 
-import riscv.plugins.scheduling.dynamic.ReorderBuffer
+import riscv.plugins.scheduling.dynamic.{ReorderBuffer, Resettable}
 import spinal.core._
 
 import scala.reflect.ClassTag
@@ -12,6 +12,7 @@ trait DynamicPipeline extends Pipeline {
   val loadStage: Stage
 
   val unorderedStages: Seq[Stage]
+  var components: Seq[Resettable] = null
 
   var pipelineRegs: Map[Stage, PipelineRegs] = null
 

@@ -8,15 +8,17 @@ class LoadManager(pipeline: Pipeline,
                   loadStage: Stage,
                   rob: ReorderBuffer,
                   retirementRegisters: DynBundle[PipelineData[Data]])
-                 (implicit config: Config) extends Area {
+                 (implicit config: Config) extends Area with Resettable {
   val storedMessage: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
   val outputCache: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
   val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
   private val resultCdbMessage = RegInit(CdbMessage(rob.indexBits).getZero)
   val rdbWaitingNext, cdbWaitingNext = Bool()
-  val rdbWaiting = RegNext(rdbWaitingNext).init(False)
-  val cdbWaiting = RegNext(cdbWaitingNext).init(False)
+  val rdbWaiting: Bool = RegNext(rdbWaitingNext).init(False)
+  val cdbWaiting: Bool = RegNext(cdbWaitingNext).init(False)
+
+  private val activeFlush = Bool()
 
   private object State extends SpinalEnum {
     val IDLE, WAITING_FOR_STORE, EXECUTING, BROADCASTING_RESULT = newElement()
@@ -50,11 +52,19 @@ class LoadManager(pipeline: Pipeline,
       isAvailable := True
     }
 
+    activeFlush := False
+
     cdbWaitingNext := cdbWaiting
     rdbWaitingNext := rdbWaiting
 
     loadStage.arbitration.isStalled := state === State.WAITING_FOR_STORE
     loadStage.arbitration.isValid := (state === State.WAITING_FOR_STORE) || (state === State.EXECUTING)
+
+    // execution was invalidated while running
+    when (activeFlush) {
+      isAvailable := True
+      stateNext := State.IDLE
+    }
 
     cdbStream.valid := False
     cdbStream.payload := resultCdbMessage
@@ -116,5 +126,9 @@ class LoadManager(pipeline: Pipeline,
     // FIXME this doesn't seem the correct place to do this...
     loadStage.connectOutputDefaults()
     loadStage.connectLastValues()
+  }
+
+  override def pipelineReset(): Unit = {
+    activeFlush := False
   }
 }

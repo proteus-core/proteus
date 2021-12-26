@@ -6,7 +6,7 @@ import spinal.core._
 import scala.collection.mutable
 
 class PcManager() extends Plugin[DynamicPipeline] with JumpService {
-  private object PrivateRegisters { // TODO: better name for this?
+  private object PrivateRegisters {
     object JUMP_REQUESTED extends PipelineData(Bool())
   }
 
@@ -74,8 +74,8 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
 
         pipeline.rob.reset()
 
-        for (exeStage <- pipeline.rsStages) {  // TODO: invalidate the load stages
-          exeStage.arbitration.isValid := False
+        for (component <- pipeline.components) {
+          component.pipelineReset()
         }
       }
     }
