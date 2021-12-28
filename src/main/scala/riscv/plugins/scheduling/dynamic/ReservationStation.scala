@@ -49,7 +49,7 @@ class ReservationStation(exeStage: Stage,
   val activeFlush: Bool = Bool()
 
   def reset(): Unit = {
-    isAvailable := True
+    isAvailable := !activeFlush
     stateNext := State.IDLE
   }
 
@@ -125,7 +125,7 @@ class ReservationStation(exeStage: Stage,
     isAvailable := False
 
     when (state === State.IDLE) {
-      isAvailable := True
+      isAvailable := !activeFlush
     }
 
     activeFlush := False
@@ -136,7 +136,7 @@ class ReservationStation(exeStage: Stage,
     }
 
     // when waiting for the result, and it is ready, put in on the bus
-    when (state === State.EXECUTING && exeStage.arbitration.isDone) {
+    when (state === State.EXECUTING && exeStage.arbitration.isDone && !activeFlush) {
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
 
       cdbStream.payload.robIndex := robEntryIndex
@@ -168,7 +168,7 @@ class ReservationStation(exeStage: Stage,
 
     // if the result is on the buses and it has been acknowledged, make the RS
     // available again
-    when (state === State.BROADCASTING_RESULT) {
+    when (state === State.BROADCASTING_RESULT && !activeFlush) {
       cdbStream.valid := cdbWaiting
       dispatchStream.valid := dispatchWaiting
 
