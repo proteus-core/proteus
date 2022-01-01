@@ -7,7 +7,7 @@ import spinal.lib.Stream
 class Dispatcher(pipeline: DynamicPipeline,
                  rob: ReorderBuffer,
                  loadManager: LoadManager,
-                 retirementRegisters: DynBundle[PipelineData[Data]]) extends Area {
+                 retirementRegisters: DynBundle[PipelineData[Data]]) extends Area with Resettable {
   val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
   val storedMessage: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
 
@@ -18,6 +18,8 @@ class Dispatcher(pipeline: DynamicPipeline,
   private val stateNext = State()
   private val state = RegNext(stateNext).init(State.IDLE)
 
+  private val activeFlush = Bool()
+
   def processMessage(rdbMessage: RdbMessage): Bool = {
     val ret = Bool()
 
@@ -25,7 +27,7 @@ class Dispatcher(pipeline: DynamicPipeline,
 
     when (lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.LOAD) {
       ret := loadManager.receiveMessage(rdbMessage)
-    } otherwise {
+    } elsewhen (!activeFlush) {
       when (state === State.BROADCASTING_RESULT) {
         ret := False
       } otherwise {
@@ -37,6 +39,8 @@ class Dispatcher(pipeline: DynamicPipeline,
         }
         ret := True
       }
+    } otherwise {
+      ret := False
     }
     ret
   }
@@ -47,11 +51,21 @@ class Dispatcher(pipeline: DynamicPipeline,
 
     stateNext := state
 
-    when (state === State.BROADCASTING_RESULT) {
+    activeFlush := False
+
+    when (activeFlush) {
+      stateNext := State.IDLE
+    }
+
+    when (state === State.BROADCASTING_RESULT && !activeFlush) {
       rdbStream.valid := True
       when (rdbStream.ready) {
         stateNext := State.IDLE
       }
     }
+  }
+
+  override def pipelineReset(): Unit = {
+    activeFlush := True
   }
 }

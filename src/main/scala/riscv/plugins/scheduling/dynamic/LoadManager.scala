@@ -31,7 +31,7 @@ class LoadManager(pipeline: Pipeline,
   def receiveMessage(rdbMessage: RdbMessage): Bool = { // TODO: can we make sure that this method is only called once per cycle?
     val ret = Bool()
     ret := False
-    when (isAvailable && !activeFlush) {
+    when (isAvailable) {
       ret := True
       storedMessage := rdbMessage
       val address = pipeline.getService[LsuService].addressOfBundle(rdbMessage.registerMap)
@@ -49,7 +49,7 @@ class LoadManager(pipeline: Pipeline,
     isAvailable := False
 
     when (state === State.IDLE) {
-      isAvailable := True
+      isAvailable := !activeFlush
     }
 
     activeFlush := False
@@ -62,7 +62,6 @@ class LoadManager(pipeline: Pipeline,
 
     // execution was invalidated while running
     when (activeFlush) {
-      isAvailable := True
       stateNext := State.IDLE
     }
 
@@ -76,7 +75,7 @@ class LoadManager(pipeline: Pipeline,
     rdbStream.valid := False
     rdbStream.payload := outputCache
 
-    when (state === State.WAITING_FOR_STORE) {
+    when (state === State.WAITING_FOR_STORE && !activeFlush) {
       val address = pipeline.getService[LsuService].addressOfBundle(storedMessage.registerMap)
       when (!rob.hasPendingStore(storedMessage.robIndex, address)) {
         state := State.EXECUTING
