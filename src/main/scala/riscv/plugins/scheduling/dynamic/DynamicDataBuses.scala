@@ -40,7 +40,7 @@ class CommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBu
 class DispatchBus(reservationStations: Seq[ReservationStation],
                   rob: ReorderBuffer,
                   dispatcher: Dispatcher,
-                 retirementRegisters: DynBundle[PipelineData[Data]]) extends Area {
+                  retirementRegisters: DynBundle[PipelineData[Data]]) extends Area {
   val inputs: Vec[Stream[RdbMessage]] = Vec(Stream(
     HardType(RdbMessage(retirementRegisters, rob.indexBits))), reservationStations.size)
   private val arbitratedInputs = StreamArbiterFactory.roundRobin.noLock.on(inputs)
