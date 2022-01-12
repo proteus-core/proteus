@@ -454,3 +454,7 @@ trait FormalService {
   def lsuOnStore(stage: Stage, addr: UInt, wmask: Bits, wdata: UInt)
   def lsuOnMisaligned(stage: Stage): Unit
 }
+
+trait ContextService {
+  def isTransientSecret(stage: Stage): Bool
+}

@@ -223,7 +223,8 @@ object createDynamicPipeline {
       new TrapHandler(pipeline.retirementStage),
       new MachineMode(pipeline.intAlu1),
       new Interrupts(pipeline.retirementStage),
-      new Timers
+      new Timers,
+      new riscv.plugins.context.Context
     ) ++ extraPlugins)
 
     if (build) {
@@ -265,7 +266,7 @@ object CoreDynamicSim {
         i += 1
 
         if (i == 200) {
-//          done = true
+          done = true
         }
       }
     }
