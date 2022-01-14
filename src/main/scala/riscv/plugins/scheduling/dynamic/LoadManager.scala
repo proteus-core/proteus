@@ -7,13 +7,14 @@ import spinal.lib.Stream
 class LoadManager(pipeline: Pipeline,
                   loadStage: Stage,
                   rob: ReorderBuffer,
-                  retirementRegisters: DynBundle[PipelineData[Data]])
+                  retirementRegisters: DynBundle[PipelineData[Data]],
+                  metaRegisters: DynBundle[PipelineData[Data]])
                  (implicit config: Config) extends Area with Resettable {
   val storedMessage: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
   val outputCache: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
   val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
-  val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
-  private val resultCdbMessage = RegInit(CdbMessage(rob.indexBits).getZero)
+  val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(metaRegisters, rob.indexBits)))
+  private val resultCdbMessage = RegInit(CdbMessage(metaRegisters, rob.indexBits).getZero)
   val rdbWaitingNext, cdbWaitingNext = Bool()
   val rdbWaiting: Bool = RegNext(rdbWaitingNext).init(False)
   val cdbWaiting: Bool = RegNext(cdbWaitingNext).init(False)
@@ -101,6 +102,7 @@ class LoadManager(pipeline: Pipeline,
       cdbStream.valid := True
       cdbStream.payload.writeValue := loadStage.output(pipeline.data.RD_DATA)
       cdbStream.payload.robIndex := storedMessage.robIndex
+      context.isTransientSecretOfBundle(cdbStream.payload.metadata) := transientSecret
       resultCdbMessage := cdbStream.payload
 
       rdbWaitingNext := !rdbStream.ready

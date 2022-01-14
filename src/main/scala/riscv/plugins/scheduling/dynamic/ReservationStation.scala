@@ -11,7 +11,8 @@ trait Resettable {
 class ReservationStation(exeStage: Stage,
                          rob: ReorderBuffer,
                          pipeline: DynamicPipeline,
-                         retirementRegisters: DynBundle[PipelineData[Data]])
+                         retirementRegisters: DynBundle[PipelineData[Data]],
+                         metaRegisters: DynBundle[PipelineData[Data]])
                         (implicit config: Config) extends Area with CdbListener with Resettable {
   setPartialName(s"RS_${exeStage.stageName}")
 
@@ -36,10 +37,10 @@ class ReservationStation(exeStage: Stage,
   private val cdbWaiting = RegNext(cdbWaitingNext).init(False)
   private val dispatchWaiting = RegNext(dispatchWaitingNext).init(False)
 
-  private val resultCdbMessage = RegInit(CdbMessage(rob.indexBits).getZero)
+  private val resultCdbMessage = RegInit(CdbMessage(metaRegisters, rob.indexBits).getZero)
   private val resultDispatchMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
 
-  val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
+  val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(metaRegisters, rob.indexBits)))
   val dispatchStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
 
   private val regs = pipeline.pipelineRegs(exeStage) // TODO: do we need this?

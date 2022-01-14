@@ -4,23 +4,30 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-case class CdbMessage(robIndexBits: BitCount)(implicit config: Config) extends Bundle {
+case class CdbMessage(metaRegisters: DynBundle[PipelineData[Data]], robIndexBits: BitCount)(implicit config: Config) extends Bundle {
   val robIndex: UInt = UInt(robIndexBits)
   val writeValue: UInt = UInt(config.xlen bits)
+  val metadata: Bundle with DynBundleAccess[PipelineData[Data]] = metaRegisters.createBundle
 
   override def clone(): CdbMessage = {
-    CdbMessage(robIndexBits)
+    CdbMessage(metaRegisters, robIndexBits)
   }
+}
+
+case class RdbMessage(retirementRegisters: DynBundle[PipelineData[Data]],
+                      robIndexBits: BitCount) extends Bundle {
+  val robIndex = UInt(robIndexBits)
+  val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] = retirementRegisters.createBundle
 }
 
 trait CdbListener {
   def onCdbMessage(cdbMessage: CdbMessage)
 }
 
-class CommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBuffer)
+class CommonDataBus(reservationStations: Seq[ReservationStation], rob: ReorderBuffer, metaRegisters: DynBundle[PipelineData[Data]])
                    (implicit config: Config) extends Area {
   val inputs: Vec[Stream[CdbMessage]] =
-    Vec(Stream(HardType(CdbMessage(rob.indexBits))), reservationStations.size + 1) // +1 for loadManager
+    Vec(Stream(HardType(CdbMessage(metaRegisters, rob.indexBits))), reservationStations.size + 1) // +1 for loadManager
 
   private val arbitratedInputs = StreamArbiterFactory.roundRobin.noLock.on(inputs)
 

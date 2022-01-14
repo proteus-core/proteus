@@ -4,12 +4,6 @@ import riscv._
 import spinal.core._
 import spinal.lib.Counter
 
-case class RdbMessage(retirementRegisters: DynBundle[PipelineData[Data]],
-                      robIndexBits: BitCount) extends Bundle {
-  val robIndex = UInt(robIndexBits)
-  val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] = retirementRegisters.createBundle
-}
-
 case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])
                    (implicit config: Config) extends Bundle {
   val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] = retirementRegisters.createBundle
