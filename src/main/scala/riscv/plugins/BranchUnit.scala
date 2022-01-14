@@ -1,10 +1,9 @@
 package riscv.plugins
 
 import riscv._
-
 import spinal.core._
 
-class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
+class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] with BranchService {
   object BranchCondition extends SpinalEnum {
     val NONE, EQ, NE, LT, GE, LTU, GEU = newElement()
   }
@@ -129,5 +128,13 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
         }
       }
     }
+  }
+
+  override def isBranch(stage: Stage): Bool = {
+    stage.output(Data.BU_IS_BRANCH)
+  }
+
+  override def isBranchOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
+    bundle.elementAs[Bool](Data.BU_IS_BRANCH.asInstanceOf[PipelineData[Data]])
   }
 }

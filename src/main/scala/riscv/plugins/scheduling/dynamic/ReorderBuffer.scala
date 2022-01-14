@@ -92,7 +92,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     adjusted
   }
 
-  def pushEntry(rd: UInt, rdType: SpinalEnumCraft[RegisterType.type], lsuOperationType: SpinalEnumCraft[LsuOperationType.type], pc: UInt): UInt = {
+  def pushEntry(rd: UInt, rdType: SpinalEnumCraft[RegisterType.type], lsuOperationType: SpinalEnumCraft[LsuOperationType.type], isBranch: Bool, pc: UInt): UInt = {
     pushInCycle := True
     pushedEntry.ready := False
     pushedEntry.hasValue := False
@@ -101,6 +101,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     pushedEntry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) := rdType
     pipeline.getService[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
     pipeline.getService[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
+    pipeline.getService[BranchService].isBranchOfBundle(pushedEntry.registerMap) := isBranch
     newestIndex.value
   }
 
@@ -166,6 +167,29 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       }
     }
     found
+  }
+
+  def isTransient(robIndex: UInt): Bool = {
+    val transient = Bool()
+    transient := False
+
+    for (nth <- 0 until capacity) {
+      val entry = robEntries(nth)
+      val index = UInt(indexBits)
+      index := nth
+
+      val isOlder = relativeIndexForAbsolute(index) < relativeIndexForAbsolute(robIndex)
+      val olderIsBranch = pipeline.getService[BranchService].isBranchOfBundle(entry.registerMap)
+      val olderIsNotResolved = !entry.ready
+
+      when (isValidAbsoluteIndex(nth)
+        && isOlder
+        && olderIsBranch
+        && olderIsNotResolved) {
+        transient := True
+      }
+    }
+    transient
   }
 
   def onRdbMessage(rdbMessage: RdbMessage): Unit = {

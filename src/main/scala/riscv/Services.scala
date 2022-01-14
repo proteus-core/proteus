@@ -143,6 +143,11 @@ trait IntAluService {
   def resultData: PipelineData[UInt]
 }
 
+trait BranchService {
+  def isBranch(stage: Stage): Bool
+  def isBranchOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+}
+
 object LsuOperationType extends SpinalEnum {
   val NONE, LOAD, STORE = newElement()
 }
@@ -457,4 +462,6 @@ trait FormalService {
 
 trait ContextService {
   def isTransientSecret(stage: Stage): Bool
+  def isTransientSecretOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+  def isTransientPipelineReg(reg: PipelineData[Data]): Boolean
 }

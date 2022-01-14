@@ -193,6 +193,7 @@ class ReservationStation(exeStage: Stage,
       dispatchStage.output(pipeline.data.RD),
       dispatchStage.output(pipeline.data.RD_TYPE),
       pipeline.getService[LsuService].operationOutput(dispatchStage),
+      pipeline.getService[BranchService].isBranch(dispatchStage),
       dispatchStage.output(pipeline.data.PC))
 
     stateNext := State.EXECUTING

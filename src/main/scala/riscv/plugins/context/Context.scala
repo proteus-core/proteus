@@ -3,16 +3,16 @@ package riscv.plugins.context
 import riscv._
 import spinal.core._
 
-class Context extends Plugin[Pipeline] with ContextService {
+class Context extends Plugin[DynamicPipeline] with ContextService {
 
   /**
     *
       [x] Tag memory loads coming from a predefined address range
-      [ ] Saving the SECRET_VALUE bit in the ROB: maybe nothing?
+      [x] Saving the SECRET_VALUE bit in the ROB: maybe nothing?
       [ ] Forwarding the SECRET_VALUE bit from loads
-          [ ] Know whether we're transient: forward BU_IS_BRANCH on dispatch, look for it (+ not having a value) same as for stores
+          [x] Know whether we're transient: forward BU_IS_BRANCH on dispatch, look for it (+ not having a value) same as for stores
           [ ] CDB: new bundle type, explicitly adding SECRET register?
-          [ ] RDB: maybe nothing needs to be done?
+          [x] RDB: maybe nothing needs to be done?
       [ ] Propagating/stalling on SECRET_VALUE in reservation stations: checking secret bit if value comes from rob or cdb, only resuming if 0
     */
 
@@ -21,7 +21,7 @@ class Context extends Plugin[Pipeline] with ContextService {
   }
 
   def isSecret(address: UInt): Bool = {
-    address % 2 === 1
+    address % 8 === 0
   }
 
   override def setup(): Unit = {
@@ -34,7 +34,26 @@ class Context extends Plugin[Pipeline] with ContextService {
     })
   }
 
+  override def build(): Unit = {
+    pipeline.issuePipeline.stages.last plug new Area {
+      pipeline.issuePipeline.stages.last.output(PrivateRegs.SECRET_VALUE) := False
+    }
+    // TODO: HACK
+    // TODO: HACK
+    val ret = pipeline.retirementStage
+    pipeline.getService[BranchService].isBranch(ret)
+    pipeline.getService[ContextService].isTransientSecret(ret)
+  }
+
   override def isTransientSecret(stage: Stage): Bool = {
-    stage.value(PrivateRegs.SECRET_VALUE)
+    stage.output(PrivateRegs.SECRET_VALUE)
+  }
+
+  override def isTransientPipelineReg(reg: PipelineData[Data]): Boolean = {
+    reg == PrivateRegs.SECRET_VALUE
+  }
+
+  override def isTransientSecretOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
+    bundle.elementAs[Bool](PrivateRegs.SECRET_VALUE.asInstanceOf[PipelineData[Data]])
   }
 }

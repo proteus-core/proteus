@@ -83,10 +83,18 @@ class LoadManager(pipeline: Pipeline,
     }
 
     when (state === State.EXECUTING && loadStage.arbitration.isDone && !activeFlush) {
+      val context = pipeline.getService[ContextService]
+      val isTransient = rob.isTransient(storedMessage.robIndex)
+      val transientSecret = context.isTransientSecret(loadStage) && isTransient
+
       rdbStream.valid := True
       rdbStream.payload.robIndex := storedMessage.robIndex
       for (register <- retirementRegisters.keys) {
-        rdbStream.payload.registerMap.element(register) := loadStage.output(register)
+        if (context.isTransientPipelineReg(register)) {
+          rdbStream.payload.registerMap.element(register) := transientSecret
+        } else {
+          rdbStream.payload.registerMap.element(register) := loadStage.output(register)
+        }
       }
       outputCache := rdbStream.payload
 
