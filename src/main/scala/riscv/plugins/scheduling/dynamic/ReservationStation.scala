@@ -205,8 +205,8 @@ class ReservationStation(exeStage: Stage,
     val rs1Id = dispatchStage.output(pipeline.data.RS1)
     val rs2Id = dispatchStage.output(pipeline.data.RS2)
 
-    val (rs1Found, rs1Valid, rs1Value, rs1Index) = rob.getValue(rs1Id)
-    val (rs2Found, rs2Valid, rs2Value, rs2Index) = rob.getValue(rs2Id)
+    val (rs1Found, rs1Target) = rob.getValue(rs1Id)
+    val (rs2Found, rs2Target) = rob.getValue(rs2Id)
 
     when (rs1Found) {
       when (rs1Valid) {

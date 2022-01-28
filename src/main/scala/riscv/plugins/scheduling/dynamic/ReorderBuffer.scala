@@ -2,7 +2,7 @@ package riscv.plugins.scheduling.dynamic
 
 import riscv._
 import spinal.core._
-import spinal.lib.Counter
+import spinal.lib.{Counter, Flow}
 
 case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])
                    (implicit config: Config) extends Bundle {
@@ -26,7 +26,8 @@ case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])
   */
 class ReorderBuffer(pipeline: DynamicPipeline,
                     robCapacity: Int,
-                    retirementRegisters: DynBundle[PipelineData[Data]])
+                    retirementRegisters: DynBundle[PipelineData[Data]],
+                    metaRegisters: DynBundle[PipelineData[Data]])
                    (implicit config: Config) extends Area with CdbListener {
   def capacity: Int = robCapacity
   def indexBits: BitCount = log2Up(capacity) bits
@@ -104,15 +105,13 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     robEntries(cdbMessage.robIndex).registerMap.element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
   }
 
-  def getValue(regId: UInt): (Bool, Bool, UInt, UInt) = {
+  def getValue(regId: UInt): (Bool, Flow[CdbMessage]) = {
     val found = Bool()
-    val ready = Bool()
-    val value = UInt(config.xlen bits)
-    val ix = UInt(indexBits)
+    val target = Flow(CdbMessage(metaRegisters, indexBits))
+    target.valid := False
+    target.payload.robIndex := 0
+    target.payload.writeValue := 0
     found := False
-    ready := False
-    value := 0
-    ix := 0
 
     // loop through valid values and return the freshest if present
     for (relative <- 0 until capacity) {
@@ -126,12 +125,13 @@ class ReorderBuffer(pipeline: DynamicPipeline,
         && regId =/= 0
         && entry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) === RegisterType.GPR) {
         found := True
-        ready := entry.hasValue
-        value := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
-        ix := absolute
+        target.valid := entry.hasValue
+        target.robIndex := absolute
+        target.writeValue := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
+        pipeline.getService[ContextService].isTransientSecretOfBundle(target.metadata) := pipeline.getService[ContextService].isTransientSecretOfBundle(entry.registerMap)
       }
     }
-    (found, ready, value, ix)
+    (found, target) // TODO: ready also in metadata?
   }
 
   def hasPendingStore(robIndex: UInt, address: UInt): Bool = {
