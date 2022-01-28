@@ -30,7 +30,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
         registerBundle.addElement(register, register.dataType)
       }
 
-      pipeline.rob = new ReorderBuffer(pipeline, 8, registerBundle)
+      pipeline.rob = new ReorderBuffer(pipeline, 8, registerBundle, cdbBMetaData)
 
       val rob = pipeline.rob
       rob.build()

@@ -209,13 +209,13 @@ class ReservationStation(exeStage: Stage,
     val (rs2Found, rs2Target) = rob.getValue(rs2Id)
 
     when (rs1Found) {
-      when (rs1Valid) {
+      when (rs1Target.valid) {
         rs1WaitingNext := False
-        regs.setReg(pipeline.data.RS1_DATA, rs1Value)
+        regs.setReg(pipeline.data.RS1_DATA, rs1Target.payload.writeValue)
       } otherwise {
         stateNext := State.WAITING_FOR_ARGS
         rs1WaitingNext := True
-        rs1RobIndexNext := rs1Index
+        rs1RobIndexNext := rs1Target.payload.robIndex
       }
     } otherwise {
       rs1WaitingNext := False
@@ -223,13 +223,13 @@ class ReservationStation(exeStage: Stage,
     }
 
     when (rs2Found) {
-      when (rs2Valid || !rs2Used) {
+      when (rs2Target.valid || !rs2Used) {
         rs2WaitingNext := False
-        regs.setReg(pipeline.data.RS2_DATA, rs2Value)
+        regs.setReg(pipeline.data.RS2_DATA, rs2Target.payload.writeValue)
       } otherwise {
         stateNext := State.WAITING_FOR_ARGS
         rs2WaitingNext := True
-        rs2RobIndexNext := rs2Index
+        rs2RobIndexNext := rs2Target.payload.robIndex
       }
     } otherwise {
       rs2WaitingNext := False
