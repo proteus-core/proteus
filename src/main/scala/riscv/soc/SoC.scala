@@ -16,7 +16,11 @@ object RamType {
   case class ExternalAxi4(override val size: BigInt) extends RamType(size)
 }
 
-class SoC(ramType: RamType, createPipeline: Config => Pipeline) extends Component {
+class SoC(
+  ramType: RamType,
+  createPipeline: Config => Pipeline,
+  extraDbusReadDelay: Int = 0
+) extends Component {
   setDefinitionName("Core")
 
   implicit val config = new Config(BaseIsa.RV32I)
@@ -93,10 +97,11 @@ class SoC(ramType: RamType, createPipeline: Config => Pipeline) extends Componen
     )
 
     val ibusAxi = core.ibus.toAxi4ReadOnly()
+    val dbusAxi = core.dbus.toAxi4Shared()
 
     axiCrossbar.addConnections(
       ibusAxi -> List(ramAxi),
-      core.dbus.toAxi4Shared() -> List(ramAxi, apbBridge.io.axi)
+      dbusAxi -> List(ramAxi, apbBridge.io.axi)
     )
 
     // This pipelining is used to cut combinatorial loops caused by lowLatency=true. It is based on
@@ -107,6 +112,17 @@ class SoC(ramType: RamType, createPipeline: Config => Pipeline) extends Componen
       ibus.readCmd.m2sPipe() >> crossbar.readCmd
       ibus.readRsp << crossbar.readRsp.s2mPipe()
     })
+
+    if (extraDbusReadDelay > 0) {
+      axiCrossbar.addPipelining(dbusAxi)((dbus, crossbar) => {
+        import Utils._
+
+        dbus.sharedCmd >> crossbar.sharedCmd
+        dbus.writeData >> crossbar.writeData
+        dbus.readRsp << crossbar.readRsp.stage(extraDbusReadDelay)
+        dbus.writeRsp << crossbar.writeRsp
+      })
+    }
 
     axiCrossbar.build()
 
