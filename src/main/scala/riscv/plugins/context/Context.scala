@@ -13,7 +13,9 @@ class Context extends Plugin[DynamicPipeline] with ContextService {
           [x] Know whether we're transient: forward BU_IS_BRANCH on dispatch, look for it (+ not having a value) same as for stores
           [x] CDB: new bundle type, explicitly adding SECRET register?
           [x] RDB: maybe nothing needs to be done?
-      [ ] Propagating/stalling on SECRET_VALUE in reservation stations: checking secret bit if value comes from rob or cdb, only resuming if 0
+      [x] Propagating/stalling on SECRET_VALUE in reservation stations: checking secret bit if value comes from rob or cdb, only resuming if 0
+      [x] Resetting SECRET_VALUE in the ROB after a branch has been resolved,
+          [ ] notify waiting reservation stations (many cdb messages? or a different bus for retired branches?)
       [ ] Make the defense optional
     */
 
@@ -22,7 +24,7 @@ class Context extends Plugin[DynamicPipeline] with ContextService {
   }
 
   def isSecret(address: UInt): Bool = {
-    address % 8 === 0
+    address % 8 === 0  // TODO: how to determine what is secret?
   }
 
   override def setup(): Unit = {

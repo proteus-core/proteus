@@ -97,12 +97,14 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     pipeline.getService[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
     pipeline.getService[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
     pipeline.getService[BranchService].isBranchOfBundle(pushedEntry.registerMap) := isBranch
+    pipeline.getService[ContextService].isTransientSecretOfBundle(pushedEntry.registerMap) := False
     newestIndex.value
   }
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
     robEntries(cdbMessage.robIndex).hasValue := True
     robEntries(cdbMessage.robIndex).registerMap.element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
+    pipeline.getService[ContextService].isTransientSecretOfBundle(pushedEntry.registerMap) := pipeline.getService[ContextService].isTransientSecretOfBundle(cdbMessage.metadata)
   }
 
   def getValue(regId: UInt): (Bool, Flow[CdbMessage]) = {
@@ -111,6 +113,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     target.valid := False
     target.payload.robIndex := 0
     target.payload.writeValue := 0
+    pipeline.getService[ContextService].isTransientSecretOfBundle(target.metadata) := False
     found := False
 
     // loop through valid values and return the freshest if present
@@ -196,6 +199,21 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     robEntries(rdbMessage.robIndex).ready := True
   }
 
+  def clearSecretFlag(): Unit = {
+    val secondBranch = Bool()
+    secondBranch := False
+    for (nth <- 1 until capacity) {
+      val absolute = absoluteIndexForRelative(nth).resized
+      val entry = robEntries(absolute)
+      when (pipeline.getService[BranchService].isBranchOfBundle(entry.registerMap)) {
+        secondBranch := True
+      }
+      when (!secondBranch) {
+        pipeline.getService[ContextService].isTransientSecretOfBundle(entry.registerMap) := False
+      }
+    }
+  }
+
   def build(): Unit = {
     val oldestEntry = robEntries(oldestIndex.value)
     val updatedOldestIndex = UInt(indexBits)
@@ -219,6 +237,10 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     }
 
     when (!isEmpty && oldestEntry.ready && ret.arbitration.isDone) {
+      // removing secret flags, we don't care whether the prediction was correct or not, if not, a flush will happen in the next cycle anyway
+      // TODO: should we only do this for jumps? it doesn't hurt like this, right?
+      clearSecretFlag()
+
       // removing the oldest entry
       updatedOldestIndex := oldestIndex.valueNext
       oldestIndex.increment()
