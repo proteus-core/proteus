@@ -79,11 +79,11 @@ trait Pipeline {
     })
   }
 
-  def withService[T](implicit tag: ClassTag[T], func: T => Unit, alternative: () => Unit = () => {}): Unit = {
-    if (hasService(tag)) {
-      func(getService(tag))
+  def withService[T](func: T => Unit, alternative: => Unit = () => {})(implicit tag: ClassTag[T]): Unit = {
+    if (hasService[T]) {
+      func(getService[T])
     } else {
-      alternative()
+      alternative
     }
   }
 
