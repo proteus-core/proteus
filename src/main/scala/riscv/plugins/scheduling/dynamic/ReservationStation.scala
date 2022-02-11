@@ -54,8 +54,6 @@ class ReservationStation(exeStage: Stage,
     stateNext := State.IDLE
   }
 
-  private def contextActive = pipeline.hasService[ContextService]
-
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
     val currentRs1Waiting, currentRs2Waiting = Bool()
     val currentRs1RobIndex, currentRs2RobIndex = UInt(rob.indexBits)
@@ -79,28 +77,34 @@ class ReservationStation(exeStage: Stage,
       r2w := currentRs2Waiting
 
       when (currentRs1Waiting && cdbMessage.robIndex === currentRs1RobIndex) {
-        if (contextActive) {
-          when (!pipeline.getService[ContextService].isTransientSecretOfBundle(cdbMessage.metadata)) {
+        pipeline.withService[ContextService](
+          context => {
+            when(!context.isTransientSecretOfBundle(cdbMessage.metadata)) {
+              rs1Waiting := False
+              r1w := False
+            }
+          },
+          {
             rs1Waiting := False
             r1w := False
           }
-        } else {
-          rs1Waiting := False
-          r1w := False
-        }
+        )
         regs.setReg(pipeline.data.RS1_DATA, cdbMessage.writeValue)
       }
 
       when (currentRs2Waiting && cdbMessage.robIndex === currentRs2RobIndex) {
-        if (contextActive) {
-          when (!pipeline.getService[ContextService].isTransientSecretOfBundle(cdbMessage.metadata)) {
-            rs1Waiting := False
-            r1w := False
+        pipeline.withService[ContextService](
+          context => {
+            when(!context.isTransientSecretOfBundle(cdbMessage.metadata)) {
+              rs2Waiting := False
+              r2w := False
+            }
+          },
+          () => {
+            rs2Waiting := False
+            r2w := False
           }
-        } else {
-          rs2Waiting := False
-          r2w := False
-        }
+        )
         regs.setReg(pipeline.data.RS2_DATA, cdbMessage.writeValue)
       }
 
@@ -155,18 +159,30 @@ class ReservationStation(exeStage: Stage,
     // when waiting for the result, and it is ready, put in on the bus
     when (state === State.EXECUTING && exeStage.arbitration.isDone && !activeFlush) {
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
-      pipeline.getService[ContextService].isTransientSecretOfBundle(cdbStream.payload.metadata) := False  // TODO if we want to propagate instead of stall
+      pipeline.withService[ContextService](
+        context => {
+          context.isTransientSecretOfBundle(cdbStream.payload.metadata) := False  // TODO if we want to propagate instead of stall
+        }
+      )
 
       cdbStream.payload.robIndex := robEntryIndex
       dispatchStream.payload.robIndex := robEntryIndex
 
       for (register <- retirementRegisters.keys) {
-        // TODO if we want to propagate instead of stall
-        if (pipeline.getService[ContextService].isTransientPipelineReg(register)) {
-          dispatchStream.payload.registerMap.element(register) := False
-        } else {
-          dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
-        }
+        pipeline.withService[ContextService](
+          context => {
+            // TODO if we want to propagate instead of stall
+            if (context.isTransientPipelineReg(register)) {
+              dispatchStream.payload.registerMap.element(register) := False
+            } else {
+              dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
+            }
+          },
+          () => {
+            dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
+          }
+        )
+
       }
 
       when (exeStage.output(pipeline.data.RD_DATA_VALID)) {
@@ -232,15 +248,18 @@ class ReservationStation(exeStage: Stage,
 
     when (rs1Found) {
       when (rs1Target.valid) {
-        if (contextActive) {
-          val secret = pipeline.getService[ContextService].isTransientSecretOfBundle(rs1Target.payload.metadata)
-          rs1WaitingNext := secret
-          when (secret) {
-            stateNext := State.WAITING_FOR_ARGS
+        pipeline.withService[ContextService](
+          context => {
+            val secret = context.isTransientSecretOfBundle(rs1Target.payload.metadata)
+            rs1WaitingNext := secret
+            when (secret) {
+              stateNext := State.WAITING_FOR_ARGS
+            }
+          },
+          () => {
+            rs1WaitingNext := False
           }
-        } else {
-          rs1WaitingNext := False
-        }
+        )
         regs.setReg(pipeline.data.RS1_DATA, rs1Target.payload.writeValue)
       } otherwise {
         stateNext := State.WAITING_FOR_ARGS
@@ -254,15 +273,18 @@ class ReservationStation(exeStage: Stage,
 
     when (rs2Found) {
       when (rs2Target.valid || !rs2Used) {
-        if (contextActive) {
-          val secret = pipeline.getService[ContextService].isTransientSecretOfBundle(rs2Target.payload.metadata)
-          rs2WaitingNext := secret
-          when (secret) {
-            stateNext := State.WAITING_FOR_ARGS
+        pipeline.withService[ContextService](
+          context => {
+            val secret = context.isTransientSecretOfBundle(rs2Target.payload.metadata)
+            rs2WaitingNext := secret
+            when (secret) {
+              stateNext := State.WAITING_FOR_ARGS
+            }
+          },
+          () => {
+            rs2WaitingNext := False
           }
-        } else {
-          rs2WaitingNext := False
-        }
+        )
         regs.setReg(pipeline.data.RS2_DATA, rs2Target.payload.writeValue)
       } otherwise {
         stateNext := State.WAITING_FOR_ARGS

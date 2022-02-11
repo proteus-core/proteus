@@ -17,6 +17,7 @@ class Context extends Plugin[DynamicPipeline] with ContextService {
       [x] Resetting SECRET_VALUE in the ROB after a branch has been resolved,
           [ ] notify waiting reservation stations (many cdb messages? or a different bus for retired branches?)
       [ ] Make the defense optional
+      [ ] Operations should not be unnecessarily delayed (after the branch is confirmed well-predicted)
     */
 
   private object PrivateRegs {
@@ -42,10 +43,8 @@ class Context extends Plugin[DynamicPipeline] with ContextService {
       pipeline.issuePipeline.stages.last.output(PrivateRegs.SECRET_VALUE) := False
     }
     // TODO: HACK
-    // TODO: HACK
     val ret = pipeline.retirementStage
-    pipeline.getService[BranchService].isBranch(ret)
-    pipeline.getService[ContextService].isTransientSecret(ret)
+    isTransientSecret(ret)
   }
 
   override def isTransientSecret(stage: Stage): Bool = {

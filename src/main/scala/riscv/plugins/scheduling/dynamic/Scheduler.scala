@@ -19,10 +19,15 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
   override def finish(): Unit = {
     pipeline plug new Area {
       val cdbBMetaData = new DynBundle[PipelineData[spinal.core.Data]]
-      pipeline.getService[ContextService].addSecretToBundle(cdbBMetaData)
 
       val registerBundle = new DynBundle[PipelineData[spinal.core.Data]]
-      pipeline.getService[ContextService].addSecretToBundle(registerBundle)
+
+      pipeline.withService[ContextService](
+        context => {
+          context.addSecretToBundle(cdbBMetaData)
+          context.addSecretToBundle(registerBundle)
+        }
+      )
 
       val ret = pipeline.retirementStage
       val ls = pipeline.loadStage
