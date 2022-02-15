@@ -223,8 +223,8 @@ object createDynamicPipeline {
       new TrapHandler(pipeline.retirementStage),
       new MachineMode(pipeline.intAlu1),
       new Interrupts(pipeline.retirementStage),
-      new Timers,
-      new riscv.plugins.context.Context
+      new Timers
+//      ,       new riscv.plugins.context.Context
     ) ++ extraPlugins)
 
     if (build) {

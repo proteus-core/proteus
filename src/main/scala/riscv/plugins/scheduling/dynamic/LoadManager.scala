@@ -97,7 +97,7 @@ class LoadManager(pipeline: Pipeline,
               rdbStream.payload.registerMap.element(register) := loadStage.output(register)
             }
           },
-          () => {
+          {
             rdbStream.payload.registerMap.element(register) := loadStage.output(register)
           }
         )
