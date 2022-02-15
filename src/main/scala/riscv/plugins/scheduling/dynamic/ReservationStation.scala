@@ -2,10 +2,26 @@ package riscv.plugins.scheduling.dynamic
 
 import riscv._
 import spinal.core._
-import spinal.lib.Stream
+import spinal.lib.{Flow, Stream}
 
 trait Resettable {
   def pipelineReset(): Unit
+}
+
+// TODO: think about these names
+case class RegisterSource(indexBits: BitCount) extends Bundle {
+  val priorInstructionNext: Flow[UInt] = Flow(UInt(indexBits))
+  val priorInstruction: Flow[UInt] = RegNext(priorInstructionNext).init(priorInstructionNext.getZero)
+  val priorBranchNext: Flow[UInt] = Flow(UInt(indexBits))
+  val priorBranch: Flow[UInt] = RegNext(priorBranchNext).init(priorBranchNext.getZero)
+
+  def waiting: Bool = priorInstruction.valid
+  def waitingNext: Bool = priorInstructionNext.valid
+
+  def build(): Unit = {
+    priorInstructionNext := priorInstruction
+    priorBranchNext := priorBranch
+  }
 }
 
 class ReservationStation(exeStage: Stage,
@@ -16,13 +32,8 @@ class ReservationStation(exeStage: Stage,
                         (implicit config: Config) extends Area with CdbListener with Resettable {
   setPartialName(s"RS_${exeStage.stageName}")
 
-  private val rs1RobIndexNext, rs2RobIndexNext = UInt(rob.indexBits)
-  private val rs1WaitingNext, rs2WaitingNext = Bool()
-
-  private val rs1RobIndex = RegNext(rs1RobIndexNext).init(0)
-  private val rs2RobIndex = RegNext(rs2RobIndexNext).init(0)
-  private val rs1Waiting = RegNext(rs1WaitingNext).init(False)
-  private val rs2Waiting = RegNext(rs2WaitingNext).init(False)
+  private val rs1Source = RegisterSource(rob.indexBits)
+  private val rs2Source = RegisterSource(rob.indexBits)
 
   private val robEntryIndex = Reg(UInt(rob.indexBits)).init(0)
 
@@ -59,15 +70,15 @@ class ReservationStation(exeStage: Stage,
     val currentRs1RobIndex, currentRs2RobIndex = UInt(rob.indexBits)
 
     when (state === State.WAITING_FOR_ARGS) {
-      currentRs1Waiting := rs1Waiting
-      currentRs2Waiting := rs2Waiting
-      currentRs1RobIndex := rs1RobIndex
-      currentRs2RobIndex := rs2RobIndex
+      currentRs1Waiting := rs1Source.waiting
+      currentRs2Waiting := rs2Source.waiting
+      currentRs1RobIndex := rs1Source.priorInstruction.payload
+      currentRs2RobIndex := rs2Source.priorInstruction.payload
     } otherwise {
-      currentRs1Waiting := rs1WaitingNext
-      currentRs2Waiting := rs2WaitingNext
-      currentRs1RobIndex := rs1RobIndexNext
-      currentRs2RobIndex := rs2RobIndexNext
+      currentRs1Waiting := rs1Source.waitingNext
+      currentRs2Waiting := rs2Source.waitingNext
+      currentRs1RobIndex := rs1Source.priorInstructionNext.payload
+      currentRs2RobIndex := rs2Source.priorInstructionNext.payload
     }
 
     when (state === State.WAITING_FOR_ARGS || stateNext === State.WAITING_FOR_ARGS) {
@@ -80,12 +91,12 @@ class ReservationStation(exeStage: Stage,
         pipeline.withService[ContextService](
           context => {
             when(!context.isTransientSecretOfBundle(cdbMessage.metadata)) {
-              rs1Waiting := False
+              rs1Source.priorInstruction.valid := False
               r1w := False
             }
           },
           {
-            rs1Waiting := False
+            rs1Source.priorInstruction.valid := False
             r1w := False
           }
         )
@@ -96,12 +107,12 @@ class ReservationStation(exeStage: Stage,
         pipeline.withService[ContextService](
           context => {
             when(!context.isTransientSecretOfBundle(cdbMessage.metadata)) {
-              rs2Waiting := False
+              rs2Source.priorInstruction.valid := False
               r2w := False
             }
           },
-          () => {
-            rs2Waiting := False
+          {
+            rs2Source.priorInstruction.valid := False
             r2w := False
           }
         )
@@ -121,10 +132,8 @@ class ReservationStation(exeStage: Stage,
   }
 
   def build(): Unit = {
-    rs1RobIndexNext := rs1RobIndex
-    rs2RobIndexNext := rs2RobIndex
-    rs1WaitingNext := rs1Waiting
-    rs2WaitingNext := rs2Waiting
+    rs1Source.build()
+    rs2Source.build()
 
     cdbWaitingNext := cdbWaiting
     dispatchWaitingNext := dispatchWaiting
@@ -178,7 +187,7 @@ class ReservationStation(exeStage: Stage,
               dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
             }
           },
-          () => {
+          {
             dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
           }
         )
@@ -251,23 +260,25 @@ class ReservationStation(exeStage: Stage,
         pipeline.withService[ContextService](
           context => {
             val secret = context.isTransientSecretOfBundle(rs1Target.payload.metadata)
-            rs1WaitingNext := secret
+//            rs1WaitingNext := secret
+            rs1Source.priorInstructionNext.valid := False
+            // TODO: we should zero these out by default, and then set the jump one here
+            //       and i guess add another field to this thing, secret, and only stall if that's true
             when (secret) {
               stateNext := State.WAITING_FOR_ARGS
             }
           },
-          () => {
-            rs1WaitingNext := False
+          {
+            rs1Source.priorInstructionNext.valid := False
           }
         )
         regs.setReg(pipeline.data.RS1_DATA, rs1Target.payload.writeValue)
       } otherwise {
         stateNext := State.WAITING_FOR_ARGS
-        rs1WaitingNext := True
-        rs1RobIndexNext := rs1Target.payload.robIndex
+        rs1Source.priorInstructionNext.push(rs1Target.payload.robIndex)
       }
     } otherwise {
-      rs1WaitingNext := False
+      rs1Source.priorInstructionNext.valid := False
       regs.setReg(pipeline.data.RS1_DATA, dispatchStage.output(pipeline.data.RS1_DATA))
     }
 
@@ -276,23 +287,23 @@ class ReservationStation(exeStage: Stage,
         pipeline.withService[ContextService](
           context => {
             val secret = context.isTransientSecretOfBundle(rs2Target.payload.metadata)
-            rs2WaitingNext := secret
+//            rs2WaitingNext := secret
+            rs2Source.priorInstructionNext.valid := False
             when (secret) {
               stateNext := State.WAITING_FOR_ARGS
             }
           },
-          () => {
-            rs2WaitingNext := False
+          {
+            rs2Source.priorInstructionNext.valid := False
           }
         )
         regs.setReg(pipeline.data.RS2_DATA, rs2Target.payload.writeValue)
       } otherwise {
         stateNext := State.WAITING_FOR_ARGS
-        rs2WaitingNext := True
-        rs2RobIndexNext := rs2Target.payload.robIndex
+        rs2Source.priorInstructionNext.push(rs2Target.payload.robIndex)
       }
     } otherwise {
-      rs2WaitingNext := False
+      rs2Source.priorInstructionNext.valid := False
       regs.setReg(pipeline.data.RS2_DATA, dispatchStage.output(pipeline.data.RS2_DATA))
     }
   }
