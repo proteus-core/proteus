@@ -2,6 +2,7 @@ package riscv.plugins
 
 import riscv._
 import spinal.core._
+import spinal.lib.Flow
 
 class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] with BranchService {
   object BranchCondition extends SpinalEnum {
@@ -13,6 +14,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] with BranchS
     object BU_WRITE_RET_ADDR_TO_RD extends PipelineData(Bool())
     object BU_IGNORE_TARGET_LSB extends PipelineData(Bool())
     object BU_CONDITION extends PipelineData(BranchCondition())
+    object PENDING_BRANCH extends PipelineData(Flow(UInt(32 bits))) // TODO: this should be rob size
   }
 
   override def setup(): Unit = {
@@ -134,7 +136,19 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] with BranchS
     stage.output(Data.BU_IS_BRANCH)
   }
 
+  override def addIsBranchToBundle(bundle: DynBundle[PipelineData[Data]]): Unit = {
+    bundle.addElement(Data.BU_IS_BRANCH.asInstanceOf[PipelineData[Data]], Data.BU_IS_BRANCH.dataType)
+  }
+
   override def isBranchOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
     bundle.elementAs[Bool](Data.BU_IS_BRANCH.asInstanceOf[PipelineData[Data]])
+  }
+
+  override def addPendingBranchToBundle(bundle: DynBundle[PipelineData[Data]]): Unit = {
+    bundle.addElement(Data.PENDING_BRANCH.asInstanceOf[PipelineData[Data]], Data.PENDING_BRANCH.dataType)
+  }
+
+  override def pendingBranchOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Flow[UInt] = {
+    bundle.elementAs[Flow[UInt]](Data.PENDING_BRANCH.asInstanceOf[PipelineData[Data]])
   }
 }

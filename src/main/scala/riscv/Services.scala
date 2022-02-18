@@ -145,7 +145,10 @@ trait IntAluService {
 
 trait BranchService {
   def isBranch(stage: Stage): Bool
+  def addIsBranchToBundle(bundle: DynBundle[PipelineData[Data]]): Unit
   def isBranchOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+  def addPendingBranchToBundle(bundle: DynBundle[PipelineData[Data]]): Unit
+  def pendingBranchOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Flow[UInt]
 }
 
 object LsuOperationType extends SpinalEnum {
@@ -329,7 +332,8 @@ trait JumpService {
 }
 
 trait BranchTargetPredictorService {
-  def getPredictedPc(stage: Stage): UInt
+  def predictedPc(stage: Stage): UInt
+  def predictedPcOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt
   def setPredictedPc(stage: Stage, pc: UInt): Unit
 }
 

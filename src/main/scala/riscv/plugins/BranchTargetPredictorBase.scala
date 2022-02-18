@@ -71,8 +71,12 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
     object PREDICTED_JUMP extends PipelineData(Bool())
   }
 
-  override def getPredictedPc(stage: Stage): UInt = {
+  override def predictedPc(stage: Stage): UInt = {
     stage.output(Data.PREDICTED_PC)
+  }
+
+  override def predictedPcOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt = {
+    bundle.elementAs[UInt](Data.PREDICTED_PC.asInstanceOf[PipelineData[Data]])
   }
 
   override def setPredictedPc(stage: Stage, pc: UInt): Unit = {
@@ -99,7 +103,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
       jumpService.onJump { (stage, _, nextPc, jumpType) =>
         jumpType match {
           case JumpType.Normal =>
-            when (predictionWasCorrect(nextPc, getPredictedPc(stage))) {
+            when (predictionWasCorrect(nextPc, predictedPc(stage))) {
               // cancel jump if it was correctly predicted in the fetch stage
               pipeline.getService[JumpService].disableJump(stage)
 

@@ -47,6 +47,7 @@ class RegisterFileAccessor(readStage: Stage, writeStage: Stage) extends Plugin[P
         False
       }
 
+      // TODO: write secret flag
       regFileIo.write :=
         value(pipeline.data.RD_TYPE) === RegisterType.GPR &&
         arbitration.isDone &&

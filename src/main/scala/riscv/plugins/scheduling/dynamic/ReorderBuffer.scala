@@ -193,14 +193,16 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       index := nth
 
       val isOlder = relativeIndexForAbsolute(index) < relativeIndexForAbsolute(robIndex)
-      val olderIsBranch = pipeline.getService[BranchService].isBranchOfBundle(entry.registerMap) // || isPredicted(entry.registerMap)
-      val olderIsNotResolved = !entry.ready
-      val incorrectlyPredicted = True
+      val isBranch = pipeline.getService[BranchService].isBranchOfBundle(entry.registerMap)
+      val resolved = entry.ready
+      val incorrectlyPredicted = pipeline.getService[BranchTargetPredictorService].predictedPcOfBundle(entry.registerMap) =/= entry.registerMap.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]])
+      // TODO: since here we already know whether it was mispredicted, might as well reset the pipeline?
 
+      // an instruction is transient if there is an instruction before it in the ROB which is either
+      // an unresolved branch, or a resolved instruction (of any type) that was mispredicted
       when (isValidAbsoluteIndex(nth)
         && isOlder
-        && olderIsBranch
-        && (olderIsNotResolved || incorrectlyPredicted)) {
+        && ((isBranch && !resolved) || (incorrectlyPredicted && resolved))) {
         dependent.push(index)
       }
     }
@@ -257,9 +259,9 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     when (!isEmpty && oldestEntry.ready && ret.arbitration.isDone) {
       // removing secret flags, we don't care whether the prediction was correct or not, if not, a flush will happen in the next cycle anyway
       // TODO: should we only do this for jumps? it doesn't hurt like this, right?
-      if (pipeline.hasService[ContextService]) {
-        clearSecretFlag()
-      }
+//      if (pipeline.hasService[ContextService]) {
+//        clearSecretFlag()
+//      }
 
       // removing the oldest entry
       updatedOldestIndex := oldestIndex.valueNext

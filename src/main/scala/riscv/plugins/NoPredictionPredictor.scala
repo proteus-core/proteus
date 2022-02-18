@@ -19,7 +19,7 @@ class NoPredictionPredictor(fetchStage: Stage, executeStage: Stage)
     }
   }
 
-  override def getPredictedPc(stage: Stage): UInt = {
+  override def predictedPc(stage: Stage): UInt = {
     stage.output(Data.PREDICTED_PC)
   }
 
@@ -29,5 +29,9 @@ class NoPredictionPredictor(fetchStage: Stage, executeStage: Stage)
 
   def predictionWasCorrect(pc: UInt, nextPc: UInt, predictedPc: UInt): Bool = {
     nextPc === predictedPc
+  }
+
+  override def predictedPcOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt = {
+    bundle.elementAs[UInt](Data.PREDICTED_PC.asInstanceOf[PipelineData[Data]])
   }
 }

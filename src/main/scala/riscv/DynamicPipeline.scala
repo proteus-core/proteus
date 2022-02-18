@@ -56,7 +56,7 @@ trait DynamicPipeline extends Pipeline {
       stage.value(data.RS1_TYPE)
       stage.value(data.RS2_TYPE)
 
-      getService[BranchTargetPredictorService].getPredictedPc(stage)
+      getService[BranchTargetPredictorService].predictedPc(stage)
       getService[JumpService].jumpRequested(stage)
       getService[BranchService].isBranch(stage)
     }

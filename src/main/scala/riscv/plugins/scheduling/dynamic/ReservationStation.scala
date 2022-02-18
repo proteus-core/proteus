@@ -8,7 +8,6 @@ trait Resettable {
   def pipelineReset(): Unit
 }
 
-// TODO: think about these names
 case class RegisterSource(indexBits: BitCount) extends Bundle {
   val priorInstructionNext: Flow[UInt] = Flow(UInt(indexBits))
   val priorInstruction: Flow[UInt] = RegNext(priorInstructionNext).init(priorInstructionNext.getZero)
@@ -83,66 +82,51 @@ class ReservationStation(exeStage: Stage,
   }
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
-    val currentRs1Waiting, currentRs2Waiting = Bool()
-    val currentRs1RobIndex, currentRs2RobIndex = UInt(rob.indexBits)
+    val currentRs1Prior, currentRs2Prior = Flow(UInt(rob.indexBits))
+    val branchWaiting = Flow(UInt(rob.indexBits))
 
     when (state === State.WAITING_FOR_ARGS) {
-      currentRs1Waiting := meta.rs1.waiting
-      currentRs2Waiting := meta.rs2.waiting
-      currentRs1RobIndex := meta.rs1.priorInstruction.payload
-      currentRs2RobIndex := meta.rs2.priorInstruction.payload
+      currentRs1Prior := meta.rs1.priorInstruction
+      currentRs2Prior := meta.rs2.priorInstruction
+      branchWaiting := meta.priorBranch
     } otherwise {
-      currentRs1Waiting := meta.rs1.waitingNext
-      currentRs2Waiting := meta.rs2.waitingNext
-      currentRs1RobIndex := meta.rs1.priorInstructionNext.payload
-      currentRs2RobIndex := meta.rs2.priorInstructionNext.payload
+      currentRs1Prior := meta.rs1.priorInstructionNext
+      currentRs2Prior := meta.rs2.priorInstructionNext
+      branchWaiting := meta.priorBranchNext
     }
 
     when (state === State.WAITING_FOR_ARGS || stateNext === State.WAITING_FOR_ARGS) {
-      // TODO:
-      // if getting operand, proceed as normal
-      // if getting branch dependency, check transferred dependency register id, if needed update, if not, clear flag
-
-
-
       val r1w = Bool()
-      r1w := currentRs1Waiting
+      r1w := currentRs1Prior.valid
       val r2w = Bool()
-      r2w := currentRs2Waiting
+      r2w := currentRs2Prior.valid
+      val brw = Bool()
+      brw := branchWaiting.valid
 
-      when (currentRs1Waiting && cdbMessage.robIndex === currentRs1RobIndex) {
-        pipeline.withService[ContextService](
-          context => {
-            when(!context.isSecretOfBundle(cdbMessage.metadata)) {
-              meta.rs1.priorInstruction.valid := False
-              r1w := False
-            }
-          },
-          {
-            meta.rs1.priorInstruction.valid := False
-            r1w := False
-          }
-        )
+      when (currentRs1Prior.valid && cdbMessage.robIndex === currentRs1Prior.payload) {
+        meta.rs1.priorInstruction.valid := False
+        r1w := False
         regs.setReg(pipeline.data.RS1_DATA, cdbMessage.writeValue)
       }
 
-      when (currentRs2Waiting && cdbMessage.robIndex === currentRs2RobIndex) {
-        pipeline.withService[ContextService](
-          context => {
-            when(!context.isSecretOfBundle(cdbMessage.metadata)) {
-              meta.rs2.priorInstruction.valid := False
-              r2w := False
-            }
-          },
-          {
-            meta.rs2.priorInstruction.valid := False
-            r2w := False
-          }
-        )
+      when (currentRs2Prior.valid && cdbMessage.robIndex === currentRs2Prior.payload) {
+        meta.rs2.priorInstruction.valid := False
+        r2w := False
         regs.setReg(pipeline.data.RS2_DATA, cdbMessage.writeValue)
       }
 
-      when (!r1w && !r2w) {
+      when (branchWaiting.valid && cdbMessage.robIndex === branchWaiting.payload) {
+        val pending = pipeline.getService[BranchService].pendingBranchOfBundle(cdbMessage.metadata)
+        when (pending.valid) {
+          meta.priorBranch.push(pending.payload.resized) // TODO: resized
+        } otherwise {
+          meta.priorBranch.setIdle()
+          brw := False
+        }
+      }
+
+      // TODO: should brw only be a condition when defense is active and secret is set?
+      when (!r1w && !r2w && !brw) {
         // This is the only place where state is written directly (instead of
         // via stateNext). This ensures that we have priority over whatever
         // execute() writes to it which means that the order of calling
@@ -192,7 +176,7 @@ class ReservationStation(exeStage: Stage,
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
       pipeline.withService[ContextService](
         context => {
-          context.isSecretOfBundle(cdbStream.payload.metadata) := False  // TODO if we want to propagate instead of stall
+          context.isSecretOfBundle(cdbStream.payload.metadata) := meta.rs1.isSecret || meta.rs2.isSecret
         }
       )
 
@@ -204,7 +188,7 @@ class ReservationStation(exeStage: Stage,
           context => {
             // TODO if we want to propagate instead of stall
             if (context.isSecretPipelineReg(register)) {
-              dispatchStream.payload.registerMap.element(register) := False
+              dispatchStream.payload.registerMap.element(register) := meta.rs1.isSecret || meta.rs2.isSecret
             } else {
               dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
             }
@@ -281,7 +265,6 @@ class ReservationStation(exeStage: Stage,
     val (rs1Found, rs1Target) = rob.getValue(rs1Id)
     val (rs2Found, rs2Target) = rob.getValue(rs2Id)
 
-    // TODO: get dependent jump from rob
     val dependentJump = rob.isTransient(robEntryIndex)
     when (dependentJump.valid) {
       meta.priorBranchNext.push(dependentJump.payload)
@@ -304,6 +287,7 @@ class ReservationStation(exeStage: Stage,
         meta.rs1.priorInstructionNext.push(rs1Target.payload.robIndex)
       }
     } otherwise {
+      // TODO: read secret flag from register
       regs.setReg(pipeline.data.RS1_DATA, dispatchStage.output(pipeline.data.RS1_DATA))
     }
 
@@ -324,6 +308,7 @@ class ReservationStation(exeStage: Stage,
         meta.rs2.priorInstructionNext.push(rs2Target.payload.robIndex)
       }
     } otherwise {
+      // TODO: read secret flag from register
       regs.setReg(pipeline.data.RS2_DATA, dispatchStage.output(pipeline.data.RS2_DATA))
     }
   }
