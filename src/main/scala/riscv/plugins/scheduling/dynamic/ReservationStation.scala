@@ -12,14 +12,32 @@ trait Resettable {
 case class RegisterSource(indexBits: BitCount) extends Bundle {
   val priorInstructionNext: Flow[UInt] = Flow(UInt(indexBits))
   val priorInstruction: Flow[UInt] = RegNext(priorInstructionNext).init(priorInstructionNext.getZero)
-  val priorBranchNext: Flow[UInt] = Flow(UInt(indexBits))
-  val priorBranch: Flow[UInt] = RegNext(priorBranchNext).init(priorBranchNext.getZero)
+
+  val isSecretNext: Bool = Bool()
+  val isSecret: Bool = RegNext(isSecretNext).init(False)
 
   def waiting: Bool = priorInstruction.valid
   def waitingNext: Bool = priorInstructionNext.valid
 
   def build(): Unit = {
     priorInstructionNext := priorInstruction
+    isSecretNext := isSecret
+  }
+}
+
+case class InstructionDependencies(indexBits: BitCount) extends Bundle {
+  val rs1 = RegisterSource(indexBits)
+  val rs2 = RegisterSource(indexBits)
+
+  val priorBranchNext: Flow[UInt] = Flow(UInt(indexBits))
+  val priorBranch: Flow[UInt] = RegNext(priorBranchNext).init(priorBranchNext.getZero)
+
+  def waitingForBranch: Bool = priorBranch.valid && (rs1.isSecret || rs2.isSecret)
+  def waitingForBranchNext: Bool = priorBranchNext.valid && (rs1.isSecretNext || rs2.isSecretNext)
+
+  def build(): Unit = {
+    rs1.build()
+    rs2.build()
     priorBranchNext := priorBranch
   }
 }
@@ -32,8 +50,7 @@ class ReservationStation(exeStage: Stage,
                         (implicit config: Config) extends Area with CdbListener with Resettable {
   setPartialName(s"RS_${exeStage.stageName}")
 
-  private val rs1Source = RegisterSource(rob.indexBits)
-  private val rs2Source = RegisterSource(rob.indexBits)
+  private val meta = InstructionDependencies(rob.indexBits)
 
   private val robEntryIndex = Reg(UInt(rob.indexBits)).init(0)
 
@@ -70,18 +87,24 @@ class ReservationStation(exeStage: Stage,
     val currentRs1RobIndex, currentRs2RobIndex = UInt(rob.indexBits)
 
     when (state === State.WAITING_FOR_ARGS) {
-      currentRs1Waiting := rs1Source.waiting
-      currentRs2Waiting := rs2Source.waiting
-      currentRs1RobIndex := rs1Source.priorInstruction.payload
-      currentRs2RobIndex := rs2Source.priorInstruction.payload
+      currentRs1Waiting := meta.rs1.waiting
+      currentRs2Waiting := meta.rs2.waiting
+      currentRs1RobIndex := meta.rs1.priorInstruction.payload
+      currentRs2RobIndex := meta.rs2.priorInstruction.payload
     } otherwise {
-      currentRs1Waiting := rs1Source.waitingNext
-      currentRs2Waiting := rs2Source.waitingNext
-      currentRs1RobIndex := rs1Source.priorInstructionNext.payload
-      currentRs2RobIndex := rs2Source.priorInstructionNext.payload
+      currentRs1Waiting := meta.rs1.waitingNext
+      currentRs2Waiting := meta.rs2.waitingNext
+      currentRs1RobIndex := meta.rs1.priorInstructionNext.payload
+      currentRs2RobIndex := meta.rs2.priorInstructionNext.payload
     }
 
     when (state === State.WAITING_FOR_ARGS || stateNext === State.WAITING_FOR_ARGS) {
+      // TODO:
+      // if getting operand, proceed as normal
+      // if getting branch dependency, check transferred dependency register id, if needed update, if not, clear flag
+
+
+
       val r1w = Bool()
       r1w := currentRs1Waiting
       val r2w = Bool()
@@ -90,13 +113,13 @@ class ReservationStation(exeStage: Stage,
       when (currentRs1Waiting && cdbMessage.robIndex === currentRs1RobIndex) {
         pipeline.withService[ContextService](
           context => {
-            when(!context.isTransientSecretOfBundle(cdbMessage.metadata)) {
-              rs1Source.priorInstruction.valid := False
+            when(!context.isSecretOfBundle(cdbMessage.metadata)) {
+              meta.rs1.priorInstruction.valid := False
               r1w := False
             }
           },
           {
-            rs1Source.priorInstruction.valid := False
+            meta.rs1.priorInstruction.valid := False
             r1w := False
           }
         )
@@ -106,13 +129,13 @@ class ReservationStation(exeStage: Stage,
       when (currentRs2Waiting && cdbMessage.robIndex === currentRs2RobIndex) {
         pipeline.withService[ContextService](
           context => {
-            when(!context.isTransientSecretOfBundle(cdbMessage.metadata)) {
-              rs2Source.priorInstruction.valid := False
+            when(!context.isSecretOfBundle(cdbMessage.metadata)) {
+              meta.rs2.priorInstruction.valid := False
               r2w := False
             }
           },
           {
-            rs2Source.priorInstruction.valid := False
+            meta.rs2.priorInstruction.valid := False
             r2w := False
           }
         )
@@ -132,8 +155,7 @@ class ReservationStation(exeStage: Stage,
   }
 
   def build(): Unit = {
-    rs1Source.build()
-    rs2Source.build()
+    meta.build()
 
     cdbWaitingNext := cdbWaiting
     dispatchWaitingNext := dispatchWaiting
@@ -170,7 +192,7 @@ class ReservationStation(exeStage: Stage,
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
       pipeline.withService[ContextService](
         context => {
-          context.isTransientSecretOfBundle(cdbStream.payload.metadata) := False  // TODO if we want to propagate instead of stall
+          context.isSecretOfBundle(cdbStream.payload.metadata) := False  // TODO if we want to propagate instead of stall
         }
       )
 
@@ -181,7 +203,7 @@ class ReservationStation(exeStage: Stage,
         pipeline.withService[ContextService](
           context => {
             // TODO if we want to propagate instead of stall
-            if (context.isTransientPipelineReg(register)) {
+            if (context.isSecretPipelineReg(register)) {
               dispatchStream.payload.registerMap.element(register) := False
             } else {
               dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
@@ -247,6 +269,10 @@ class ReservationStation(exeStage: Stage,
     stateNext := State.EXECUTING
     regs.shift := True
 
+    meta.priorBranchNext.setIdle()
+    meta.rs1.priorInstructionNext.setIdle()
+    meta.rs2.priorInstructionNext.setIdle()
+
     val rs2Used = dispatchStage.output(pipeline.data.RS2_TYPE) === RegisterType.GPR
 
     val rs1Id = dispatchStage.output(pipeline.data.RS1)
@@ -255,30 +281,29 @@ class ReservationStation(exeStage: Stage,
     val (rs1Found, rs1Target) = rob.getValue(rs1Id)
     val (rs2Found, rs2Target) = rob.getValue(rs2Id)
 
+    // TODO: get dependent jump from rob
+    val dependentJump = rob.isTransient(robEntryIndex)
+    when (dependentJump.valid) {
+      meta.priorBranchNext.push(dependentJump.payload)
+    }
+
     when (rs1Found) {
       when (rs1Target.valid) {
         pipeline.withService[ContextService](
           context => {
-            val secret = context.isTransientSecretOfBundle(rs1Target.payload.metadata)
-//            rs1WaitingNext := secret
-            rs1Source.priorInstructionNext.valid := False
-            // TODO: we should zero these out by default, and then set the jump one here
-            //       and i guess add another field to this thing, secret, and only stall if that's true
-            when (secret) {
+            val secret = context.isSecretOfBundle(rs1Target.payload.metadata)
+            meta.rs1.isSecretNext := secret
+            when (meta.waitingForBranchNext) {
               stateNext := State.WAITING_FOR_ARGS
             }
-          },
-          {
-            rs1Source.priorInstructionNext.valid := False
           }
         )
         regs.setReg(pipeline.data.RS1_DATA, rs1Target.payload.writeValue)
       } otherwise {
         stateNext := State.WAITING_FOR_ARGS
-        rs1Source.priorInstructionNext.push(rs1Target.payload.robIndex)
+        meta.rs1.priorInstructionNext.push(rs1Target.payload.robIndex)
       }
     } otherwise {
-      rs1Source.priorInstructionNext.valid := False
       regs.setReg(pipeline.data.RS1_DATA, dispatchStage.output(pipeline.data.RS1_DATA))
     }
 
@@ -286,24 +311,19 @@ class ReservationStation(exeStage: Stage,
       when (rs2Target.valid || !rs2Used) {
         pipeline.withService[ContextService](
           context => {
-            val secret = context.isTransientSecretOfBundle(rs2Target.payload.metadata)
-//            rs2WaitingNext := secret
-            rs2Source.priorInstructionNext.valid := False
-            when (secret) {
+            val secret = context.isSecretOfBundle(rs2Target.payload.metadata)
+            meta.rs2.isSecretNext := secret
+            when (meta.waitingForBranchNext) {
               stateNext := State.WAITING_FOR_ARGS
             }
-          },
-          {
-            rs2Source.priorInstructionNext.valid := False
           }
         )
         regs.setReg(pipeline.data.RS2_DATA, rs2Target.payload.writeValue)
       } otherwise {
         stateNext := State.WAITING_FOR_ARGS
-        rs2Source.priorInstructionNext.push(rs2Target.payload.robIndex)
+        meta.rs2.priorInstructionNext.push(rs2Target.payload.robIndex)
       }
     } otherwise {
-      rs2Source.priorInstructionNext.valid := False
       regs.setReg(pipeline.data.RS2_DATA, dispatchStage.output(pipeline.data.RS2_DATA))
     }
   }

@@ -99,7 +99,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     pipeline.getService[BranchService].isBranchOfBundle(pushedEntry.registerMap) := isBranch
     pipeline.withService[ContextService](
       context => {
-        context.isTransientSecretOfBundle(pushedEntry.registerMap) := False
+        context.isSecretOfBundle(pushedEntry.registerMap) := False
       }
     )
     newestIndex.value
@@ -110,7 +110,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     robEntries(cdbMessage.robIndex).registerMap.element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
     pipeline.withService[ContextService](
       context => {
-        context.isTransientSecretOfBundle(pushedEntry.registerMap) := context.isTransientSecretOfBundle(cdbMessage.metadata)
+        context.isSecretOfBundle(pushedEntry.registerMap) := context.isSecretOfBundle(cdbMessage.metadata)
       }
     )
   }
@@ -123,7 +123,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     target.payload.writeValue := 0
     pipeline.withService[ContextService](
       context => {
-        context.isTransientSecretOfBundle(target.metadata) := False
+        context.isSecretOfBundle(target.metadata) := False
       }
     )
     found := False
@@ -145,7 +145,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
         target.writeValue := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
         pipeline.withService[ContextService](
           context => {
-            context.isTransientSecretOfBundle(target.metadata) := context.isTransientSecretOfBundle(entry.registerMap)
+            context.isSecretOfBundle(target.metadata) := context.isSecretOfBundle(entry.registerMap)
           }
         )
       }
@@ -182,9 +182,10 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     found
   }
 
-  def isTransient(robIndex: UInt): Bool = {
-    val transient = Bool()
-    transient := False
+  def isTransient(robIndex: UInt): Flow[UInt] = {
+    val dependent = Flow(UInt(indexBits))
+    dependent.valid := False
+    dependent.payload := 0
 
     for (nth <- 0 until capacity) {
       val entry = robEntries(nth)
@@ -192,17 +193,18 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       index := nth
 
       val isOlder = relativeIndexForAbsolute(index) < relativeIndexForAbsolute(robIndex)
-      val olderIsBranch = pipeline.getService[BranchService].isBranchOfBundle(entry.registerMap)
+      val olderIsBranch = pipeline.getService[BranchService].isBranchOfBundle(entry.registerMap) // || isPredicted(entry.registerMap)
       val olderIsNotResolved = !entry.ready
+      val incorrectlyPredicted = True
 
       when (isValidAbsoluteIndex(nth)
         && isOlder
         && olderIsBranch
-        && olderIsNotResolved) {
-        transient := True
+        && (olderIsNotResolved || incorrectlyPredicted)) {
+        dependent.push(index)
       }
     }
-    transient
+    dependent
   }
 
   def onRdbMessage(rdbMessage: RdbMessage): Unit = {
@@ -225,7 +227,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
         secondBranch := True
       }
       when (!secondBranch) {
-        pipeline.getService[ContextService].isTransientSecretOfBundle(entry.registerMap) := False
+        pipeline.getService[ContextService].isSecretOfBundle(entry.registerMap) := False
       }
     }
   }

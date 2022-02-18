@@ -19,6 +19,8 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
   override def finish(): Unit = {
     pipeline plug new Area {
       val cdbBMetaData = new DynBundle[PipelineData[spinal.core.Data]]
+      // TODO: add branch dependency register, also to register bundle
+      // TODO: when entering entry to rob, set branch dependency register (preceding jump that is not ready or mispredicted)
 
       val registerBundle = new DynBundle[PipelineData[spinal.core.Data]]
 

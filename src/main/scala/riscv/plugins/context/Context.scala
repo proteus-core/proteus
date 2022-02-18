@@ -44,18 +44,18 @@ class Context extends Plugin[DynamicPipeline] with ContextService {
     }
     // TODO: HACK
     val ret = pipeline.retirementStage
-    isTransientSecret(ret)
+    isSecret(ret)
   }
 
-  override def isTransientSecret(stage: Stage): Bool = {
+  override def isSecret(stage: Stage): Bool = {
     stage.output(PrivateRegs.SECRET_VALUE)
   }
 
-  override def isTransientPipelineReg(reg: PipelineData[Data]): Boolean = {
+  override def isSecretPipelineReg(reg: PipelineData[Data]): Boolean = {
     reg == PrivateRegs.SECRET_VALUE
   }
 
-  override def isTransientSecretOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
+  override def isSecretOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
     bundle.elementAs[Bool](PrivateRegs.SECRET_VALUE.asInstanceOf[PipelineData[Data]])
   }
 

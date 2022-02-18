@@ -461,8 +461,8 @@ trait FormalService {
 }
 
 trait ContextService {
-  def isTransientSecret(stage: Stage): Bool
-  def isTransientSecretOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
-  def isTransientPipelineReg(reg: PipelineData[Data]): Boolean
+  def isSecret(stage: Stage): Bool
+  def isSecretOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+  def isSecretPipelineReg(reg: PipelineData[Data]): Boolean
   def addSecretToBundle(bundle: DynBundle[PipelineData[Data]]): Unit
 }
