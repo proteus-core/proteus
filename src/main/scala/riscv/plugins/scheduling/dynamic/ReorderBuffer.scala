@@ -234,6 +234,15 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     }
   }
 
+  def taintRegister(context: ContextService, entry: RobEntry): Unit = {
+    val regId = entry.registerMap.elementAs[UInt](pipeline.data.RD.asInstanceOf[PipelineData[Data]])
+    val secret = context.isSecretOfBundle(entry.registerMap)
+    when (regId =/= 0
+      && entry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) === RegisterType.GPR) {
+      context.setSecretRegister(regId, secret)
+    }
+  }
+
   def build(): Unit = {
     val oldestEntry = robEntries(oldestIndex.value)
     val updatedOldestIndex = UInt(indexBits)
@@ -262,6 +271,10 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 //      if (pipeline.hasService[ContextService]) {
 //        clearSecretFlag()
 //      }
+
+      pipeline.withService[ContextService](
+        context => taintRegister(context, oldestEntry)
+      )
 
       // removing the oldest entry
       updatedOldestIndex := oldestIndex.valueNext

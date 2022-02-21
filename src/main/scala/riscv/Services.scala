@@ -469,4 +469,6 @@ trait ContextService {
   def isSecretOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
   def isSecretPipelineReg(reg: PipelineData[Data]): Boolean
   def addSecretToBundle(bundle: DynBundle[PipelineData[Data]]): Unit
+  def setSecretRegister(regId: UInt, secret: Bool): Unit
+  def isSecretRegister(regId: UInt): Bool
 }

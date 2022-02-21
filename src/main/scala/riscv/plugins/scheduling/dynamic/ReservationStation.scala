@@ -104,12 +104,22 @@ class ReservationStation(exeStage: Stage,
       brw := branchWaiting.valid
 
       when (currentRs1Prior.valid && cdbMessage.robIndex === currentRs1Prior.payload) {
+        pipeline.withService[ContextService](
+          context => {
+            meta.rs1.isSecret := context.isSecretOfBundle(cdbMessage.metadata)
+          }
+        )
         meta.rs1.priorInstruction.valid := False
         r1w := False
         regs.setReg(pipeline.data.RS1_DATA, cdbMessage.writeValue)
       }
 
       when (currentRs2Prior.valid && cdbMessage.robIndex === currentRs2Prior.payload) {
+        pipeline.withService[ContextService](
+          context => {
+            meta.rs2.isSecret := context.isSecretOfBundle(cdbMessage.metadata)
+          }
+        )
         meta.rs2.priorInstruction.valid := False
         r2w := False
         regs.setReg(pipeline.data.RS2_DATA, cdbMessage.writeValue)
@@ -186,7 +196,6 @@ class ReservationStation(exeStage: Stage,
       for (register <- retirementRegisters.keys) {
         pipeline.withService[ContextService](
           context => {
-            // TODO if we want to propagate instead of stall
             if (context.isSecretPipelineReg(register)) {
               dispatchStream.payload.registerMap.element(register) := meta.rs1.isSecret || meta.rs2.isSecret
             } else {
@@ -287,7 +296,12 @@ class ReservationStation(exeStage: Stage,
         meta.rs1.priorInstructionNext.push(rs1Target.payload.robIndex)
       }
     } otherwise {
-      // TODO: read secret flag from register
+      pipeline.withService[ContextService](
+        context => {
+          val secret = context.isSecretRegister(rs1Id)
+          meta.rs1.isSecretNext := secret
+        }
+      )
       regs.setReg(pipeline.data.RS1_DATA, dispatchStage.output(pipeline.data.RS1_DATA))
     }
 
@@ -308,7 +322,12 @@ class ReservationStation(exeStage: Stage,
         meta.rs2.priorInstructionNext.push(rs2Target.payload.robIndex)
       }
     } otherwise {
-      // TODO: read secret flag from register
+      pipeline.withService[ContextService](
+        context => {
+          val secret = context.isSecretRegister(rs2Id)
+          meta.rs2.isSecretNext := secret
+        }
+      )
       regs.setReg(pipeline.data.RS2_DATA, dispatchStage.output(pipeline.data.RS2_DATA))
     }
   }

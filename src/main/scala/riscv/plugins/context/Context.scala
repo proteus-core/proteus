@@ -5,20 +5,7 @@ import spinal.core._
 
 class Context extends Plugin[DynamicPipeline] with ContextService {
 
-  /**
-    *
-      [x] Tag memory loads coming from a predefined address range
-      [x] Saving the SECRET_VALUE bit in the ROB: maybe nothing?
-      [x] Forwarding the SECRET_VALUE bit from loads
-          [x] Know whether we're transient: forward BU_IS_BRANCH on dispatch, look for it (+ not having a value) same as for stores
-          [x] CDB: new bundle type, explicitly adding SECRET register?
-          [x] RDB: maybe nothing needs to be done?
-      [x] Propagating/stalling on SECRET_VALUE in reservation stations: checking secret bit if value comes from rob or cdb, only resuming if 0
-      [x] Resetting SECRET_VALUE in the ROB after a branch has been resolved,
-          [ ] notify waiting reservation stations (many cdb messages? or a different bus for retired branches?)
-      [ ] Make the defense optional
-      [ ] Operations should not be unnecessarily delayed (after the branch is confirmed well-predicted)
-    */
+  private var secretRegisters: Vec[Bool] = null
 
   private object PrivateRegs {
     object SECRET_VALUE extends PipelineData(Bool())
@@ -45,6 +32,10 @@ class Context extends Plugin[DynamicPipeline] with ContextService {
     // TODO: HACK
     val ret = pipeline.retirementStage
     isSecret(ret)
+
+    pipeline plug new Area {
+      secretRegisters = Vec.fill(config.numRegs)(False)
+    }
   }
 
   override def isSecret(stage: Stage): Bool = {
@@ -61,5 +52,13 @@ class Context extends Plugin[DynamicPipeline] with ContextService {
 
   override def addSecretToBundle(bundle: DynBundle[PipelineData[Data]]): Unit = {
     bundle.addElement(PrivateRegs.SECRET_VALUE.asInstanceOf[PipelineData[Data]], PrivateRegs.SECRET_VALUE.dataType)
+  }
+
+  override def setSecretRegister(regId: UInt, secret: Bool): Unit = {
+    secretRegisters(regId) := secret
+  }
+
+  override def isSecretRegister(regId: UInt): Bool = {
+    secretRegisters(regId)
   }
 }
