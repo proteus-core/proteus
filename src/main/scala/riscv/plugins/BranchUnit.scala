@@ -14,7 +14,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] with BranchS
     object BU_WRITE_RET_ADDR_TO_RD extends PipelineData(Bool())
     object BU_IGNORE_TARGET_LSB extends PipelineData(Bool())
     object BU_CONDITION extends PipelineData(BranchCondition())
-    object PENDING_BRANCH extends PipelineData(Flow(UInt(32 bits))) // TODO: this should be rob size
+    object PENDING_BRANCH extends PipelineData(Flow(UInt(32 bits))) // TODO: this should be rob size and also isn't used in the static pipeline (or even outside context)F
   }
 
   override def setup(): Unit = {

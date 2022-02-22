@@ -84,24 +84,22 @@ class LoadManager(pipeline: Pipeline,
     }
 
     when (state === State.EXECUTING && loadStage.arbitration.isDone && !activeFlush) {
-//      val isTransient = rob.isTransient(storedMessage.robIndex)
-      // TODO: tainting all loads, not just transient ones: lw; beq; lw
-
       rdbStream.valid := True
       rdbStream.payload.robIndex := storedMessage.robIndex
       for (register <- retirementRegisters.keys) {
-        pipeline.withService[ContextService](
-          context => {
-            if (context.isSecretPipelineReg(register)) {
-              rdbStream.payload.registerMap.element(register) := context.isSecret(loadStage) // && isTransient
-            } else {
-              rdbStream.payload.registerMap.element(register) := loadStage.output(register)
-            }
-          },
-          {
-            rdbStream.payload.registerMap.element(register) := loadStage.output(register)
-          }
-        )
+        rdbStream.payload.registerMap.element(register) := loadStage.output(register)
+//        pipeline.withService[ContextService](
+//          context => {
+//            if (context.isSecretPipelineReg(register)) {
+//              rdbStream.payload.registerMap.element(register) := context.isSecret(loadStage)
+//            } else {
+//              rdbStream.payload.registerMap.element(register) := loadStage.output(register)
+//            }
+//          },
+//          {
+//            rdbStream.payload.registerMap.element(register) := loadStage.output(register)
+//          }
+//        )
       }
       outputCache := rdbStream.payload
 
@@ -111,7 +109,7 @@ class LoadManager(pipeline: Pipeline,
 
       pipeline.withService[ContextService](
         context => {
-          context.isSecretOfBundle(cdbStream.payload.metadata) := context.isSecret(loadStage) // && isTransient // TODO: duplication
+          context.isSecretOfBundle(cdbStream.payload.metadata) := context.isSecret(loadStage)
         }
       )
 

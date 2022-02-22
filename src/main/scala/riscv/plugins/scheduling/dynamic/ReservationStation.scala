@@ -136,7 +136,7 @@ class ReservationStation(exeStage: Stage,
       }
 
       // TODO: should brw only be a condition when defense is active and secret is set?
-      when (!r1w && !r2w && !brw) {
+      when (!r1w && !r2w && (!brw || (!meta.rs1.isSecretNext && !meta.rs2.isSecretNext))) {
         // This is the only place where state is written directly (instead of
         // via stateNext). This ensures that we have priority over whatever
         // execute() writes to it which means that the order of calling
@@ -197,7 +197,7 @@ class ReservationStation(exeStage: Stage,
         pipeline.withService[ContextService](
           context => {
             if (context.isSecretPipelineReg(register)) {
-              dispatchStream.payload.registerMap.element(register) := meta.rs1.isSecret || meta.rs2.isSecret
+              dispatchStream.payload.registerMap.element(register) := meta.rs1.isSecret || meta.rs2.isSecret || exeStage.output(register).asInstanceOf[Bool] // TODO: bit dirty
             } else {
               dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
             }

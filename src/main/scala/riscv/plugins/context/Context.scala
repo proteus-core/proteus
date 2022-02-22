@@ -12,7 +12,7 @@ class Context extends Plugin[DynamicPipeline] with ContextService {
   }
 
   def isSecret(address: UInt): Bool = {
-    address % 8 === 0  // TODO: how to determine what is secret?
+    address % 8 =/= 0  // TODO: how to determine what is secret?
   }
 
   override def setup(): Unit = {
@@ -34,7 +34,8 @@ class Context extends Plugin[DynamicPipeline] with ContextService {
     isSecret(ret)
 
     pipeline plug new Area {
-      secretRegisters = Vec.fill(config.numRegs)(False)
+      val regArray = Vec.fill(config.numRegs)(RegInit(False))
+      secretRegisters = regArray
     }
   }
 
