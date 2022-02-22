@@ -66,12 +66,12 @@ object createStaticPipeline {
 }
 
 object SoC {
-  def static(ramType: RamType): SoC = {
-    new SoC(ramType, config => createStaticPipeline()(config))
+  def static(ramType: RamType, extraDbusReadDelay: Int = 0): SoC = {
+    new SoC(ramType, config => createStaticPipeline()(config), extraDbusReadDelay)
   }
 
-  def dynamic(ramType: RamType): SoC = {
-    new SoC(ramType, config => createDynamicPipeline()(config))
+  def dynamic(ramType: RamType, extraDbusReadDelay: Int = 0): SoC = {
+    new SoC(ramType, config => createDynamicPipeline()(config), extraDbusReadDelay)
   }
 }
 

@@ -44,6 +44,15 @@ object Utils {
     swapContext.appendBack()
     ret
   }
+
+  implicit class StreamExtensions[T <: Data](stream: Stream[T]) {
+    def stage(stagesCount: Int): Stream[T] = {
+      stagesCount match {
+        case 0 => stream
+        case _ => stream.stage().stage(stagesCount - 1)
+      }
+    }
+  }
 }
 
 trait DynBundleAccess[KeyType] {
