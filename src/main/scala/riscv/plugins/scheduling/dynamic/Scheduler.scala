@@ -4,15 +4,14 @@ import riscv._
 import spinal.core._
 
 class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
-  class Data { // TODO: better name for this?
+
+  private object PrivateRegisters {
     object DEST_FU extends PipelineData(Bits(pipeline.rsStages.size bits))
   }
 
-  lazy val data = new Data // TODO: better name for this?
-
   override def setup(): Unit = {
     pipeline.getService[DecoderService].configure { config =>
-      config.addDefault(data.DEST_FU, B(0))
+      config.addDefault(PrivateRegisters.DEST_FU, B(0))
     }
   }
 
@@ -67,7 +66,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       dispatchStage.arbitration.isStalled := False
 
       when (dispatchStage.arbitration.isValid && dispatchStage.arbitration.isReady) {
-        val fuMask = dispatchStage.output(data.DEST_FU)
+        val fuMask = dispatchStage.output(PrivateRegisters.DEST_FU)
         val illegalInstruction = fuMask === 0
 
         var context = when (False) {}
@@ -99,7 +98,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
         fuMask = (fuMask << 1) | nextBit
       }
 
-      config.addDecoding(opcode, Map(data.DEST_FU -> B(fuMask)))
+      config.addDecoding(opcode, Map(PrivateRegisters.DEST_FU -> B(fuMask)))
     }
   }
 }

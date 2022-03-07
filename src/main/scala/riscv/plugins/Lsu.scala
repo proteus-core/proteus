@@ -266,7 +266,7 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
           val valid = Bool()
           valid := False
           val wValue = UInt(config.xlen bits).getZero
-          when (dbusCtrl.isReady) {
+          when (dbusCtrl.isReady || True) {  // TODO
             val tpl = dbusCtrl.read(busAddress)
             valid := tpl._1
             wValue := tpl._2
