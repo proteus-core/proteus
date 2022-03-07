@@ -135,6 +135,10 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     def isWrite = if (bus.config.readWrite) cmd.write else False
   }
 
+  def isReady: Bool = {
+    !currentCmd.isIssued
+  }
+
   bus.cmd.valid := currentCmd.valid
   bus.cmd.address := currentCmd.cmd.address
 

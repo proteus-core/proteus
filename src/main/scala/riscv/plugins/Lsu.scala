@@ -263,7 +263,14 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
       when (arbitration.isValid && !misaligned) {
         when (isActive) {
           val busAddress = address & U(0xfffffffcL)
-          val (valid, wValue) = dbusCtrl.read(busAddress)
+          val valid = Bool()
+          valid := False
+          val wValue = UInt(config.xlen bits).getZero
+          when (dbusCtrl.isReady) {
+            val tpl = dbusCtrl.read(busAddress)
+            valid := tpl._1
+            wValue := tpl._2
+          }
           arbitration.isReady := valid
           val result = UInt(config.xlen bits)
           result := wValue

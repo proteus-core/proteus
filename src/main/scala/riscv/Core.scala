@@ -274,7 +274,7 @@ object CoreDynamicSim {
 
 object CoreDynamicExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB)))
+    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 16))
   }
 }
 
