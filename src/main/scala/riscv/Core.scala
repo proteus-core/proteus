@@ -77,7 +77,7 @@ object SoC {
 
 object Core {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.static(RamType.OnChipRam(10 MiB, args.headOption)))
+    SpinalVerilog(SoC.static(RamType.OnChipRam(10 MiB, args.headOption), 16))
   }
 }
 
@@ -156,7 +156,7 @@ object CoreTestSim {
 
 object CoreExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.static(RamType.ExternalAxi4(10 MiB)))
+    SpinalVerilog(SoC.static(RamType.ExternalAxi4(10 MiB), 16))
   }
 }
 
@@ -236,7 +236,7 @@ object createDynamicPipeline {
 
 object CoreDynamic {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.dynamic(RamType.OnChipRam(10 MiB, args.headOption)))
+    SpinalVerilog(SoC.dynamic(RamType.OnChipRam(10 MiB, args.headOption), 16))
   }
 }
 
@@ -274,7 +274,7 @@ object CoreDynamicSim {
 
 object CoreDynamicExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 0))
+    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 16))
   }
 }
 

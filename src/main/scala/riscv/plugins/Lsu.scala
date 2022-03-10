@@ -252,6 +252,10 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
 
       val mask = baseMask |<< address(1 downto 0)
 
+      val busReady = Bool()
+      val loadActive = RegInit(False)
+      busReady := False
+
       when (isActive && misaligned) {
         if (pipeline.hasService[TrapService]) {
           trap(TrapCause.LoadAddressMisaligned(address), loadStage)
@@ -266,10 +270,17 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
           val valid = Bool()
           valid := False
           val wValue = UInt(config.xlen bits).getZero
-          when (dbusCtrl.isReady || True) {  // TODO
+          busReady := dbusCtrl.isReady
+          when (busReady) {
+            loadActive := True
+          }
+          when (busReady || loadActive) {
             val tpl = dbusCtrl.read(busAddress)
             valid := tpl._1
             wValue := tpl._2
+          }
+          when (valid) {
+            loadActive := False
           }
           arbitration.isReady := valid
           val result = UInt(config.xlen bits)
@@ -303,6 +314,8 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
 
           formal.lsuOnLoad(loadStage, busAddress, mask, wValue)
         }
+      } otherwise {
+        loadActive := False
       }
     }
 
