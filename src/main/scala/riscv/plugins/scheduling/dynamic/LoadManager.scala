@@ -59,7 +59,7 @@ class LoadManager(pipeline: Pipeline,
     rdbWaitingNext := rdbWaiting
 
     loadStage.arbitration.isStalled := state === State.WAITING_FOR_STORE
-    loadStage.arbitration.isValid := (state === State.WAITING_FOR_STORE) || (state === State.EXECUTING)
+    loadStage.arbitration.isValid := state === State.EXECUTING
 
     // execution was invalidated while running
     when (activeFlush) {

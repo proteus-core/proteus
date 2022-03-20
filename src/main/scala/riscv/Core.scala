@@ -44,7 +44,7 @@ object createStaticPipeline {
       new RegisterFileAccessor(pipeline.decode, pipeline.writeback),
       new IntAlu(Set(pipeline.execute)),
       new Shifter(pipeline.execute),
-      new Lsu(pipeline.memory, pipeline.memory, pipeline.memory),
+      new Lsu(Set(pipeline.memory), pipeline.memory, pipeline.memory),
       new BranchUnit(Set(pipeline.execute)),
       new PcManager(0x80000000L),
       new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
@@ -66,12 +66,12 @@ object createStaticPipeline {
 }
 
 object SoC {
-  def static(ramType: RamType): SoC = {
-    new SoC(ramType, config => createStaticPipeline()(config))
+  def static(ramType: RamType, extraDbusReadDelay: Int = 0): SoC = {
+    new SoC(ramType, config => createStaticPipeline()(config), extraDbusReadDelay)
   }
 
-  def dynamic(ramType: RamType): SoC = {
-    new SoC(ramType, config => createDynamicPipeline()(config))
+  def dynamic(ramType: RamType, extraDbusReadDelay: Int = 0): SoC = {
+    new SoC(ramType, config => createDynamicPipeline()(config), extraDbusReadDelay)
   }
 }
 
@@ -156,7 +156,7 @@ object CoreTestSim {
 
 object CoreExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.static(RamType.ExternalAxi4(10 MiB)))
+    SpinalVerilog(SoC.static(RamType.ExternalAxi4(10 MiB), 32))
   }
 }
 
@@ -213,7 +213,7 @@ object createDynamicPipeline {
         readStage  = pipeline.issuePipeline.decode,
         writeStage = pipeline.retirementStage
       ),
-      new Lsu(pipeline.intAlu2, pipeline.loadStage, pipeline.retirementStage),
+      new Lsu(Set(pipeline.intAlu2), pipeline.loadStage, pipeline.retirementStage),
       new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage, 8, conf.xlen),
       new IntAlu(Set(pipeline.intAlu1, pipeline.intAlu2)),
       new Shifter(pipeline.intAlu1),
@@ -275,7 +275,7 @@ object CoreDynamicSim {
 
 object CoreDynamicExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB)))
+    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 16))
   }
 }
 

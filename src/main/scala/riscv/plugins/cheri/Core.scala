@@ -37,7 +37,7 @@ object createCheriPipeline {
       new rvp.RegisterFileAccessor(pipeline.decode, pipeline.writeback),
       new rvp.IntAlu(Set(pipeline.execute)),
       new rvp.Shifter(pipeline.execute),
-      new rvp.Lsu(pipeline.memory, pipeline.memory, pipeline.memory),
+      new rvp.Lsu(Set(pipeline.memory), pipeline.memory, pipeline.memory),
       new rvp.BranchUnit(Set(pipeline.execute)),
       new rvp.scheduling.static.PcManager(0x80000000L),
       new rvp.CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
