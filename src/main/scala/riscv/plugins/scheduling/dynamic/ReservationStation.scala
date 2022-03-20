@@ -209,7 +209,7 @@ class ReservationStation(exeStage: Stage,
 
       }
 
-      when (exeStage.output(pipeline.data.RD_DATA_VALID)) {
+      when (exeStage.output(pipeline.data.RD_DATA_VALID) || pipeline.getService[BranchService].isBranch(exeStage)) {
         cdbStream.valid := True
       }
       dispatchStream.valid := True
