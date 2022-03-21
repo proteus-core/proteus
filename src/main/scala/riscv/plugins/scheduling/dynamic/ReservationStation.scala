@@ -95,6 +95,16 @@ class ReservationStation(exeStage: Stage,
       branchWaiting := meta.priorBranchNext
     }
 
+//    when (branchWaiting.valid && cdbMessage.robIndex === branchWaiting.payload) {
+//      val pending = pipeline.getService[BranchService].pendingBranchOfBundle(cdbMessage.metadata)
+//      when (pending.valid) {
+//        meta.priorBranch.push(pending.payload.resized) // TODO: resized
+//      } otherwise {
+//        meta.priorBranch.setIdle()
+//        brw := False
+//      }
+//    }
+
     when (state === State.WAITING_FOR_ARGS || stateNext === State.WAITING_FOR_ARGS) {
       val r1w = Bool()
       r1w := currentRs1Prior.valid
@@ -184,6 +194,7 @@ class ReservationStation(exeStage: Stage,
     // when waiting for the result, and it is ready, put in on the bus
     when (state === State.EXECUTING && exeStage.arbitration.isDone && !activeFlush) {
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
+      pipeline.getService[BranchService].pendingBranchOfBundle(cdbStream.payload.metadata) := meta.priorBranch.resized
       pipeline.withService[ContextService](
         context => {
           context.isSecretOfBundle(cdbStream.payload.metadata) := meta.rs1.isSecret || meta.rs2.isSecret

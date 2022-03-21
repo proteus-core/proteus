@@ -110,7 +110,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     robEntries(cdbMessage.robIndex).registerMap.element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
     pipeline.withService[ContextService](
       context => {
-        context.isSecretOfBundle(pushedEntry.registerMap) := context.isSecretOfBundle(cdbMessage.metadata)
+        context.isSecretOfBundle(robEntries(cdbMessage.robIndex).registerMap) := context.isSecretOfBundle(cdbMessage.metadata)
       }
     )
   }
