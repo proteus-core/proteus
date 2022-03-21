@@ -44,7 +44,7 @@ object createCheriPipeline {
       new rvp.Timers,
       new rvp.MachineMode(pipeline.execute, addMepc = false, addMtvec = false),
       new rvp.Interrupts(pipeline.writeback),
-      new rvp.MulDiv(pipeline.execute)
+      new rvp.MulDiv(Set(pipeline.execute))
     ))
 
     implicit val context = Context(pipeline)
