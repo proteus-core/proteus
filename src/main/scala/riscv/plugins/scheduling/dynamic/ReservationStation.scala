@@ -318,27 +318,31 @@ class ReservationStation(exeStage: Stage,
 
     when (rs2Found) {
       when (rs2Target.valid || !rs2Used) {
-        pipeline.withService[ContextService](
-          context => {
-            val secret = context.isSecretOfBundle(rs2Target.payload.metadata)
-            meta.rs2.isSecretNext := secret
-            when (meta.waitingForBranchNext) {
-              stateNext := State.WAITING_FOR_ARGS
+        when (rs2Used) {
+          pipeline.withService[ContextService](
+            context => {
+              val secret = context.isSecretOfBundle(rs2Target.payload.metadata)
+              meta.rs2.isSecretNext := secret
+              when (meta.waitingForBranchNext) {
+                stateNext := State.WAITING_FOR_ARGS
+              }
             }
-          }
-        )
+          )
+        }
         regs.setReg(pipeline.data.RS2_DATA, rs2Target.payload.writeValue)
       } otherwise {
         stateNext := State.WAITING_FOR_ARGS
         meta.rs2.priorInstructionNext.push(rs2Target.payload.robIndex)
       }
     } otherwise {
-      pipeline.withService[ContextService](
-        context => {
-          val secret = context.isSecretRegister(rs2Id)
-          meta.rs2.isSecretNext := secret
-        }
-      )
+      when (rs2Used) {
+        pipeline.withService[ContextService](
+          context => {
+            val secret = context.isSecretRegister(rs2Id)
+            meta.rs2.isSecretNext := secret
+          }
+        )
+      }
       regs.setReg(pipeline.data.RS2_DATA, dispatchStage.output(pipeline.data.RS2_DATA))
     }
   }
