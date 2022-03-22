@@ -54,7 +54,7 @@ object createStaticPipeline {
       new TrapHandler(pipeline.writeback),
       new TrapStageInvalidator,
       new Interrupts(pipeline.writeback),
-      new MulDiv(pipeline.execute)
+      new MulDiv(Set(pipeline.execute))
     ) ++ extraPlugins)
 
     if (build) {
@@ -185,9 +185,10 @@ object createDynamicPipeline {
 
       val intAlu1 = new Stage("EX_ALU1")
       val intAlu2 = new Stage("EX_ALU2")
-      val intMul = new Stage("EX_MUL")
+      val intMul1 = new Stage("EX_MUL1")
+      val intMul2 = new Stage("EX_MUL2")
       override val passThroughStage: Stage = intAlu1
-      override val rsStages: Seq[Stage] = Seq(intAlu1, intAlu2, intMul)
+      override val rsStages: Seq[Stage] = Seq(intAlu1, intAlu2, intMul1, intMul2)
       override val loadStage: Stage = new Stage("LOAD")
       override val retirementStage = new Stage("RET")
       override val unorderedStages: Seq[Stage] = rsStages :+ loadStage
@@ -217,7 +218,7 @@ object createDynamicPipeline {
       new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage, 8, conf.xlen),
       new IntAlu(Set(pipeline.intAlu1, pipeline.intAlu2)),
       new Shifter(pipeline.intAlu1),
-      new MulDiv(pipeline.intMul),
+      new MulDiv(Set(pipeline.intMul1, pipeline.intMul2)),
       new BranchUnit(Set(pipeline.intAlu1, pipeline.intAlu2)),
       new CsrFile(pipeline.retirementStage, pipeline.intAlu1),
       new TrapHandler(pipeline.retirementStage),
