@@ -316,6 +316,10 @@ class ReservationStation(exeStage: Stage,
       regs.setReg(pipeline.data.RS1_DATA, dispatchStage.output(pipeline.data.RS1_DATA))
     }
 
+    when (!rs2Used) {
+      meta.rs2.isSecretNext := False
+    }
+
     when (rs2Found) {
       when (rs2Target.valid || !rs2Used) {
         when (rs2Used) {
