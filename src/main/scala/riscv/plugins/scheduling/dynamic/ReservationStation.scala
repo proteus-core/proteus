@@ -291,33 +291,37 @@ class ReservationStation(exeStage: Stage,
       meta.priorBranchNext.push(dependentJump.payload)
     }
 
-    val rs1Id = dispatchStage.output(pipeline.data.RS1)
-    val (rs1Found, rs1Target) = rob.getValue(rs1Id)
+    val rs1Used = dispatchStage.output(pipeline.data.RS1_TYPE) === RegisterType.GPR
 
-    when (rs1Found) {
-      when (rs1Target.valid) {
+    when(rs1Used) {
+      val rs1Id = dispatchStage.output(pipeline.data.RS1)
+      val (rs1Found, rs1Target) = rob.getValue(rs1Id)
+
+      when(rs1Found) {
+        when(rs1Target.valid) {
+          pipeline.withService[ContextService](
+            context => {
+              val secret = context.isSecretOfBundle(rs1Target.payload.metadata)
+              meta.rs1.isSecretNext := secret
+              when(meta.waitingForBranchNext) {
+                stateNext := State.WAITING_FOR_ARGS
+              }
+            }
+          )
+          regs.setReg(pipeline.data.RS1_DATA, rs1Target.payload.writeValue)
+        } otherwise {
+          stateNext := State.WAITING_FOR_ARGS
+          meta.rs1.priorInstructionNext.push(rs1Target.payload.robIndex)
+        }
+      } otherwise {
         pipeline.withService[ContextService](
           context => {
-            val secret = context.isSecretOfBundle(rs1Target.payload.metadata)
+            val secret = context.isSecretRegister(rs1Id)
             meta.rs1.isSecretNext := secret
-            when (meta.waitingForBranchNext) {
-              stateNext := State.WAITING_FOR_ARGS
-            }
           }
         )
-        regs.setReg(pipeline.data.RS1_DATA, rs1Target.payload.writeValue)
-      } otherwise {
-        stateNext := State.WAITING_FOR_ARGS
-        meta.rs1.priorInstructionNext.push(rs1Target.payload.robIndex)
+        regs.setReg(pipeline.data.RS1_DATA, dispatchStage.output(pipeline.data.RS1_DATA))
       }
-    } otherwise {
-      pipeline.withService[ContextService](
-        context => {
-          val secret = context.isSecretRegister(rs1Id)
-          meta.rs1.isSecretNext := secret
-        }
-      )
-      regs.setReg(pipeline.data.RS1_DATA, dispatchStage.output(pipeline.data.RS1_DATA))
     }
 
     val rs2Used = dispatchStage.output(pipeline.data.RS2_TYPE) === RegisterType.GPR
