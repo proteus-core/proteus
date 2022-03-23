@@ -22,6 +22,11 @@ case class RegisterSource(indexBits: BitCount) extends Bundle {
     priorInstructionNext := priorInstruction
     isSecretNext := isSecret
   }
+
+  def reset(): Unit = {
+    priorInstructionNext.setIdle()
+    isSecretNext := False
+  }
 }
 
 case class InstructionDependencies(indexBits: BitCount) extends Bundle {
@@ -38,6 +43,12 @@ case class InstructionDependencies(indexBits: BitCount) extends Bundle {
     rs1.build()
     rs2.build()
     priorBranchNext := priorBranch
+  }
+
+  def reset(): Unit = {
+    rs1.reset()
+    rs2.reset()
+    priorBranchNext.setIdle()
   }
 }
 
@@ -273,9 +284,7 @@ class ReservationStation(exeStage: Stage,
     stateNext := State.EXECUTING
     regs.shift := True
 
-    meta.priorBranchNext.setIdle()
-    meta.rs1.priorInstructionNext.setIdle()
-    meta.rs2.priorInstructionNext.setIdle()
+    meta.reset()
 
     val dependentJump = rob.isTransient(robEntryIndex)
     when (dependentJump.valid) {
