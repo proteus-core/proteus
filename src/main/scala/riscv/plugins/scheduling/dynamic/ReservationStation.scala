@@ -277,18 +277,13 @@ class ReservationStation(exeStage: Stage,
     meta.rs1.priorInstructionNext.setIdle()
     meta.rs2.priorInstructionNext.setIdle()
 
-    val rs2Used = dispatchStage.output(pipeline.data.RS2_TYPE) === RegisterType.GPR
-
-    val rs1Id = dispatchStage.output(pipeline.data.RS1)
-    val rs2Id = dispatchStage.output(pipeline.data.RS2)
-
-    val (rs1Found, rs1Target) = rob.getValue(rs1Id)
-    val (rs2Found, rs2Target) = rob.getValue(rs2Id)
-
     val dependentJump = rob.isTransient(robEntryIndex)
     when (dependentJump.valid) {
       meta.priorBranchNext.push(dependentJump.payload)
     }
+
+    val rs1Id = dispatchStage.output(pipeline.data.RS1)
+    val (rs1Found, rs1Target) = rob.getValue(rs1Id)
 
     when (rs1Found) {
       when (rs1Target.valid) {
@@ -316,13 +311,14 @@ class ReservationStation(exeStage: Stage,
       regs.setReg(pipeline.data.RS1_DATA, dispatchStage.output(pipeline.data.RS1_DATA))
     }
 
-    when (!rs2Used) {
-      meta.rs2.isSecretNext := False
-    }
+    val rs2Used = dispatchStage.output(pipeline.data.RS2_TYPE) === RegisterType.GPR
 
-    when (rs2Found) {
-      when (rs2Target.valid || !rs2Used) {
-        when (rs2Used) {
+    when (rs2Used) {
+      val rs2Id = dispatchStage.output(pipeline.data.RS2)
+      val (rs2Found, rs2Target) = rob.getValue(rs2Id)
+
+      when (rs2Found) {
+        when (rs2Target.valid) {
           pipeline.withService[ContextService](
             context => {
               val secret = context.isSecretOfBundle(rs2Target.payload.metadata)
@@ -332,22 +328,20 @@ class ReservationStation(exeStage: Stage,
               }
             }
           )
+          regs.setReg(pipeline.data.RS2_DATA, rs2Target.payload.writeValue)
+        } otherwise {
+          stateNext := State.WAITING_FOR_ARGS
+          meta.rs2.priorInstructionNext.push(rs2Target.payload.robIndex)
         }
-        regs.setReg(pipeline.data.RS2_DATA, rs2Target.payload.writeValue)
       } otherwise {
-        stateNext := State.WAITING_FOR_ARGS
-        meta.rs2.priorInstructionNext.push(rs2Target.payload.robIndex)
-      }
-    } otherwise {
-      when (rs2Used) {
         pipeline.withService[ContextService](
           context => {
             val secret = context.isSecretRegister(rs2Id)
             meta.rs2.isSecretNext := secret
           }
         )
+        regs.setReg(pipeline.data.RS2_DATA, dispatchStage.output(pipeline.data.RS2_DATA))
       }
-      regs.setReg(pipeline.data.RS2_DATA, dispatchStage.output(pipeline.data.RS2_DATA))
     }
   }
 
