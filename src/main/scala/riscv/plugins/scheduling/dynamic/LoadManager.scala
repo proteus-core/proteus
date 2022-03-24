@@ -88,18 +88,6 @@ class LoadManager(pipeline: Pipeline,
       rdbStream.payload.robIndex := storedMessage.robIndex
       for (register <- retirementRegisters.keys) {
         rdbStream.payload.registerMap.element(register) := loadStage.output(register)
-//        pipeline.withService[ContextService](
-//          context => {
-//            if (context.isSecretPipelineReg(register)) {
-//              rdbStream.payload.registerMap.element(register) := context.isSecret(loadStage)
-//            } else {
-//              rdbStream.payload.registerMap.element(register) := loadStage.output(register)
-//            }
-//          },
-//          {
-//            rdbStream.payload.registerMap.element(register) := loadStage.output(register)
-//          }
-//        )
       }
       outputCache := rdbStream.payload
 

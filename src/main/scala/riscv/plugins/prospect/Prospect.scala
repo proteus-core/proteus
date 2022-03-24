@@ -1,9 +1,9 @@
-package riscv.plugins.context
+package riscv.plugins.prospect
 
 import riscv._
 import spinal.core._
 
-class Context extends Plugin[DynamicPipeline] with ContextService {
+class Prospect extends Plugin[DynamicPipeline] with ContextService {
 
   private var secretRegisters: Vec[Bool] = null
 

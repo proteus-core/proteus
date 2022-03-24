@@ -225,7 +225,7 @@ object createDynamicPipeline {
       new MachineMode(pipeline.intAlu1),
       new Interrupts(pipeline.retirementStage),
       new Timers
-//      ,       new riscv.plugins.context.Context
+//      ,       new riscv.plugins.prospect.Prospect
     ) ++ extraPlugins)
 
     if (build) {
