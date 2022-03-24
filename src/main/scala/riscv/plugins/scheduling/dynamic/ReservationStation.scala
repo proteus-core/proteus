@@ -30,14 +30,11 @@ case class RegisterSource(indexBits: BitCount) extends Bundle {
 }
 
 case class InstructionDependencies(indexBits: BitCount) extends Bundle {
-  val rs1 = RegisterSource(indexBits)
-  val rs2 = RegisterSource(indexBits)
+  val rs1: RegisterSource = RegisterSource(indexBits)
+  val rs2: RegisterSource = RegisterSource(indexBits)
 
   val priorBranchNext: Flow[UInt] = Flow(UInt(indexBits))
   val priorBranch: Flow[UInt] = RegNext(priorBranchNext).init(priorBranchNext.getZero)
-
-  def waitingForBranch: Bool = priorBranch.valid && (rs1.isSecret || rs2.isSecret)
-  def waitingForBranchNext: Bool = priorBranchNext.valid && (rs1.isSecretNext || rs2.isSecretNext)
 
   def build(): Unit = {
     rs1.build()
@@ -90,6 +87,7 @@ class ReservationStation(exeStage: Stage,
   def reset(): Unit = {
     isAvailable := !activeFlush
     stateNext := State.IDLE
+    meta.reset()
   }
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
@@ -106,15 +104,15 @@ class ReservationStation(exeStage: Stage,
       branchWaiting := meta.priorBranchNext
     }
 
-//    when (branchWaiting.valid && cdbMessage.robIndex === branchWaiting.payload) {
-//      val pending = pipeline.getService[BranchService].pendingBranchOfBundle(cdbMessage.metadata)
-//      when (pending.valid) {
-//        meta.priorBranch.push(pending.payload.resized) // TODO: resized
-//      } otherwise {
-//        meta.priorBranch.setIdle()
-//        brw := False
-//      }
-//    }
+    // keep track of incoming branch updates, even if already executing
+    when (branchWaiting.valid && cdbMessage.robIndex === branchWaiting.payload) {
+      val pending = pipeline.getService[BranchService].pendingBranchOfBundle(cdbMessage.metadata)
+      when (pending.valid) {
+        meta.priorBranch.push(pending.payload.resized) // TODO: resized
+      } otherwise {
+        meta.priorBranch.setIdle()
+      }
+    }
 
     when (state === State.WAITING_FOR_ARGS || stateNext === State.WAITING_FOR_ARGS) {
       val r1w = Bool()
@@ -146,18 +144,10 @@ class ReservationStation(exeStage: Stage,
         regs.setReg(pipeline.data.RS2_DATA, cdbMessage.writeValue)
       }
 
-      when (branchWaiting.valid && cdbMessage.robIndex === branchWaiting.payload) {
-        val pending = pipeline.getService[BranchService].pendingBranchOfBundle(cdbMessage.metadata)
-        when (pending.valid) {
-          meta.priorBranch.push(pending.payload.resized) // TODO: resized
-        } otherwise {
-          meta.priorBranch.setIdle()
-          brw := False
-        }
-      }
+      // ProSpeCT: keep stalling if one of the operands is secret and there is a pending branch
+      val transientSecretAccess = brw && (meta.rs1.isSecret || meta.rs2.isSecret)
 
-      // TODO: should brw only be a condition when defense is active and secret is set?
-      when (!r1w && !r2w && (!brw || (!meta.rs1.isSecretNext && !meta.rs2.isSecretNext))) {
+      when (!r1w && !r2w && !transientSecretAccess) {
         // This is the only place where state is written directly (instead of
         // via stateNext). This ensures that we have priority over whatever
         // execute() writes to it which means that the order of calling
@@ -205,10 +195,25 @@ class ReservationStation(exeStage: Stage,
     // when waiting for the result, and it is ready, put in on the bus
     when (state === State.EXECUTING && exeStage.arbitration.isDone && !activeFlush) {
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
+
+      // propagate branch dependencies on the CDB
       pipeline.getService[BranchService].pendingBranchOfBundle(cdbStream.payload.metadata) := meta.priorBranch.resized
+
+      val outputIsSecret = Bool()
+
       pipeline.withService[ContextService](
         context => {
-          context.isSecretOfBundle(cdbStream.payload.metadata) := meta.rs1.isSecret || meta.rs2.isSecret
+          // ProSpeCT: the output is tainted if one of the inputs is tainted or the execution stage tainted the result
+          outputIsSecret := meta.rs1.isSecret || meta.rs2.isSecret || context.isSecret(exeStage)
+        },
+        {
+          outputIsSecret := False
+        }
+      )
+
+      pipeline.withService[ContextService](
+        context => {
+          context.isSecretOfBundle(cdbStream.payload.metadata) := outputIsSecret
         }
       )
 
@@ -219,7 +224,7 @@ class ReservationStation(exeStage: Stage,
         pipeline.withService[ContextService](
           context => {
             if (context.isSecretPipelineReg(register)) {
-              dispatchStream.payload.registerMap.element(register) := meta.rs1.isSecret || meta.rs2.isSecret || exeStage.output(register).asInstanceOf[Bool] // TODO: bit dirty
+              dispatchStream.payload.registerMap.element(register) := outputIsSecret
             } else {
               dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
             }
@@ -288,74 +293,45 @@ class ReservationStation(exeStage: Stage,
 
     val dependentJump = rob.isTransient(robEntryIndex)
     when (dependentJump.valid) {
-      meta.priorBranchNext.push(dependentJump.payload)
+      meta.priorBranch.push(dependentJump.payload)
     }
 
-    val rs1Used = dispatchStage.output(pipeline.data.RS1_TYPE) === RegisterType.GPR
+    def dependencySetup(metaRs: RegisterSource, reg: PipelineData[UInt], regData: PipelineData[UInt], regType: PipelineData[SpinalEnumCraft[RegisterType.type]]): Unit = {
+      val rsUsed = dispatchStage.output(regType) === RegisterType.GPR
 
-    when(rs1Used) {
-      val rs1Id = dispatchStage.output(pipeline.data.RS1)
-      val (rs1Found, rs1Target) = rob.getValue(rs1Id)
+      when(rsUsed) {
+        val rsReg = dispatchStage.output(reg)
+        val (rsInRob, rsValue) = rob.getValue(rsReg)
 
-      when(rs1Found) {
-        when(rs1Target.valid) {
+        when(rsInRob) {
+          when(rsValue.valid) {
+            pipeline.withService[ContextService](
+              context => {
+                metaRs.isSecret := context.isSecretOfBundle(rsValue.payload.metadata)
+              }
+            )
+            regs.setReg(regData, rsValue.payload.writeValue)
+          } otherwise {
+            metaRs.priorInstructionNext.push(rsValue.payload.robIndex)
+          }
+        } otherwise {
           pipeline.withService[ContextService](
             context => {
-              val secret = context.isSecretOfBundle(rs1Target.payload.metadata)
-              meta.rs1.isSecretNext := secret
-              when(meta.waitingForBranchNext) {
-                stateNext := State.WAITING_FOR_ARGS
-              }
+              metaRs.isSecret := context.isSecretRegister(rsReg)
             }
           )
-          regs.setReg(pipeline.data.RS1_DATA, rs1Target.payload.writeValue)
-        } otherwise {
-          stateNext := State.WAITING_FOR_ARGS
-          meta.rs1.priorInstructionNext.push(rs1Target.payload.robIndex)
+          regs.setReg(regData, dispatchStage.output(regData))
         }
-      } otherwise {
-        pipeline.withService[ContextService](
-          context => {
-            val secret = context.isSecretRegister(rs1Id)
-            meta.rs1.isSecretNext := secret
-          }
-        )
-        regs.setReg(pipeline.data.RS1_DATA, dispatchStage.output(pipeline.data.RS1_DATA))
+
+        // ProSpeCT: condition for waiting: either the operand is pending in ROB, or the operand is secret and there is a pending branch
+        when ((rsInRob && !rsValue.valid) || (dependentJump.valid && metaRs.isSecret)) {
+          stateNext := State.WAITING_FOR_ARGS
+        }
       }
     }
 
-    val rs2Used = dispatchStage.output(pipeline.data.RS2_TYPE) === RegisterType.GPR
-
-    when (rs2Used) {
-      val rs2Id = dispatchStage.output(pipeline.data.RS2)
-      val (rs2Found, rs2Target) = rob.getValue(rs2Id)
-
-      when (rs2Found) {
-        when (rs2Target.valid) {
-          pipeline.withService[ContextService](
-            context => {
-              val secret = context.isSecretOfBundle(rs2Target.payload.metadata)
-              meta.rs2.isSecretNext := secret
-              when (meta.waitingForBranchNext) {
-                stateNext := State.WAITING_FOR_ARGS
-              }
-            }
-          )
-          regs.setReg(pipeline.data.RS2_DATA, rs2Target.payload.writeValue)
-        } otherwise {
-          stateNext := State.WAITING_FOR_ARGS
-          meta.rs2.priorInstructionNext.push(rs2Target.payload.robIndex)
-        }
-      } otherwise {
-        pipeline.withService[ContextService](
-          context => {
-            val secret = context.isSecretRegister(rs2Id)
-            meta.rs2.isSecretNext := secret
-          }
-        )
-        regs.setReg(pipeline.data.RS2_DATA, dispatchStage.output(pipeline.data.RS2_DATA))
-      }
-    }
+    dependencySetup(meta.rs1, pipeline.data.RS1, pipeline.data.RS1_DATA, pipeline.data.RS1_TYPE)
+    dependencySetup(meta.rs2, pipeline.data.RS2, pipeline.data.RS2_DATA, pipeline.data.RS2_TYPE)
   }
 
   override def pipelineReset(): Unit = {
