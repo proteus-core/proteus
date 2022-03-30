@@ -35,7 +35,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   val robEntries = Vec.fill(capacity)(RegInit(RobEntry(retirementRegisters).getZero))
   val oldestIndex = Counter(capacity)
   val newestIndex = Counter(capacity)
-  private val isFull = RegInit(False)
+  private val isFullNext = Bool()
+  private val isFull = RegNext(isFullNext).init(False)
   private val willRetire = False
   val isAvailable = !isFull || willRetire
 
@@ -43,6 +44,12 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   pushInCycle := False
   val pushedEntry = RobEntry(retirementRegisters)
   pushedEntry := RobEntry(retirementRegisters).getZero
+
+  val findRa1 = findRegisterValue(1)._1
+  val findRa2 = findRegisterValue(1)._2
+
+  val isValidAbsoluteIndex15 = isValidAbsoluteIndex(15)
+  val relativeIndexForAbsolute2 = relativeIndexForAbsolute(2)
 
   def reset(): Unit = {
     oldestIndex.clear()
@@ -57,15 +64,17 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     val newest = UInt(indexBits)
     oldest := oldestIndex.value
     when (pushInCycle) {
-      newest := newestIndex.value//Next
+      newest := newestIndex.value
     } otherwise {
       newest := newestIndex.value
     }
 
-    when ((oldest === newest && !isFull) || index >= capacity) { // initial setting
+    when (index >= capacity) {
       ret := False
-    } elsewhen (oldest === newest) { // rob is full
+    } elsewhen (isFullNext) {
       ret := True
+    } elsewhen (oldest === newest && !isFull) {  // empty
+      ret := False
     } elsewhen (newest > oldest) { // normal order
       ret := index >= oldest && index < newest
     } otherwise { // wrapping
@@ -125,7 +134,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     )
   }
 
-  def getValue(robIndex: UInt, regId: UInt): (Bool, Flow[CdbMessage]) = {
+  def findRegisterValue(regId: UInt): (Bool, Flow[CdbMessage]) = {
     val found = Bool()
     val target = Flow(CdbMessage(metaRegisters, indexBits))
     target.valid := False
@@ -146,7 +155,6 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
       // last condition: prevent dependencies on x0
       when (isValidAbsoluteIndex(absolute)
-        && relative < relativeIndexForAbsolute(robIndex)
         && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId
         && regId =/= 0
         && entry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) === RegisterType.GPR) {
@@ -161,7 +169,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
         )
       }
     }
-    (found, target) // TODO: ready also in metadata?
+    (found, target)
   }
 
   def hasPendingStore(robIndex: UInt, address: UInt): Bool = {
@@ -193,7 +201,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     found
   }
 
-  def isTransient(robIndex: UInt): Flow[UInt] = {
+  def hasUnresolvedBranch(): Flow[UInt] = {
     val dependent = Flow(UInt(indexBits))
     dependent.valid := False
     dependent.payload := 0
@@ -203,7 +211,6 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       val index = UInt(indexBits)
       index := nth
 
-      val isOlder = relativeIndexForAbsolute(index) < relativeIndexForAbsolute(robIndex)
       val isBranch = pipeline.getService[BranchService].isBranchOfBundle(entry.registerMap)
       val resolved = entry.ready
       val incorrectlyPredicted = pipeline.getService[BranchTargetPredictorService].predictedPcOfBundle(entry.registerMap) =/= entry.registerMap.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]])
@@ -212,7 +219,6 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       // an instruction is transient if there is an instruction before it in the ROB which is either
       // an unresolved branch, or a resolved instruction (of any type) that was mispredicted
       when (isValidAbsoluteIndex(nth)
-        && isOlder
         && ((isBranch && !resolved) || (incorrectlyPredicted && resolved))) {
         dependent.push(index)
       }
@@ -255,6 +261,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   }
 
   def build(): Unit = {
+    isFullNext := isFull
+
     val oldestEntry = robEntries(oldestIndex.value)
     val updatedOldestIndex = UInt(indexBits)
     updatedOldestIndex := oldestIndex.value
@@ -285,7 +293,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       updatedOldestIndex := oldestIndex.valueNext
       oldestIndex.increment()
       willRetire := True
-      isFull := False
+      isFullNext := False
     }
 
     when (pushInCycle) {
@@ -293,7 +301,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       val updatedNewest = newestIndex.valueNext
       newestIndex.increment()
       when (updatedOldestIndex === updatedNewest) {
-        isFull := True
+        isFullNext := True
       }
     }
   }

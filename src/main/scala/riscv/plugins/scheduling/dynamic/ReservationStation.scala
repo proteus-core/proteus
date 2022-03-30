@@ -304,7 +304,7 @@ class ReservationStation(exeStage: Stage,
 
     meta.reset()
 
-    val dependentJump = rob.isTransient(robIndex)
+    val dependentJump = rob.hasUnresolvedBranch()
     when (dependentJump.valid) {
       meta.priorBranchNext.push(dependentJump.payload)
     }
@@ -314,7 +314,7 @@ class ReservationStation(exeStage: Stage,
 
       when(rsUsed) {
         val rsReg = dispatchStage.output(reg)
-        val (rsInRob, rsValue) = rob.getValue(robIndex, rsReg)
+        val (rsInRob, rsValue) = rob.findRegisterValue(rsReg)
 
         when(rsInRob) {
           when(rsValue.valid) {
