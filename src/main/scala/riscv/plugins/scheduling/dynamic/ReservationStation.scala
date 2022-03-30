@@ -15,9 +15,6 @@ case class RegisterSource(indexBits: BitCount) extends Bundle {
   val isSecretNext: Bool = Bool()
   val isSecret: Bool = RegNext(isSecretNext).init(False)
 
-  def waiting: Bool = priorInstruction.valid
-  def waitingNext: Bool = priorInstructionNext.valid
-
   def build(): Unit = {
     priorInstructionNext := priorInstruction
     isSecretNext := isSecret
@@ -93,15 +90,21 @@ class ReservationStation(exeStage: Stage,
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
     val currentRs1Prior, currentRs2Prior = Flow(UInt(rob.indexBits))
     val branchWaiting = Flow(UInt(rob.indexBits))
+    val rs1secret = Bool()
+    val rs2secret = Bool()
 
     when (state === State.WAITING_FOR_ARGS) {
       currentRs1Prior := meta.rs1.priorInstruction
       currentRs2Prior := meta.rs2.priorInstruction
       branchWaiting := meta.priorBranch
+      rs1secret := meta.rs1.isSecret
+      rs2secret := meta.rs2.isSecret
     } otherwise {
       currentRs1Prior := meta.rs1.priorInstructionNext
       currentRs2Prior := meta.rs2.priorInstructionNext
       branchWaiting := meta.priorBranchNext
+      rs1secret := meta.rs1.isSecretNext
+      rs2secret := meta.rs2.isSecretNext
     }
 
     // keep track of incoming branch updates, even if already executing
@@ -121,11 +124,16 @@ class ReservationStation(exeStage: Stage,
       r2w := currentRs2Prior.valid
       val brw = Bool()
       brw := branchWaiting.valid
+      val sec1 = Bool()
+      sec1 := rs1secret
+      val sec2 = Bool()
+      sec2 := rs1secret
 
       when (currentRs1Prior.valid && cdbMessage.robIndex === currentRs1Prior.payload) {
         pipeline.withService[ContextService](
           context => {
             meta.rs1.isSecret := context.isSecretOfBundle(cdbMessage.metadata)
+            sec1 := context.isSecretOfBundle(cdbMessage.metadata)
           }
         )
         meta.rs1.priorInstruction.valid := False
@@ -137,6 +145,7 @@ class ReservationStation(exeStage: Stage,
         pipeline.withService[ContextService](
           context => {
             meta.rs2.isSecret := context.isSecretOfBundle(cdbMessage.metadata)
+            sec2 := context.isSecretOfBundle(cdbMessage.metadata)
           }
         )
         meta.rs2.priorInstruction.valid := False
@@ -145,7 +154,8 @@ class ReservationStation(exeStage: Stage,
       }
 
       // ProSpeCT: keep stalling if one of the operands is secret and there is a pending branch
-      val transientSecretAccess = brw && (meta.rs1.isSecret || meta.rs2.isSecret)
+      val transientSecretAccess = Bool()
+      transientSecretAccess := brw && (sec1 || sec2)
 
       when (!r1w && !r2w && !transientSecretAccess) {
         // This is the only place where state is written directly (instead of
@@ -279,21 +289,24 @@ class ReservationStation(exeStage: Stage,
   def execute(): Unit = {
     val dispatchStage = pipeline.issuePipeline.stages.last
 
-    robEntryIndex := rob.pushEntry(
+    val robIndex = UInt()
+    robIndex := rob.pushEntry(
       dispatchStage.output(pipeline.data.RD),
       dispatchStage.output(pipeline.data.RD_TYPE),
       pipeline.getService[LsuService].operationOutput(dispatchStage),
       pipeline.getService[BranchService].isBranch(dispatchStage),
       dispatchStage.output(pipeline.data.PC))
 
+    robEntryIndex := robIndex
+
     stateNext := State.EXECUTING
     regs.shift := True
 
     meta.reset()
 
-    val dependentJump = rob.isTransient(robEntryIndex)
+    val dependentJump = rob.isTransient(robIndex)
     when (dependentJump.valid) {
-      meta.priorBranch.push(dependentJump.payload)
+      meta.priorBranchNext.push(dependentJump.payload)
     }
 
     def dependencySetup(metaRs: RegisterSource, reg: PipelineData[UInt], regData: PipelineData[UInt], regType: PipelineData[SpinalEnumCraft[RegisterType.type]]): Unit = {
@@ -301,13 +314,13 @@ class ReservationStation(exeStage: Stage,
 
       when(rsUsed) {
         val rsReg = dispatchStage.output(reg)
-        val (rsInRob, rsValue) = rob.getValue(rsReg)
+        val (rsInRob, rsValue) = rob.getValue(robIndex, rsReg)
 
         when(rsInRob) {
           when(rsValue.valid) {
             pipeline.withService[ContextService](
               context => {
-                metaRs.isSecret := context.isSecretOfBundle(rsValue.payload.metadata)
+                metaRs.isSecretNext := context.isSecretOfBundle(rsValue.payload.metadata)
               }
             )
             regs.setReg(regData, rsValue.payload.writeValue)
@@ -317,14 +330,14 @@ class ReservationStation(exeStage: Stage,
         } otherwise {
           pipeline.withService[ContextService](
             context => {
-              metaRs.isSecret := context.isSecretRegister(rsReg)
+              metaRs.isSecretNext := context.isSecretRegister(rsReg)
             }
           )
           regs.setReg(regData, dispatchStage.output(regData))
         }
 
         // ProSpeCT: condition for waiting: either the operand is pending in ROB, or the operand is secret and there is a pending branch
-        when ((rsInRob && !rsValue.valid) || (dependentJump.valid && metaRs.isSecret)) {
+        when ((rsInRob && !rsValue.valid) || (dependentJump.valid && metaRs.isSecretNext)) {
           stateNext := State.WAITING_FOR_ARGS
         }
       }

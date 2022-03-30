@@ -52,14 +52,24 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
   def isValidAbsoluteIndex(index: UInt): Bool = {
     val ret = Bool()
-    when ((oldestIndex.value === newestIndex.value && !isFull) || index >= capacity) { // initial setting
+
+    val oldest = UInt(indexBits)
+    val newest = UInt(indexBits)
+    oldest := oldestIndex.value
+    when (pushInCycle) {
+      newest := newestIndex.value//Next
+    } otherwise {
+      newest := newestIndex.value
+    }
+
+    when ((oldest === newest && !isFull) || index >= capacity) { // initial setting
       ret := False
-    } elsewhen (oldestIndex.value === newestIndex.value) { // rob is full
+    } elsewhen (oldest === newest) { // rob is full
       ret := True
-    } elsewhen (newestIndex.value > oldestIndex.value) { // normal order
-      ret := index >= oldestIndex.value && index < newestIndex.value
+    } elsewhen (newest > oldest) { // normal order
+      ret := index >= oldest && index < newest
     } otherwise { // wrapping
-      ret := index >= oldestIndex.value || index < newestIndex.value
+      ret := index >= oldest || index < newest
     }
     ret
   }
@@ -115,7 +125,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     )
   }
 
-  def getValue(regId: UInt): (Bool, Flow[CdbMessage]) = {
+  def getValue(robIndex: UInt, regId: UInt): (Bool, Flow[CdbMessage]) = {
     val found = Bool()
     val target = Flow(CdbMessage(metaRegisters, indexBits))
     target.valid := False
@@ -136,6 +146,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
       // last condition: prevent dependencies on x0
       when (isValidAbsoluteIndex(absolute)
+        && relative < relativeIndexForAbsolute(robIndex)
         && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId
         && regId =/= 0
         && entry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) === RegisterType.GPR) {
@@ -266,12 +277,6 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     }
 
     when (!isEmpty && oldestEntry.ready && ret.arbitration.isDone) {
-      // removing secret flags, we don't care whether the prediction was correct or not, if not, a flush will happen in the next cycle anyway
-      // TODO: should we only do this for jumps? it doesn't hurt like this, right?
-//      if (pipeline.hasService[ContextService]) {
-//        clearSecretFlag()
-//      }
-
       pipeline.withService[ContextService](
         context => taintRegister(context, oldestEntry)
       )
