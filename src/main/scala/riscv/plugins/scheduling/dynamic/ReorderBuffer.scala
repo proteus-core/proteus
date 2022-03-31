@@ -45,12 +45,6 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   val pushedEntry = RobEntry(retirementRegisters)
   pushedEntry := RobEntry(retirementRegisters).getZero
 
-  val findRa1 = findRegisterValue(1)._1
-  val findRa2 = findRegisterValue(1)._2
-
-  val isValidAbsoluteIndex15 = isValidAbsoluteIndex(15)
-  val relativeIndexForAbsolute2 = relativeIndexForAbsolute(2)
-
   def reset(): Unit = {
     oldestIndex.clear()
     newestIndex.clear()
@@ -63,11 +57,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     val oldest = UInt(indexBits)
     val newest = UInt(indexBits)
     oldest := oldestIndex.value
-    when (pushInCycle) {
-      newest := newestIndex.value
-    } otherwise {
-      newest := newestIndex.value
-    }
+    newest := newestIndex.value
 
     when (index >= capacity) {
       ret := False
@@ -106,11 +96,12 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     adjusted
   }
 
-  def pushEntry(rd: UInt, rdType: SpinalEnumCraft[RegisterType.type], lsuOperationType: SpinalEnumCraft[LsuOperationType.type], isBranch: Bool, pc: UInt): UInt = {
+  def pushEntry(rd: UInt, rdType: SpinalEnumCraft[RegisterType.type], lsuOperationType: SpinalEnumCraft[LsuOperationType.type], isBranch: Bool, pc: UInt, predictedPc: UInt): UInt = {
     pushInCycle := True
     pushedEntry.ready := False
     pushedEntry.hasValue := False
     pushedEntry.registerMap.element(pipeline.data.PC.asInstanceOf[PipelineData[Data]]) := pc
+    pipeline.getService[BranchTargetPredictorService].predictedPcOfBundle(pushedEntry.registerMap) := predictedPc
     pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := rd
     pushedEntry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) := rdType
     pipeline.getService[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
@@ -127,6 +118,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
     robEntries(cdbMessage.robIndex).hasValue := True
     robEntries(cdbMessage.robIndex).registerMap.element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
+    robEntries(cdbMessage.robIndex).registerMap.element(pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]) := cdbMessage.metadata.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]])
     pipeline.withService[ContextService](
       context => {
         context.isSecretOfBundle(robEntries(cdbMessage.robIndex).registerMap) := context.isSecretOfBundle(cdbMessage.metadata)
@@ -201,26 +193,27 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     found
   }
 
-  def hasUnresolvedBranch(): Flow[UInt] = {
+  def hasUnresolvedBranch(robIndex: UInt): Flow[UInt] = {
     val dependent = Flow(UInt(indexBits))
     dependent.valid := False
     dependent.payload := 0
 
-    for (nth <- 0 until capacity) {
-      val entry = robEntries(nth)
-      val index = UInt(indexBits)
-      index := nth
+    for (relative <- 0 until capacity) {
+      val absolute = UInt(indexBits)
+      absolute := absoluteIndexForRelative(relative).resized
+      val entry = robEntries(absolute)
 
       val isBranch = pipeline.getService[BranchService].isBranchOfBundle(entry.registerMap)
-      val resolved = entry.ready
+      val resolved = entry.hasValue
       val incorrectlyPredicted = pipeline.getService[BranchTargetPredictorService].predictedPcOfBundle(entry.registerMap) =/= entry.registerMap.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]])
       // TODO: since here we already know whether it was mispredicted, might as well reset the pipeline?
 
       // an instruction is transient if there is an instruction before it in the ROB which is either
       // an unresolved branch, or a resolved instruction (of any type) that was mispredicted
-      when (isValidAbsoluteIndex(nth)
+      when (isValidAbsoluteIndex(absolute)
+        && absolute =/= robIndex  // TODO? can also be solved by clearing the ROB registers on reset? also, think twice about this: must be able to differnetiate
         && ((isBranch && !resolved) || (incorrectlyPredicted && resolved))) {
-        dependent.push(index)
+        dependent.push(absolute)
       }
     }
     dependent

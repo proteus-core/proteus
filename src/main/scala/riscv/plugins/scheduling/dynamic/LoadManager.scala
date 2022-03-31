@@ -93,6 +93,7 @@ class LoadManager(pipeline: Pipeline,
 
       cdbStream.valid := True
       cdbStream.payload.writeValue := loadStage.output(pipeline.data.RD_DATA)
+      cdbStream.metadata.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]) := loadStage.output(pipeline.data.NEXT_PC)
       cdbStream.payload.robIndex := storedMessage.robIndex
 
       pipeline.withService[ContextService](

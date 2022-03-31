@@ -27,6 +27,8 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       branchService.addPendingBranchToBundle(registerBundle)
       branchService.addPendingBranchToBundle(cdbBMetaData)
 
+      cdbBMetaData.addElement(pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]], pipeline.data.NEXT_PC.dataType)
+
       pipeline.withService[ContextService](
         context => {
           context.addSecretToBundle(cdbBMetaData)

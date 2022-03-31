@@ -114,6 +114,9 @@ class ReservationStation(exeStage: Stage,
         meta.priorBranch.push(pending.payload.resized) // TODO: resized
       } otherwise {
         meta.priorBranch.setIdle()
+        when (!currentRs1Prior.valid && !currentRs2Prior.valid) {
+          state := State.EXECUTING
+        }
       }
     }
 
@@ -205,6 +208,7 @@ class ReservationStation(exeStage: Stage,
     // when waiting for the result, and it is ready, put in on the bus
     when (state === State.EXECUTING && exeStage.arbitration.isDone && !activeFlush) {
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
+      cdbStream.metadata.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]) := exeStage.output(pipeline.data.NEXT_PC)
 
       // propagate branch dependencies on the CDB
       pipeline.getService[BranchService].pendingBranchOfBundle(cdbStream.payload.metadata) := meta.priorBranch.resized
@@ -295,7 +299,8 @@ class ReservationStation(exeStage: Stage,
       dispatchStage.output(pipeline.data.RD_TYPE),
       pipeline.getService[LsuService].operationOutput(dispatchStage),
       pipeline.getService[BranchService].isBranch(dispatchStage),
-      dispatchStage.output(pipeline.data.PC))
+      dispatchStage.output(pipeline.data.PC),
+      pipeline.getService[BranchTargetPredictorService].predictedPc(dispatchStage))
 
     robEntryIndex := robIndex
 
@@ -304,7 +309,7 @@ class ReservationStation(exeStage: Stage,
 
     meta.reset()
 
-    val dependentJump = rob.hasUnresolvedBranch()
+    val dependentJump = rob.hasUnresolvedBranch(robIndex)
     when (dependentJump.valid) {
       meta.priorBranchNext.push(dependentJump.payload)
     }
