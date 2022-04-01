@@ -92,30 +92,41 @@ class ReservationStation(exeStage: Stage,
     val branchWaiting = Flow(UInt(rob.indexBits))
     val rs1secret = Bool()
     val rs2secret = Bool()
+    if (!pipeline.hasService[ProspectService]) {
+      branchWaiting.setIdle()
+      rs1secret := False
+      rs2secret := False
+    }
 
     when (state === State.WAITING_FOR_ARGS) {
       currentRs1Prior := meta.rs1.priorInstruction
       currentRs2Prior := meta.rs2.priorInstruction
-      branchWaiting := meta.priorBranch
-      rs1secret := meta.rs1.isSecret
-      rs2secret := meta.rs2.isSecret
+      if (pipeline.hasService[ProspectService]) {
+        branchWaiting := meta.priorBranch
+        rs1secret := meta.rs1.isSecret
+        rs2secret := meta.rs2.isSecret
+      }
     } otherwise {
       currentRs1Prior := meta.rs1.priorInstructionNext
       currentRs2Prior := meta.rs2.priorInstructionNext
-      branchWaiting := meta.priorBranchNext
-      rs1secret := meta.rs1.isSecretNext
-      rs2secret := meta.rs2.isSecretNext
+      if (pipeline.hasService[ProspectService]) {
+        branchWaiting := meta.priorBranchNext
+        rs1secret := meta.rs1.isSecretNext
+        rs2secret := meta.rs2.isSecretNext
+      }
     }
 
-    // keep track of incoming branch updates, even if already executing
-    when (branchWaiting.valid && cdbMessage.robIndex === branchWaiting.payload) {
-      val pending = pipeline.getService[BranchService].pendingBranchOfBundle(cdbMessage.metadata)
-      when (pending.valid) {
-        meta.priorBranch.push(pending.payload.resized) // TODO: resized
-      } otherwise {
-        meta.priorBranch.setIdle()
-        when (!currentRs1Prior.valid && !currentRs2Prior.valid) {
-          state := State.EXECUTING
+    if (pipeline.hasService[ProspectService]) {
+      // keep track of incoming branch updates, even if already executing
+      when (branchWaiting.valid && cdbMessage.robIndex === branchWaiting.payload) {
+        val pending = pipeline.getService[BranchService].pendingBranchOfBundle(cdbMessage.metadata)
+        when (pending.valid) {
+          meta.priorBranch.push(pending.payload.resized) // TODO: resized
+        } otherwise {
+          meta.priorBranch.setIdle()
+          when (!currentRs1Prior.valid && !currentRs2Prior.valid) {
+            state := State.EXECUTING
+          }
         }
       }
     }
@@ -158,7 +169,11 @@ class ReservationStation(exeStage: Stage,
 
       // ProSpeCT: keep stalling if one of the operands is secret and there is a pending branch
       val transientSecretAccess = Bool()
-      transientSecretAccess := brw && (sec1 || sec2)
+      if (pipeline.hasService[ProspectService]) {
+        transientSecretAccess := brw && (sec1 || sec2)
+      } else {
+        transientSecretAccess := False
+      }
 
       when (!r1w && !r2w && !transientSecretAccess) {
         // This is the only place where state is written directly (instead of
@@ -210,15 +225,14 @@ class ReservationStation(exeStage: Stage,
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
       cdbStream.metadata.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]) := exeStage.output(pipeline.data.NEXT_PC)
 
-      // propagate branch dependencies on the CDB
-      pipeline.getService[BranchService].pendingBranchOfBundle(cdbStream.payload.metadata) := meta.priorBranch.resized
-
       val outputIsSecret = Bool()
 
       pipeline.withService[ProspectService](
         context => {
           // ProSpeCT: the output is tainted if one of the inputs is tainted or the execution stage tainted the result
           outputIsSecret := meta.rs1.isSecret || meta.rs2.isSecret || context.isSecret(exeStage)
+          // propagate branch dependencies on the CDB
+          pipeline.getService[BranchService].pendingBranchOfBundle(cdbStream.payload.metadata) := meta.priorBranch.resized
         },
         {
           outputIsSecret := False
@@ -309,9 +323,14 @@ class ReservationStation(exeStage: Stage,
 
     meta.reset()
 
-    val dependentJump = rob.hasUnresolvedBranch(robIndex)
-    when (dependentJump.valid) {
-      meta.priorBranchNext.push(dependentJump.payload)
+    val dependentJump = Flow(UInt(rob.indexBits))
+    if (pipeline.hasService[ProspectService]) {
+      dependentJump := rob.hasUnresolvedBranch(robIndex)
+      when (dependentJump.valid) {
+        meta.priorBranchNext.push(dependentJump.payload)
+      }
+    } else {
+      dependentJump.setIdle()
     }
 
     def dependencySetup(metaRs: RegisterSource, reg: PipelineData[UInt], regData: PipelineData[UInt], regType: PipelineData[SpinalEnumCraft[RegisterType.type]]): Unit = {

@@ -20,21 +20,19 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       val cdbBMetaData = new DynBundle[PipelineData[spinal.core.Data]]
       val registerBundle = new DynBundle[PipelineData[spinal.core.Data]]
 
-      val branchService = pipeline.getService[BranchService]
-
-      branchService.addIsBranchToBundle(registerBundle)
-      // TODO: do we need to store pending branch in rob?
-      branchService.addPendingBranchToBundle(registerBundle)
-      branchService.addPendingBranchToBundle(cdbBMetaData)
-
-      cdbBMetaData.addElement(pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]], pipeline.data.NEXT_PC.dataType)
-
       pipeline.withService[ProspectService](
         context => {
+          val branchService = pipeline.getService[BranchService]
+          branchService.addIsBranchToBundle(registerBundle)
+          branchService.addPendingBranchToBundle(registerBundle)
+          branchService.addPendingBranchToBundle(cdbBMetaData)
+
           context.addSecretToBundle(cdbBMetaData)
           context.addSecretToBundle(registerBundle)
         }
       )
+
+      cdbBMetaData.addElement(pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]], pipeline.data.NEXT_PC.dataType)
 
       val ret = pipeline.retirementStage
       val ls = pipeline.loadStage

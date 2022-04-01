@@ -106,9 +106,9 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     pushedEntry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) := rdType
     pipeline.getService[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
     pipeline.getService[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
-    pipeline.getService[BranchService].isBranchOfBundle(pushedEntry.registerMap) := isBranch
     pipeline.withService[ProspectService](
       context => {
+        pipeline.getService[BranchService].isBranchOfBundle(pushedEntry.registerMap) := isBranch
         context.isSecretOfBundle(pushedEntry.registerMap) := False
       }
     )
