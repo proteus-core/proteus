@@ -133,7 +133,7 @@ class ReservationStation(exeStage: Stage,
       sec2 := rs1secret
 
       when (currentRs1Prior.valid && cdbMessage.robIndex === currentRs1Prior.payload) {
-        pipeline.withService[ContextService](
+        pipeline.withService[ProspectService](
           context => {
             meta.rs1.isSecret := context.isSecretOfBundle(cdbMessage.metadata)
             sec1 := context.isSecretOfBundle(cdbMessage.metadata)
@@ -145,7 +145,7 @@ class ReservationStation(exeStage: Stage,
       }
 
       when (currentRs2Prior.valid && cdbMessage.robIndex === currentRs2Prior.payload) {
-        pipeline.withService[ContextService](
+        pipeline.withService[ProspectService](
           context => {
             meta.rs2.isSecret := context.isSecretOfBundle(cdbMessage.metadata)
             sec2 := context.isSecretOfBundle(cdbMessage.metadata)
@@ -215,7 +215,7 @@ class ReservationStation(exeStage: Stage,
 
       val outputIsSecret = Bool()
 
-      pipeline.withService[ContextService](
+      pipeline.withService[ProspectService](
         context => {
           // ProSpeCT: the output is tainted if one of the inputs is tainted or the execution stage tainted the result
           outputIsSecret := meta.rs1.isSecret || meta.rs2.isSecret || context.isSecret(exeStage)
@@ -225,7 +225,7 @@ class ReservationStation(exeStage: Stage,
         }
       )
 
-      pipeline.withService[ContextService](
+      pipeline.withService[ProspectService](
         context => {
           context.isSecretOfBundle(cdbStream.payload.metadata) := outputIsSecret
         }
@@ -235,7 +235,7 @@ class ReservationStation(exeStage: Stage,
       dispatchStream.payload.robIndex := robEntryIndex
 
       for (register <- retirementRegisters.keys) {
-        pipeline.withService[ContextService](
+        pipeline.withService[ProspectService](
           context => {
             if (context.isSecretPipelineReg(register)) {
               dispatchStream.payload.registerMap.element(register) := outputIsSecret
@@ -323,7 +323,7 @@ class ReservationStation(exeStage: Stage,
 
         when(rsInRob) {
           when(rsValue.valid) {
-            pipeline.withService[ContextService](
+            pipeline.withService[ProspectService](
               context => {
                 metaRs.isSecretNext := context.isSecretOfBundle(rsValue.payload.metadata)
               }
@@ -333,7 +333,7 @@ class ReservationStation(exeStage: Stage,
             metaRs.priorInstructionNext.push(rsValue.payload.robIndex)
           }
         } otherwise {
-          pipeline.withService[ContextService](
+          pipeline.withService[ProspectService](
             context => {
               metaRs.isSecretNext := context.isSecretRegister(rsReg)
             }

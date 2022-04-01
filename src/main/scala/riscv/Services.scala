@@ -464,7 +464,7 @@ trait FormalService {
   def lsuOnMisaligned(stage: Stage): Unit
 }
 
-trait ContextService {
+trait ProspectService {
   def isSecret(stage: Stage): Bool
   def isSecretOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
   def isSecretPipelineReg(reg: PipelineData[Data]): Boolean

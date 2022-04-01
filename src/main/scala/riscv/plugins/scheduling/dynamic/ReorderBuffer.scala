@@ -107,7 +107,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     pipeline.getService[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
     pipeline.getService[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
     pipeline.getService[BranchService].isBranchOfBundle(pushedEntry.registerMap) := isBranch
-    pipeline.withService[ContextService](
+    pipeline.withService[ProspectService](
       context => {
         context.isSecretOfBundle(pushedEntry.registerMap) := False
       }
@@ -119,7 +119,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     robEntries(cdbMessage.robIndex).hasValue := True
     robEntries(cdbMessage.robIndex).registerMap.element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
     robEntries(cdbMessage.robIndex).registerMap.element(pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]) := cdbMessage.metadata.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]])
-    pipeline.withService[ContextService](
+    pipeline.withService[ProspectService](
       context => {
         context.isSecretOfBundle(robEntries(cdbMessage.robIndex).registerMap) := context.isSecretOfBundle(cdbMessage.metadata)
       }
@@ -132,7 +132,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     target.valid := False
     target.payload.robIndex := 0
     target.payload.writeValue := 0
-    pipeline.withService[ContextService](
+    pipeline.withService[ProspectService](
       context => {
         context.isSecretOfBundle(target.metadata) := False
       }
@@ -154,7 +154,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
         target.valid := entry.hasValue
         target.robIndex := absolute
         target.writeValue := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
-        pipeline.withService[ContextService](
+        pipeline.withService[ProspectService](
           context => {
             context.isSecretOfBundle(target.metadata) := context.isSecretOfBundle(entry.registerMap)
           }
@@ -229,22 +229,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     robEntries(rdbMessage.robIndex).ready := True
   }
 
-  def clearSecretFlag(): Unit = {
-    val secondBranch = Bool()
-    secondBranch := False
-    for (nth <- 1 until capacity) {
-      val absolute = absoluteIndexForRelative(nth).resized
-      val entry = robEntries(absolute)
-      when (pipeline.getService[BranchService].isBranchOfBundle(entry.registerMap)) {
-        secondBranch := True
-      }
-      when (!secondBranch) {
-        pipeline.getService[ContextService].isSecretOfBundle(entry.registerMap) := False
-      }
-    }
-  }
-
-  def taintRegister(context: ContextService, entry: RobEntry): Unit = {
+  def taintRegister(context: ProspectService, entry: RobEntry): Unit = {
     val regId = entry.registerMap.elementAs[UInt](pipeline.data.RD.asInstanceOf[PipelineData[Data]])
     val secret = context.isSecretOfBundle(entry.registerMap)
     when (regId =/= 0
@@ -278,7 +263,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     }
 
     when (!isEmpty && oldestEntry.ready && ret.arbitration.isDone) {
-      pipeline.withService[ContextService](
+      pipeline.withService[ProspectService](
         context => taintRegister(context, oldestEntry)
       )
 

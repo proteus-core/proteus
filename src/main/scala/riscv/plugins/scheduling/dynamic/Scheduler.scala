@@ -29,7 +29,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
 
       cdbBMetaData.addElement(pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]], pipeline.data.NEXT_PC.dataType)
 
-      pipeline.withService[ContextService](
+      pipeline.withService[ProspectService](
         context => {
           context.addSecretToBundle(cdbBMetaData)
           context.addSecretToBundle(registerBundle)

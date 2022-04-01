@@ -96,7 +96,7 @@ class LoadManager(pipeline: Pipeline,
       cdbStream.metadata.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]) := loadStage.output(pipeline.data.NEXT_PC)
       cdbStream.payload.robIndex := storedMessage.robIndex
 
-      pipeline.withService[ContextService](
+      pipeline.withService[ProspectService](
         context => {
           context.isSecretOfBundle(cdbStream.payload.metadata) := context.isSecret(loadStage)
         }
