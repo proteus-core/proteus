@@ -87,9 +87,11 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   def absoluteIndexForRelative(relative: UInt): UInt = {
     val absolute = UInt(32 bits)
     val adjusted = UInt(32 bits)
-    absolute := (relative + oldestIndex.value).resized
+    val oldestResized = UInt(32 bits)
+    oldestResized := oldestIndex.value.resized
+    absolute := oldestResized + relative
     when (absolute >= capacity) {
-      adjusted := (absolute - capacity).resized
+      adjusted := absolute - capacity
     } otherwise {
       adjusted := absolute
     }
