@@ -61,7 +61,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
     when (index >= capacity) {
       ret := False
-    } elsewhen (isFullNext) {
+    } elsewhen (isFull) {
       ret := True
     } elsewhen (oldest === newest && !isFull) {  // empty
       ret := False
@@ -166,7 +166,32 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     (found, target)
   }
 
-  def hasPendingStore(robIndex: UInt, address: UInt): Bool = {
+  def hasUnresolvedBranch: Flow[UInt] = {
+    val dependent = Flow(UInt(indexBits))
+    dependent.valid := False
+    dependent.payload := 0
+
+    for (relative <- 0 until capacity) {
+      val absolute = UInt(indexBits)
+      absolute := absoluteIndexForRelative(relative).resized
+      val entry = robEntries(absolute)
+
+      val isBranch = pipeline.getService[BranchService].isBranchOfBundle(entry.registerMap)
+      val resolved = entry.hasValue
+      val incorrectlyPredicted = pipeline.getService[BranchTargetPredictorService].predictedPcOfBundle(entry.registerMap) =/= entry.registerMap.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]])
+      // TODO: since here we already know whether it was mispredicted, might as well reset the pipeline?
+
+      // an instruction is transient if there is an instruction before it in the ROB which is either
+      // an unresolved branch, or a resolved instruction (of any type) that was mispredicted
+      when (isValidAbsoluteIndex(absolute)
+        && ((isBranch && !resolved) || (incorrectlyPredicted && resolved))) {
+        dependent.push(absolute)
+      }
+    }
+    dependent
+  }
+
+  def hasPendingStoreForEntry(robIndex: UInt, address: UInt): Bool = {
     val found = Bool()
     found := False
 
@@ -193,32 +218,6 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       }
     }
     found
-  }
-
-  def hasUnresolvedBranch(robIndex: UInt): Flow[UInt] = {
-    val dependent = Flow(UInt(indexBits))
-    dependent.valid := False
-    dependent.payload := 0
-
-    for (relative <- 0 until capacity) {
-      val absolute = UInt(indexBits)
-      absolute := absoluteIndexForRelative(relative).resized
-      val entry = robEntries(absolute)
-
-      val isBranch = pipeline.getService[BranchService].isBranchOfBundle(entry.registerMap)
-      val resolved = entry.hasValue
-      val incorrectlyPredicted = pipeline.getService[BranchTargetPredictorService].predictedPcOfBundle(entry.registerMap) =/= entry.registerMap.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]])
-      // TODO: since here we already know whether it was mispredicted, might as well reset the pipeline?
-
-      // an instruction is transient if there is an instruction before it in the ROB which is either
-      // an unresolved branch, or a resolved instruction (of any type) that was mispredicted
-      when (isValidAbsoluteIndex(absolute)
-        && absolute =/= robIndex  // TODO? can also be solved by clearing the ROB registers on reset? also, think twice about this: must be able to differnetiate
-        && ((isBranch && !resolved) || (incorrectlyPredicted && resolved))) {
-        dependent.push(absolute)
-      }
-    }
-    dependent
   }
 
   def onRdbMessage(rdbMessage: RdbMessage): Unit = {

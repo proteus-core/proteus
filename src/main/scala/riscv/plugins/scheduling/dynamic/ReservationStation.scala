@@ -325,7 +325,7 @@ class ReservationStation(exeStage: Stage,
 
     val dependentJump = Flow(UInt(rob.indexBits))
     if (pipeline.hasService[ProspectService]) {
-      dependentJump := rob.hasUnresolvedBranch(robIndex)
+      dependentJump := rob.hasUnresolvedBranch
       when (dependentJump.valid) {
         meta.priorBranchNext.push(dependentJump.payload)
       }
