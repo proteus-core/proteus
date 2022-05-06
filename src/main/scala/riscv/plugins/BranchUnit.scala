@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class BranchUnit(branchStage: Stage) extends Plugin[Pipeline] {
+class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
   object BranchCondition extends SpinalEnum {
     val NONE, EQ, NE, LT, GE, LTU, GEU = newElement()
   }
@@ -33,7 +33,7 @@ class BranchUnit(branchStage: Stage) extends Plugin[Pipeline] {
         Data.BU_WRITE_RET_ADDR_TO_RD -> True
       ))
 
-      issuer.setDestination(Opcodes.JAL, branchStage)
+      issuer.setDestinations(Opcodes.JAL, branchStages)
 
       alu.addOperation(Opcodes.JAL, alu.AluOp.ADD,
                        alu.Src1Select.PC, alu.Src2Select.IMM)
@@ -44,7 +44,7 @@ class BranchUnit(branchStage: Stage) extends Plugin[Pipeline] {
         Data.BU_IGNORE_TARGET_LSB -> True
       ))
 
-      issuer.setDestination(Opcodes.JALR, branchStage)
+      issuer.setDestinations(Opcodes.JALR, branchStages)
 
       alu.addOperation(Opcodes.JALR, alu.AluOp.ADD,
                        alu.Src1Select.RS1, alu.Src2Select.IMM)
@@ -64,7 +64,7 @@ class BranchUnit(branchStage: Stage) extends Plugin[Pipeline] {
           Data.BU_CONDITION -> condition
         ))
 
-        issuer.setDestination(opcode, branchStage)
+        issuer.setDestinations(opcode, branchStages)
 
         alu.addOperation(opcode, alu.AluOp.ADD,
                          alu.Src1Select.PC, alu.Src2Select.IMM)
@@ -73,56 +73,58 @@ class BranchUnit(branchStage: Stage) extends Plugin[Pipeline] {
   }
 
   override def build(): Unit = {
-    branchStage plug new Area {
-      import branchStage._
+    for (stage <- branchStages) {
+      stage plug new Area {
+        import stage._
 
-      val aluResultData = pipeline.getService[IntAluService].resultData
-      val target = aluResultData.dataType()
-      target := value(aluResultData)
+        val aluResultData = pipeline.getService[IntAluService].resultData
+        val target = aluResultData.dataType()
+        target := value(aluResultData)
 
-      when (value(Data.BU_IGNORE_TARGET_LSB)) {
-        target(0) := False
-      }
-
-      val misaligned = target(1 downto 0).orR
-
-      val src1, src2 = UInt(config.xlen bits)
-      src1 := value(pipeline.data.RS1_DATA)
-      src2 := value(pipeline.data.RS2_DATA)
-
-      val eq = src1 === src2
-      val ne = !eq
-      val lt = src1.asSInt < src2.asSInt
-      val ltu = src1 < src2
-      val ge = !lt
-      val geu = !ltu
-
-      val condition = value(Data.BU_CONDITION)
-
-      val branchTaken = condition.mux(
-        BranchCondition.NONE -> True,
-        BranchCondition.EQ   -> eq,
-        BranchCondition.NE   -> ne,
-        BranchCondition.LT   -> lt,
-        BranchCondition.GE   -> ge,
-        BranchCondition.LTU  -> ltu,
-        BranchCondition.GEU  -> geu
-      )
-
-      val jumpService = pipeline.getService[JumpService]
-
-      when (arbitration.isValid && value(Data.BU_IS_BRANCH)) {
-        when (condition =/= BranchCondition.NONE) {
-          arbitration.rs1Needed := True
-          arbitration.rs2Needed := True
+        when (value(Data.BU_IGNORE_TARGET_LSB)) {
+          target(0) := False
         }
 
-        when (branchTaken && !arbitration.isStalled) {
-          jumpService.jump(branchStage, target)
+        val misaligned = target(1 downto 0).orR
 
-          when (value(Data.BU_WRITE_RET_ADDR_TO_RD)) {
-            output(pipeline.data.RD_DATA) := input(pipeline.data.NEXT_PC)
-            output(pipeline.data.RD_DATA_VALID) := True
+        val src1, src2 = UInt(config.xlen bits)
+        src1 := value(pipeline.data.RS1_DATA)
+        src2 := value(pipeline.data.RS2_DATA)
+
+        val eq = src1 === src2
+        val ne = !eq
+        val lt = src1.asSInt < src2.asSInt
+        val ltu = src1 < src2
+        val ge = !lt
+        val geu = !ltu
+
+        val condition = value(Data.BU_CONDITION)
+
+        val branchTaken = condition.mux(
+          BranchCondition.NONE -> True,
+          BranchCondition.EQ   -> eq,
+          BranchCondition.NE   -> ne,
+          BranchCondition.LT   -> lt,
+          BranchCondition.GE   -> ge,
+          BranchCondition.LTU  -> ltu,
+          BranchCondition.GEU  -> geu
+        )
+
+        val jumpService = pipeline.getService[JumpService]
+
+        when (arbitration.isValid && value(Data.BU_IS_BRANCH)) {
+          when (condition =/= BranchCondition.NONE) {
+            arbitration.rs1Needed := True
+            arbitration.rs2Needed := True
+          }
+
+          when (branchTaken && !arbitration.isStalled) {
+            jumpService.jump(stage, target)
+
+            when (value(Data.BU_WRITE_RET_ADDR_TO_RD)) {
+              output(pipeline.data.RD_DATA) := input(pipeline.data.NEXT_PC)
+              output(pipeline.data.RD_DATA_VALID) := True
+            }
           }
         }
       }

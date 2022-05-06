@@ -42,10 +42,10 @@ object createStaticPipeline {
       new Fetcher(pipeline.fetch),
       new Decoder(pipeline.decode),
       new RegisterFileAccessor(pipeline.decode, pipeline.writeback),
-      new IntAlu(pipeline.execute),
-      new Shifter(pipeline.execute),
-      new Lsu(pipeline.memory, pipeline.memory, pipeline.memory),
-      new BranchUnit(pipeline.execute),
+      new IntAlu(Set(pipeline.execute)),
+      new Shifter(Set(pipeline.execute)),
+      new Lsu(Set(pipeline.memory), pipeline.memory, pipeline.memory),
+      new BranchUnit(Set(pipeline.execute)),
       new PcManager(0x80000000L),
       new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
       new CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
@@ -54,7 +54,7 @@ object createStaticPipeline {
       new TrapHandler(pipeline.writeback),
       new TrapStageInvalidator,
       new Interrupts(pipeline.writeback),
-      new MulDiv(pipeline.execute)
+      new MulDiv(Set(pipeline.execute))
     ) ++ extraPlugins)
 
     if (build) {
@@ -156,7 +156,7 @@ object CoreTestSim {
 
 object CoreExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.static(RamType.ExternalAxi4(10 MiB)))
+    SpinalVerilog(SoC.static(RamType.ExternalAxi4(10 MiB), 32))
   }
 }
 
@@ -183,10 +183,12 @@ object createDynamicPipeline {
         override val passThroughStage: Stage = decode // dummy
       }
 
-      val intAlu = new Stage("EX_ALU")
-      val intMul = new Stage("EX_MUL")
-      override val passThroughStage: Stage = intAlu
-      override val rsStages: Seq[Stage] = Seq(intAlu, intMul)
+      val intAlu1 = new Stage("EX_ALU1")
+      val intAlu2 = new Stage("EX_ALU2")
+      val intMul1 = new Stage("EX_MUL1")
+      val intMul2 = new Stage("EX_MUL2")
+      override val passThroughStage: Stage = intAlu1
+      override val rsStages: Seq[Stage] = Seq(intAlu1, intAlu2, intMul1, intMul2)
       override val loadStage: Stage = new Stage("LOAD")
       override val retirementStage = new Stage("RET")
       override val unorderedStages: Seq[Stage] = rsStages :+ loadStage
@@ -212,15 +214,15 @@ object createDynamicPipeline {
         readStage  = pipeline.issuePipeline.decode,
         writeStage = pipeline.retirementStage
       ),
-      new Lsu(pipeline.intAlu, pipeline.loadStage, pipeline.retirementStage),
+      new Lsu(Set(pipeline.intAlu2), pipeline.loadStage, pipeline.retirementStage),
       new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage, 8, conf.xlen),
-      new IntAlu(pipeline.intAlu),
-      new Shifter(pipeline.intAlu),
-      new MulDiv(pipeline.intMul),
-      new BranchUnit(pipeline.intAlu),
-      new CsrFile(pipeline.retirementStage, pipeline.intAlu),
+      new IntAlu(Set(pipeline.intAlu1, pipeline.intAlu2)),
+      new Shifter(Set(pipeline.intAlu1, pipeline.intAlu2)),
+      new MulDiv(Set(pipeline.intMul1, pipeline.intMul2)),
+      new BranchUnit(Set(pipeline.intAlu1, pipeline.intAlu2)),
+      new CsrFile(pipeline.retirementStage, pipeline.intAlu1),
       new TrapHandler(pipeline.retirementStage),
-      new MachineMode(pipeline.intAlu),
+      new MachineMode(pipeline.intAlu1),
       new Interrupts(pipeline.retirementStage),
       new Timers
     ) ++ extraPlugins)
@@ -263,8 +265,8 @@ object CoreDynamicSim {
 
         i += 1
 
-        if (i == 100) {
- //         done = true
+        if (i == 200) {
+//          done = true
         }
       }
     }
@@ -273,7 +275,7 @@ object CoreDynamicSim {
 
 object CoreDynamicExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB)))
+    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 16))
   }
 }
 

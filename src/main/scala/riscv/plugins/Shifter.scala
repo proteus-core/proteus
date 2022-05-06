@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class Shifter(exeStage: Stage) extends Plugin[Pipeline] {
+class Shifter(exeStages: Set[Stage]) extends Plugin[Pipeline] {
   object ShiftOp extends SpinalEnum {
     val NONE, SLL, SRL, SRA = newElement()
   }
@@ -34,40 +34,42 @@ class Shifter(exeStage: Stage) extends Plugin[Pipeline] {
         config.addDecoding(opcode, itype, Map(
           Data.SHIFT_OP -> op
         ))
-        issuer.setDestination(opcode, exeStage)
+        issuer.setDestinations(opcode, exeStages)
       }
     }
   }
 
   override def build(): Unit = {
-    exeStage plug new Area {
-      import exeStage._
+    for (exeStage <- exeStages) {
+      exeStage plug new Area {
+        import exeStage._
 
-      val src = UInt(config.xlen bits)
-      src := value(pipeline.data.RS1_DATA)
-      val shamt = UInt(5 bits)
-      val useImm = value(pipeline.data.IMM_USED)
+        val src = UInt(config.xlen bits)
+        src := value(pipeline.data.RS1_DATA)
+        val shamt = UInt(5 bits)
+        val useImm = value(pipeline.data.IMM_USED)
 
-      when (useImm) {
-        shamt := value(pipeline.data.IMM)(4 downto 0)
-      } otherwise {
-        shamt := value(pipeline.data.RS2_DATA)(4 downto 0)
-      }
+        when (useImm) {
+          shamt := value(pipeline.data.IMM)(4 downto 0)
+        } otherwise {
+          shamt := value(pipeline.data.RS2_DATA)(4 downto 0)
+        }
 
-      val op = value(Data.SHIFT_OP)
+        val op = value(Data.SHIFT_OP)
 
-      val result = op.mux(
-        ShiftOp.NONE -> U(0),
-        ShiftOp.SLL  -> (src |<< shamt),
-        ShiftOp.SRL  -> (src |>> shamt),
-        ShiftOp.SRA  -> (src.asSInt >> shamt).asUInt
-      )
+        val result = op.mux(
+          ShiftOp.NONE -> U(0),
+          ShiftOp.SLL  -> (src |<< shamt),
+          ShiftOp.SRL  -> (src |>> shamt),
+          ShiftOp.SRA  -> (src.asSInt >> shamt).asUInt
+        )
 
-      when (arbitration.isValid && op =/= ShiftOp.NONE) {
-        arbitration.rs1Needed := True
-        arbitration.rs2Needed := !useImm
-        output(pipeline.data.RD_DATA) := result
-        output(pipeline.data.RD_DATA_VALID) := True
+        when (arbitration.isValid && op =/= ShiftOp.NONE) {
+          arbitration.rs1Needed := True
+          arbitration.rs2Needed := !useImm
+          output(pipeline.data.RD_DATA) := result
+          output(pipeline.data.RD_DATA_VALID) := True
+        }
       }
     }
   }

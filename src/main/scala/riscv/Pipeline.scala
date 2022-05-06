@@ -79,6 +79,14 @@ trait Pipeline {
     })
   }
 
+  def withService[T](func: T => Unit, alternative: => Unit = () => {})(implicit tag: ClassTag[T]): Unit = {
+    if (hasService[T]) {
+      func(getService[T])
+    } else {
+      alternative
+    }
+  }
+
   def getImplementedExtensions: Seq[Extension] = {
     Extension(config.baseIsa) +: plugins.flatMap(_.getImplementedExtensions)
   }

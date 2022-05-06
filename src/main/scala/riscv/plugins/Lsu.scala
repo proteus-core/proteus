@@ -4,7 +4,7 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plugin[Pipeline] with LsuService {
+class Lsu(addressStages: Set[Stage], loadStage: Stage, storeStage: Stage) extends Plugin[Pipeline] with LsuService {
   private var addressTranslator = new LsuAddressTranslator {
     override def translate(stage: Stage,
                            address: UInt,
@@ -49,7 +49,7 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
 
     hasExternalOps = true
 
-    pipeline.getService[IssueService].setDestination(opcode, addressStage)
+    pipeline.getService[IssueService].setDestinations(opcode, addressStages)
   }
 
   override def addLoad(opcode: MaskedLiteral,
@@ -67,14 +67,14 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
 
     hasExternalOps = true
 
-    pipeline.getService[IssueService].setDestination(opcode, addressStage)
+    pipeline.getService[IssueService].setDestinations(opcode, addressStages)
   }
 
   override def setAddress(address: UInt): Unit = {
     externalAddress := address
   }
 
-  override def stage: Stage = addressStage // TODO: which one? needed?
+  override def stage: Stage = addressStages.head // TODO: which one? needed?
 
   override def operation(stage: Stage): SpinalEnumCraft[LsuOperationType.type] = {
     stage.value(Data.LSU_OPERATION_TYPE)
@@ -99,9 +99,11 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
   }
 
   override def setup(): Unit = {
-    addressStage plug new Area {
-      val externalAddress = UInt(config.xlen bits).assignDontCare()
-      Lsu.this.externalAddress = externalAddress
+    for (addressStage <- addressStages) {
+      addressStage plug new Area {
+        val externalAddress = UInt(config.xlen bits).assignDontCare()
+        Lsu.this.externalAddress = externalAddress
+      }
     }
 
     val intAlu = pipeline.getService[IntAluService]
@@ -132,7 +134,7 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
           Data.LSU_TARGET_VALID -> False
         ))
 
-        pipeline.getService[IssueService].setDestination(opcode, addressStage)
+        pipeline.getService[IssueService].setDestinations(opcode, addressStages)
       }
 
       addLoad(Opcodes.LW,  LsuAccessWidth.W, False)
@@ -149,7 +151,7 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
           Data.LSU_TARGET_VALID -> False
         ))
 
-        pipeline.getService[IssueService].setDestination(opcode, addressStage)
+        pipeline.getService[IssueService].setDestinations(opcode, addressStages)
       }
 
       addStore(Opcodes.SW, LsuAccessWidth.W)
@@ -159,30 +161,32 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
   }
 
   override def build(): Unit = {
-    addressStage plug new Area {
-      import addressStage._
+    for (addressStage <- addressStages) {
+      addressStage plug new Area {
+        import addressStage._
 
-      val operation = value(Data.LSU_OPERATION_TYPE)
-      val accessWidth = value(Data.LSU_ACCESS_WIDTH)
-      val unsigned = value(Data.LSU_IS_UNSIGNED) // TODO: another hack
-      val aluResult = value(pipeline.getService[IntAluService].resultData)
+        val operation = value(Data.LSU_OPERATION_TYPE)
+        val accessWidth = value(Data.LSU_ACCESS_WIDTH)
+        val unsigned = value(Data.LSU_IS_UNSIGNED) // TODO: another hack
+        val aluResult = value(pipeline.getService[IntAluService].resultData)
 
-      val inputAddress = if (hasExternalOps) {
-        // We keep track of whether we have external loads/stores to 1) prevent LSU_IS_EXTERNAL_OP
-        // from being added to the pipeline regs and 2) not generate this mux when not necessary
-        // (although the latter might be optimized away at some point).
-        value(Data.LSU_IS_EXTERNAL_OP) ? externalAddress | aluResult
-      } else {
-        aluResult
-      }
+        val inputAddress = if (hasExternalOps) {
+          // We keep track of whether we have external loads/stores to 1) prevent LSU_IS_EXTERNAL_OP
+          // from being added to the pipeline regs and 2) not generate this mux when not necessary
+          // (although the latter might be optimized away at some point).
+          value(Data.LSU_IS_EXTERNAL_OP) ? externalAddress | aluResult
+        } else {
+          aluResult
+        }
 
-      val address = addressTranslator.translate(
-        addressStage, inputAddress, operation, accessWidth
-      )
+        val address = addressTranslator.translate(
+          addressStage, inputAddress, operation, accessWidth
+        )
 
-      output(Data.LSU_TARGET_ADDRESS) := address
-      when (operation === LsuOperationType.LOAD || operation === LsuOperationType.STORE) {
-        output(Data.LSU_TARGET_VALID) := True
+        output(Data.LSU_TARGET_ADDRESS) := address
+        when (operation === LsuOperationType.LOAD || operation === LsuOperationType.STORE) {
+          output(Data.LSU_TARGET_VALID) := True
+        }
       }
     }
 
@@ -252,6 +256,10 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
 
       val mask = baseMask |<< address(1 downto 0)
 
+      val busReady = Bool()
+      val loadActive = RegInit(False)
+      busReady := False
+
       when (isActive && misaligned) {
         if (pipeline.hasService[TrapService]) {
           trap(TrapCause.LoadAddressMisaligned(address), loadStage)
@@ -263,7 +271,21 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
       when (arbitration.isValid && !misaligned) {
         when (isActive) {
           val busAddress = address & U(0xfffffffcL)
-          val (valid, wValue) = dbusCtrl.read(busAddress)
+          val valid = Bool()
+          valid := False
+          val wValue = UInt(config.xlen bits).getZero
+          busReady := dbusCtrl.isReady
+          when (busReady) {
+            loadActive := True
+          }
+          when (busReady || loadActive) {
+            val tpl = dbusCtrl.read(busAddress)
+            valid := tpl._1
+            wValue := tpl._2
+          }
+          when (valid) {
+            loadActive := False
+          }
           arbitration.isReady := valid
           val result = UInt(config.xlen bits)
           result := wValue
@@ -296,6 +318,8 @@ class Lsu(addressStage: Stage, loadStage: Stage, storeStage: Stage) extends Plug
 
           formal.lsuOnLoad(loadStage, busAddress, mask, wValue)
         }
+      } otherwise {
+        loadActive := False
       }
     }
 
