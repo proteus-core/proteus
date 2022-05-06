@@ -35,16 +35,16 @@ object createCheriPipeline {
       new rvp.Fetcher(pipeline.fetch),
       new rvp.Decoder(pipeline.decode),
       new rvp.RegisterFileAccessor(pipeline.decode, pipeline.writeback),
-      new rvp.IntAlu(pipeline.execute),
-      new rvp.Shifter(pipeline.execute),
-      new rvp.Lsu(pipeline.memory, pipeline.memory, pipeline.memory),
-      new rvp.BranchUnit(pipeline.execute),
+      new rvp.IntAlu(Set(pipeline.execute)),
+      new rvp.Shifter(Set(pipeline.execute)),
+      new rvp.Lsu(Set(pipeline.memory), pipeline.memory, pipeline.memory),
+      new rvp.BranchUnit(Set(pipeline.execute)),
       new rvp.scheduling.static.PcManager(0x80000000L),
       new rvp.CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
       new rvp.Timers,
       new rvp.MachineMode(pipeline.execute, addMepc = false, addMtvec = false),
       new rvp.Interrupts(pipeline.writeback),
-      new rvp.MulDiv(pipeline.execute)
+      new rvp.MulDiv(Set(pipeline.execute))
     ))
 
     implicit val context = Context(pipeline)

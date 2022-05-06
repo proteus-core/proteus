@@ -1,6 +1,6 @@
 package riscv
 
-import riscv.plugins.scheduling.dynamic.ReorderBuffer
+import riscv.plugins.scheduling.dynamic.{ReorderBuffer, Resettable}
 import spinal.core._
 
 import scala.reflect.ClassTag
@@ -12,6 +12,7 @@ trait DynamicPipeline extends Pipeline {
   val loadStage: Stage
 
   val unorderedStages: Seq[Stage]
+  var components: Seq[Resettable] = null
 
   var pipelineRegs: Map[Stage, PipelineRegs] = null
 
@@ -54,6 +55,20 @@ trait DynamicPipeline extends Pipeline {
       stage.value(data.RS2)
       stage.value(data.RS1_TYPE)
       stage.value(data.RS2_TYPE)
+
+      getService[BranchTargetPredictorService].getPredictedPc(stage)
+      getService[JumpService].jumpRequested(stage)
+    }
+
+    // HACK make sure that all pipeline regs are routed through *all* exe stages.
+    // I'm embarrassed...
+    // https://gitlab.com/ProteusCore/ProteusCore/-/issues/17
+    for (stage <- rsStages) {
+      for (pipelineData <- stage.lastValues.keys) {
+        for (stage <- rsStages) {
+          stage.value(pipelineData)
+        }
+      }
     }
 
     // HACK make sure that all pipeline regs are routed through *all* exe stages.

@@ -9,7 +9,10 @@ case class MemBusConfig(
   addressWidth: Int,
   dataWidth: Int,
   readWrite: Boolean = true
-)
+) {
+  def byte2WordAddress(ba: UInt): UInt = ba(dataWidth - 1 downto log2Up(dataWidth / 8))
+  def word2ByteAddress(wa: UInt): UInt = wa << log2Up(dataWidth / 8)
+}
 
 case class MemBusCmd(config: MemBusConfig) extends Bundle {
   val address = UInt(config.addressWidth bits)
@@ -25,9 +28,6 @@ case class MemBusRsp(config: MemBusConfig) extends Bundle {
 class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
   val cmd = Stream(MemBusCmd(config))
   val rsp = Stream(MemBusRsp(config))
-
-  def byte2WordAddress(ba: UInt): UInt = ba >> log2Up(config.dataWidth / 8)
-  def word2ByteAddress(wa: UInt): UInt = wa << log2Up(config.dataWidth / 8)
 
   override def asMaster(): Unit = {
     master(cmd)
@@ -133,6 +133,10 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
 
     def isIssued = valid || ready
     def isWrite = if (bus.config.readWrite) cmd.write else False
+  }
+
+  def isReady: Bool = {
+    !currentCmd.isIssued
   }
 
   bus.cmd.valid := currentCmd.valid

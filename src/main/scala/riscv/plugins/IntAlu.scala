@@ -4,7 +4,7 @@ import riscv._
 
 import spinal.core._
 
-class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
+class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService {
   object Data {
     object ALU_OP extends PipelineData(AluOp())
     object ALU_SRC1 extends PipelineData(Src1Select())
@@ -55,7 +55,7 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
           Data.ALU_COMMIT_RESULT -> True
         ))
 
-        issuer.setDestination(opcode, aluStage)
+        issuer.setDestinations(opcode, aluStages)
       }
 
       val regImmOpcodes = Map(
@@ -74,7 +74,7 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
           Data.ALU_COMMIT_RESULT -> True
         ))
 
-        issuer.setDestination(opcode, aluStage)
+        issuer.setDestinations(opcode, aluStages)
       }
 
       config.addDecoding(Opcodes.LUI, InstructionType.U, Map(
@@ -83,7 +83,7 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
         Data.ALU_COMMIT_RESULT -> True
       ))
 
-      issuer.setDestination(Opcodes.LUI, aluStage)
+      issuer.setDestinations(Opcodes.LUI, aluStages)
 
       config.addDecoding(Opcodes.AUIPC, InstructionType.U, Map(
         Data.ALU_OP -> AluOp.ADD,
@@ -92,71 +92,73 @@ class IntAlu(aluStage: Stage) extends Plugin[Pipeline] with IntAluService {
         Data.ALU_COMMIT_RESULT -> True
       ))
 
-      issuer.setDestination(Opcodes.AUIPC, aluStage)
+      issuer.setDestinations(Opcodes.AUIPC, aluStages)
     }
   }
 
   override def build(): Unit = {
-    aluStage plug new Area {
-      import aluStage._
+    for (stage <- aluStages) {
+      stage plug new Area {
+        import stage._
 
-      val op = value(Data.ALU_OP)
-      val src1, src2 = UInt(config.xlen bits)
+        val op = value(Data.ALU_OP)
+        val src1, src2 = UInt(config.xlen bits)
 
-      switch (value(Data.ALU_SRC1)) {
-        is (Src1Select.RS1) {
-          src1 := value(pipeline.data.RS1_DATA)
-          arbitration.rs1Needed := True
+        switch (value(Data.ALU_SRC1)) {
+          is (Src1Select.RS1) {
+            src1 := value(pipeline.data.RS1_DATA)
+            arbitration.rs1Needed := True
+          }
+          is (Src1Select.PC) {
+            src1 := value(pipeline.data.PC)
+          }
         }
-        is (Src1Select.PC) {
-          src1 := value(pipeline.data.PC)
-        }
-      }
 
-      switch (value(Data.ALU_SRC2)) {
-        is (Src2Select.RS2) {
-          src2 := value(pipeline.data.RS2_DATA)
-          arbitration.rs2Needed := True
+        switch (value(Data.ALU_SRC2)) {
+          is (Src2Select.RS2) {
+            src2 := value(pipeline.data.RS2_DATA)
+            arbitration.rs2Needed := True
+          }
+          is (Src2Select.IMM) {
+            src2 := value(pipeline.data.IMM)
+          }
         }
-        is (Src2Select.IMM) {
-          src2 := value(pipeline.data.IMM)
-        }
-      }
 
-      val result = UInt(config.xlen bits)
+        val result = UInt(config.xlen bits)
 
-      switch (op) {
-        is (AluOp.ADD) {
-          result := src1 + src2
+        switch (op) {
+          is (AluOp.ADD) {
+            result := src1 + src2
+          }
+          is (AluOp.SUB) {
+            result := src1 - src2
+          }
+          is (AluOp.SLT) {
+            result := (src1.asSInt < src2.asSInt).asUInt.resized
+          }
+          is (AluOp.SLTU) {
+            result := (src1 < src2).asUInt.resized
+          }
+          is (AluOp.XOR) {
+            result := src1 ^ src2
+          }
+          is (AluOp.OR) {
+            result := src1 | src2
+          }
+          is (AluOp.AND) {
+            result := src1 & src2
+          }
+          is (AluOp.SRC2) {
+            result := src2
+          }
         }
-        is (AluOp.SUB) {
-          result := src1 - src2
-        }
-        is (AluOp.SLT) {
-          result := (src1.asSInt < src2.asSInt).asUInt.resized
-        }
-        is (AluOp.SLTU) {
-          result := (src1 < src2).asUInt.resized
-        }
-        is (AluOp.XOR) {
-          result := src1 ^ src2
-        }
-        is (AluOp.OR) {
-          result := src1 | src2
-        }
-        is (AluOp.AND) {
-          result := src1 & src2
-        }
-        is (AluOp.SRC2) {
-          result := src2
-        }
-      }
 
-      when (value(Data.ALU_COMMIT_RESULT)) {
-        output(pipeline.data.RD_DATA) := result
-        output(pipeline.data.RD_DATA_VALID) := True
-      } otherwise {
-        output(Data.ALU_RESULT) := result
+        when (value(Data.ALU_COMMIT_RESULT)) {
+          output(pipeline.data.RD_DATA) := result
+          output(pipeline.data.RD_DATA_VALID) := True
+        } otherwise {
+          output(Data.ALU_RESULT) := result
+        }
       }
     }
   }

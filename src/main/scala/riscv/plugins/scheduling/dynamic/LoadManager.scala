@@ -8,15 +8,17 @@ class LoadManager(pipeline: Pipeline,
                   loadStage: Stage,
                   rob: ReorderBuffer,
                   retirementRegisters: DynBundle[PipelineData[Data]])
-                 (implicit config: Config) extends Area {
+                 (implicit config: Config) extends Area with Resettable {
   val storedMessage: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
   val outputCache: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
   val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
   private val resultCdbMessage = RegInit(CdbMessage(rob.indexBits).getZero)
   val rdbWaitingNext, cdbWaitingNext = Bool()
-  val rdbWaiting = RegNext(rdbWaitingNext).init(False)
-  val cdbWaiting = RegNext(cdbWaitingNext).init(False)
+  val rdbWaiting: Bool = RegNext(rdbWaitingNext).init(False)
+  val cdbWaiting: Bool = RegNext(cdbWaitingNext).init(False)
+
+  private val activeFlush = Bool()
 
   private object State extends SpinalEnum {
     val IDLE, WAITING_FOR_STORE, EXECUTING, BROADCASTING_RESULT = newElement()
@@ -47,14 +49,21 @@ class LoadManager(pipeline: Pipeline,
     isAvailable := False
 
     when (state === State.IDLE) {
-      isAvailable := True
+      isAvailable := !activeFlush
     }
+
+    activeFlush := False
 
     cdbWaitingNext := cdbWaiting
     rdbWaitingNext := rdbWaiting
 
     loadStage.arbitration.isStalled := state === State.WAITING_FOR_STORE
-    loadStage.arbitration.isValid := (state === State.WAITING_FOR_STORE) || (state === State.EXECUTING)
+    loadStage.arbitration.isValid := state === State.EXECUTING
+
+    // execution was invalidated while running
+    when (activeFlush) {
+      stateNext := State.IDLE
+    }
 
     cdbStream.valid := False
     cdbStream.payload := resultCdbMessage
@@ -66,14 +75,14 @@ class LoadManager(pipeline: Pipeline,
     rdbStream.valid := False
     rdbStream.payload := outputCache
 
-    when (state === State.WAITING_FOR_STORE) {
+    when (state === State.WAITING_FOR_STORE && !activeFlush) {
       val address = pipeline.getService[LsuService].addressOfBundle(storedMessage.registerMap)
       when (!rob.hasPendingStore(storedMessage.robIndex, address)) {
         state := State.EXECUTING
       }
     }
 
-    when (state === State.EXECUTING && loadStage.arbitration.isDone) {
+    when (state === State.EXECUTING && loadStage.arbitration.isDone && !activeFlush) {
       rdbStream.valid := True
       rdbStream.payload.robIndex := storedMessage.robIndex
       for (register <- retirementRegisters.keys) {
@@ -97,7 +106,7 @@ class LoadManager(pipeline: Pipeline,
       }
     }
 
-    when (state === State.BROADCASTING_RESULT) {
+    when (state === State.BROADCASTING_RESULT && !activeFlush) {
       rdbStream.valid := rdbWaiting
       cdbStream.valid := cdbWaiting
       
@@ -107,7 +116,7 @@ class LoadManager(pipeline: Pipeline,
       when (cdbStream.ready) {
         cdbWaitingNext := False
       }
-      when (!rdbWaiting && !cdbWaiting) {
+      when ((rdbStream.ready || !rdbWaiting) && (cdbStream.ready || !cdbWaiting)) {
         stateNext := State.IDLE
         isAvailable := True
       }
@@ -116,5 +125,9 @@ class LoadManager(pipeline: Pipeline,
     // FIXME this doesn't seem the correct place to do this...
     loadStage.connectOutputDefaults()
     loadStage.connectLastValues()
+  }
+
+  override def pipelineReset(): Unit = {
+    activeFlush := True
   }
 }

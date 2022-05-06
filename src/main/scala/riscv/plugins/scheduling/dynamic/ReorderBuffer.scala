@@ -2,6 +2,7 @@ package riscv.plugins.scheduling.dynamic
 
 import riscv._
 import spinal.core._
+import spinal.lib.Counter
 
 case class RdbMessage(retirementRegisters: DynBundle[PipelineData[Data]],
                       robIndexBits: BitCount) extends Bundle {
@@ -20,6 +21,15 @@ case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])
   }
 }
 
+/**
+  * Terminology:
+  * - absolute index: the actual index of an entry in the circular buffer
+  * - relative index: an index that shows the order of instructions inserted into the ROB, 0 being
+  *                   the oldest
+  *
+  * Relative indices are internal to the ROB, outside components only see the absolute index of
+  * an entry
+  */
 class ReorderBuffer(pipeline: DynamicPipeline,
                     robCapacity: Int,
                     retirementRegisters: DynBundle[PipelineData[Data]])
@@ -28,8 +38,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   def indexBits: BitCount = log2Up(capacity) bits
 
   val robEntries = Vec.fill(capacity)(RegInit(RobEntry(retirementRegisters).getZero))
-  val oldestIndex = Reg(UInt(indexBits)).init(0)
-  val newestIndex = Reg(UInt(indexBits)).init(0) // TODO: use built-in counter class for these?
+  val oldestIndex = Counter(capacity)
+  val newestIndex = Counter(capacity)
   private val isFull = RegInit(False)
   private val willRetire = False
   val isAvailable = !isFull || willRetire
@@ -40,70 +50,58 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   pushedEntry := RobEntry(retirementRegisters).getZero
 
   def reset(): Unit = {
-    oldestIndex := 0
-    newestIndex := 0
+    oldestIndex.clear()
+    newestIndex.clear()
     isFull := False
   }
 
-  def nextIndex(index: UInt): UInt = {
-    val next = UInt()
-    when (index + 1 === capacity) {
-      next := 0
-    } otherwise {
-      next := index + 1
-    }
-    next
-  }
-
-  def isValidIndex(index: UInt): Bool = {
+  def isValidAbsoluteIndex(index: UInt): Bool = {
     val ret = Bool()
-    when ((oldestIndex === newestIndex && !isFull) || index >= capacity) { // initial setting
+    when ((oldestIndex.value === newestIndex.value && !isFull) || index >= capacity) { // initial setting
       ret := False
-    } elsewhen (oldestIndex === newestIndex) { // rob is full
+    } elsewhen (oldestIndex.value === newestIndex.value) { // rob is full
       ret := True
-    } elsewhen (newestIndex > oldestIndex) { // normal order
-      ret := index >= oldestIndex && index < newestIndex
+    } elsewhen (newestIndex.value > oldestIndex.value) { // normal order
+      ret := index >= oldestIndex.value && index < newestIndex.value
     } otherwise { // wrapping
-      ret := index >= oldestIndex || index < newestIndex
+      ret := index >= oldestIndex.value || index < newestIndex.value
     }
     ret
   }
 
-  def isOlderThan(first: UInt, second: UInt): Bool = {
-    val ret = Bool()
-    when (!isValidIndex(first) || !isValidIndex(second)) {
-      ret := False
-    } elsewhen (first < second && !(oldestIndex >= first && oldestIndex <= second)) {
-      ret := True
-    } elsewhen (first > second && (oldestIndex <= first && oldestIndex > second)) {
-      ret := True
+  def relativeIndexForAbsolute(absolute: UInt): UInt = {
+    val adjustedIndex = UInt(32 bits)
+    when (absolute >= oldestIndex.value) {
+      adjustedIndex := (absolute.resized - oldestIndex.value).resized
     } otherwise {
-      ret := False
+      val remainder = capacity - oldestIndex.value
+      adjustedIndex := (absolute + remainder).resized
     }
-    ret
+    adjustedIndex
   }
 
-  def indexForNth(nth: UInt): UInt = {
-    val index = UInt(config.xlen bits)
-    val adjusted = UInt(config.xlen bits)
-    index := (nth + oldestIndex).resized
-    when (index >= capacity) {
-      adjusted := index - capacity
+  def absoluteIndexForRelative(relative: UInt): UInt = {
+    val absolute = UInt(32 bits)
+    val adjusted = UInt(32 bits)
+    absolute := (relative + oldestIndex.value).resized
+    when (absolute >= capacity) {
+      adjusted := (absolute - capacity).resized
     } otherwise {
-      adjusted := index
+      adjusted := absolute
     }
     adjusted
   }
 
-  def pushEntry(rd: UInt, rdType: SpinalEnumCraft[RegisterType.type], lsuOperationType: SpinalEnumCraft[LsuOperationType.type]): UInt = {
+  def pushEntry(rd: UInt, rdType: SpinalEnumCraft[RegisterType.type], lsuOperationType: SpinalEnumCraft[LsuOperationType.type], pc: UInt): UInt = {
     pushInCycle := True
     pushedEntry.ready := False
     pushedEntry.hasValue := False
+    pushedEntry.registerMap.element(pipeline.data.PC.asInstanceOf[PipelineData[Data]]) := pc
     pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := rd
     pushedEntry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) := rdType
     pipeline.getService[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
     pipeline.getService[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
-    newestIndex
+    newestIndex.value
   }
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
@@ -122,19 +120,20 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     ix := 0
 
     // loop through valid values and return the freshest if present
-    for (nth <- 0 until capacity) {
-      val index = indexForNth(nth)
-      val entry = robEntries(index.resized)
+    for (relative <- 0 until capacity) {
+      val absolute = UInt(indexBits)
+      absolute := absoluteIndexForRelative(relative).resized
+      val entry = robEntries(absolute)
 
       // last condition: prevent dependencies on x0
-      when (isValidIndex(index)
+      when (isValidAbsoluteIndex(absolute)
         && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId
         && regId =/= 0
         && entry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) === RegisterType.GPR) {
         found := True
         ready := entry.hasValue
         value := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
-        ix := index.resized
+        ix := absolute
       }
     }
     (found, ready, value, ix)
@@ -144,16 +143,25 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     val found = Bool()
     found := False
 
-    for (nth <- 0 until capacity) {
-      val index = indexForNth(nth)
-      val entry = robEntries(index.resized)
+    val wordAddress = config.dbusConfig.byte2WordAddress(address)
 
-      when (isValidIndex(index)
-        && isOlderThan(index, robIndex)
-        && pipeline.getService[LsuService].operationOfBundle(entry.registerMap) === LsuOperationType.STORE
-        && ((pipeline.getService[LsuService].addressValidOfBundle(entry.registerMap) === True
-            && pipeline.getService[LsuService].addressOfBundle(entry.registerMap) === address)
-          || pipeline.getService[LsuService].addressValidOfBundle(entry.registerMap) === False)) {
+    for (nth <- 0 until capacity) {
+      val entry = robEntries(nth)
+      val index = UInt(indexBits)
+      index := nth
+
+      val lsuService = pipeline.getService[LsuService]
+      val entryIsStore = lsuService.operationOfBundle(entry.registerMap) === LsuOperationType.STORE
+      val entryAddressValid = lsuService.addressValidOfBundle(entry.registerMap)
+      val entryAddress = lsuService.addressOfBundle(entry.registerMap)
+      val entryWordAddress = config.dbusConfig.byte2WordAddress(entryAddress)
+      val addressesMatch = entryWordAddress === wordAddress
+      val isOlder = relativeIndexForAbsolute(index) < relativeIndexForAbsolute(robIndex)
+
+      when (isValidAbsoluteIndex(nth)
+        && isOlder
+        && entryIsStore
+        && ((entryAddressValid && addressesMatch) || !entryAddressValid)) {
         found := True
       }
     }
@@ -171,10 +179,10 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   }
 
   def build(): Unit = {
-    val oldestEntry = robEntries(oldestIndex)
+    val oldestEntry = robEntries(oldestIndex.value)
     val updatedOldestIndex = UInt(indexBits)
-    updatedOldestIndex := oldestIndex
-    val isEmpty = oldestIndex === newestIndex && !isFull
+    updatedOldestIndex := oldestIndex.value
+    val isEmpty = oldestIndex.value === newestIndex.value && !isFull
 
     val ret = pipeline.retirementStage
     ret.arbitration.isValid := False
@@ -194,16 +202,16 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
     when (!isEmpty && oldestEntry.ready && ret.arbitration.isDone) {
       // removing the oldest entry
-      updatedOldestIndex := nextIndex(oldestIndex)
-      oldestIndex := updatedOldestIndex
+      updatedOldestIndex := oldestIndex.valueNext
+      oldestIndex.increment()
       willRetire := True
       isFull := False
     }
 
     when (pushInCycle) {
-      robEntries(newestIndex) := pushedEntry
-      val updatedNewest = nextIndex(newestIndex)
-      newestIndex := updatedNewest
+      robEntries(newestIndex.value) := pushedEntry
+      val updatedNewest = newestIndex.valueNext
+      newestIndex.increment()
       when (updatedOldestIndex === updatedNewest) {
         isFull := True
       }
