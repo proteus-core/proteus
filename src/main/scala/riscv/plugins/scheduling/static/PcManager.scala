@@ -43,7 +43,7 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
       doJump()
     } else {
       when (target(1 downto 0) =/= 0) {
-        val trapHandler = pipeline.getService[TrapService]
+        val trapHandler = pipeline.service[TrapService]
         trapHandler.trap(stage, TrapCause.InstructionAddressMisaligned(target))
       }.otherwise {
         doJump()

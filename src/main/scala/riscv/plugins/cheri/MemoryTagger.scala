@@ -15,7 +15,7 @@ class MemoryTagger(memoryStart: BigInt, memorySize: BigInt)(implicit context: Co
   private var slaveCapBus: CapBus = _
 
   override def build(): Unit = {
-    pipeline.getService[MemoryService].filterDBus {(stage, dbusIn, dbusOut) =>
+    pipeline.service[MemoryService].filterDBus { (stage, dbusIn, dbusOut) =>
       slaveCapBus = CapBus().setName("cbus")
       build(stage, dbusIn, slaveCapBus, dbusOut)
     }

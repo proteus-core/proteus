@@ -24,7 +24,7 @@ class PccManager(branchStage: Stage)(implicit context: Context)
     val targetPccInfo = getTargetPcc(stage)
 
     def except(cause: ExceptionCause) = {
-      val handler = pipeline.getService[ExceptionHandler]
+      val handler = pipeline.service[ExceptionHandler]
       handler.except(stage, cause, targetPccInfo.capIdx)
       ok := False
     }
@@ -82,11 +82,11 @@ class PccManager(branchStage: Stage)(implicit context: Context)
     val pc = UInt(config.xlen bits)
     pc := pcc.offset
     pc.lsb := False
-    pipeline.getService[JumpService].jump(stage, pc)
+    pipeline.service[JumpService].jump(stage, pc)
   }
 
   override def setup(): Unit = {
-    pipeline.getService[DecoderService].configure {config =>
+    pipeline.service[DecoderService].configure { config =>
       config.addDefault(Map(
         Data.CJALR -> False
       ))
@@ -114,7 +114,7 @@ class PccManager(branchStage: Stage)(implicit context: Context)
 
     // Register PCC as a payload of PC. JumpService will make sure PCC is
     // updated whenever PC is through these callbacks.
-    pipeline.getService[JumpService] addPcPayload new PcPayload[PccData] {
+    pipeline.service[JumpService] addPcPayload new PcPayload[PccData] {
       override def dataType = HardType(PccData())
       override def initValue = PccData.Root
       override def get(stage: Stage) = getTargetPcc(stage).value
@@ -126,7 +126,7 @@ class PccManager(branchStage: Stage)(implicit context: Context)
     // Checking permissions on PCC is done at two locations.
     // 1) While fetching instructions (combined with offsetting PC via PCC).
     // This will catch PCC violations caused by normal (non-jump) PC updates.
-    pipeline.getService[FetchService] setAddressTranslator new FetchAddressTranslator {
+    pipeline.service[FetchService] setAddressTranslator new FetchAddressTranslator {
       override def translate(stage: Stage, address: UInt): UInt = {
         val pcc = getCurrentPcc(stage)
         val fetchAddress = pcc.base + address
@@ -135,7 +135,7 @@ class PccManager(branchStage: Stage)(implicit context: Context)
       }
     }
 
-    pipeline.getService[JumpService] onJump {(stage, prevPc, nextPc, jumpType) =>
+    pipeline.service[JumpService] onJump { (stage, prevPc, nextPc, jumpType) =>
       jumpType match {
         // 2) While executing jumps. Note that this violation would ultimately
         // also be caught by the logic added to the fetch stage but it seems to
@@ -156,7 +156,7 @@ class PccManager(branchStage: Stage)(implicit context: Context)
         // 2) for now.
         // TODO: actually implement a full reset.
         case JumpType.Trap => {
-          val scrService = pipeline.getService[ScrService]
+          val scrService = pipeline.service[ScrService]
           val mtcc = scrService.getScr(stage, ScrIndex.MTCC)
           val mepcc = scrService.getScr(stage, ScrIndex.MEPCC)
 
@@ -167,21 +167,21 @@ class PccManager(branchStage: Stage)(implicit context: Context)
         // address comes from the source of the trap and it seems to make more
         // sense to generate a violation there.
         case JumpType.TrapReturn => {
-          val scrService = pipeline.getService[ScrService]
+          val scrService = pipeline.service[ScrService]
           val mepcc = scrService.getScr(stage, ScrIndex.MEPCC)
           setTargetPcc(stage, mepcc.read(), CapIdx.scr(ScrIndex.MEPCC))
         }
       }
     }
 
-    pipeline.getService[ScrService] registerScr(ScrIndex.MTCC, 0x305, new Area with Scr {
+    pipeline.service[ScrService] registerScr(ScrIndex.MTCC, 0x305, new Area with Scr {
       override val needAsr: Boolean = true
       private val mtcc = Reg(PackedCapability()).init(PackedCapability.Root)
       override def read(): Capability = mtcc
       override def write(value: Capability): Unit = mtcc.assignFrom(value)
     })
 
-    pipeline.getService[ScrService] registerScr(ScrIndex.MEPCC, 0x341, new Area with Scr {
+    pipeline.service[ScrService] registerScr(ScrIndex.MEPCC, 0x341, new Area with Scr {
       override val needAsr: Boolean = true
       private val mepcc = Reg(PackedCapability()).init(PackedCapability.Root)
       override def read(): Capability = mepcc

@@ -99,8 +99,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     pushedEntry.registerMap.element(pipeline.data.PC.asInstanceOf[PipelineData[Data]]) := pc
     pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := rd
     pushedEntry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) := rdType
-    pipeline.getService[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
-    pipeline.getService[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
+    pipeline.service[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
+    pipeline.service[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
     newestIndex.value
   }
 
@@ -150,7 +150,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       val index = UInt(indexBits)
       index := nth
 
-      val lsuService = pipeline.getService[LsuService]
+      val lsuService = pipeline.service[LsuService]
       val entryIsStore = lsuService.operationOfBundle(entry.registerMap) === LsuOperationType.STORE
       val entryAddressValid = lsuService.addressValidOfBundle(entry.registerMap)
       val entryAddress = lsuService.addressOfBundle(entry.registerMap)
@@ -171,8 +171,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   def onRdbMessage(rdbMessage: RdbMessage): Unit = {
     robEntries(rdbMessage.robIndex).registerMap := rdbMessage.registerMap
 
-    when (pipeline.getService[CsrService].isCsrInstruction(rdbMessage.registerMap)) {
-      pipeline.getService[JumpService].jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
+    when (pipeline.service[CsrService].isCsrInstruction(rdbMessage.registerMap)) {
+      pipeline.service[JumpService].jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
     }
 
     robEntries(rdbMessage.robIndex).ready := True

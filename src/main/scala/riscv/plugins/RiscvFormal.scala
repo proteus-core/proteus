@@ -73,7 +73,7 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
 
   override def build(): Unit = {
     val stage = pipeline.retirementStage
-    val trapService = pipeline.getService[TrapService]
+    val trapService = pipeline.service[TrapService]
 
     def zeroIfNone(regType: PipelineData[SpinalEnumCraft[RegisterType.type]],
                    data: PipelineData[UInt]): UInt = {

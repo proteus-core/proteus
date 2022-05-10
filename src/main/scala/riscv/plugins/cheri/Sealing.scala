@@ -12,7 +12,7 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
   }
 
   override def setup(): Unit = {
-    pipeline.getService[DecoderService].configure {config =>
+    pipeline.service[DecoderService].configure { config =>
       config.addDefault(Map(
         Data.CSEAL -> False,
         Data.CUNSEAL -> False,
@@ -45,7 +45,7 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
       val cs2Idx = CapIdx.gpcr(value(pipeline.data.RS2))
 
       def except(cause: ExceptionCause, capIdx: CapIdx) = {
-        val handler = pipeline.getService[ExceptionHandler]
+        val handler = pipeline.service[ExceptionHandler]
         handler.except(stage, cause, capIdx)
       }
 
@@ -150,7 +150,7 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
             targetPcc.assignFrom(cs1)
             targetPcc.otype.value.allowOverride
             targetPcc.otype.unseal()
-            pipeline.getService[PccService].jump(stage, targetPcc, cs1Idx)
+            pipeline.service[PccService].jump(stage, targetPcc, cs1Idx)
 
             val cd = PackedCapability()
             cd.assignFrom(cs2)

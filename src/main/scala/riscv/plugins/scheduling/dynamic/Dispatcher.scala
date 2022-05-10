@@ -23,7 +23,7 @@ class Dispatcher(pipeline: DynamicPipeline,
   def processMessage(rdbMessage: RdbMessage): Bool = {
     val ret = Bool()
 
-    val lsu = pipeline.getService[LsuService]
+    val lsu = pipeline.service[LsuService]
 
     when (lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.LOAD) {
       ret := loadManager.receiveMessage(rdbMessage)

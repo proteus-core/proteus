@@ -67,7 +67,7 @@ class Scheduler(canStallExternally: Boolean = false)
             prevStage.arbitration.isValid := False
           }
 
-          pipeline.getService[JumpService].setFetchPc(stage.input(pipeline.data.NEXT_PC))
+          pipeline.service[JumpService].setFetchPc(stage.input(pipeline.data.NEXT_PC))
         }
       }
 

@@ -6,7 +6,7 @@ import spinal.core._
 
 class Timers extends Plugin[Pipeline] {
   override def setup(): Unit = {
-    val csr = pipeline.getService[CsrService]
+    val csr = pipeline.service[CsrService]
 
     val cycleCsr = csr.registerCsr(0xC00, new Csr {
       val cycle = Reg(UInt(64 bits)).init(0)

@@ -80,7 +80,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
   }
 
   override def setup(): Unit = {
-    pipeline.getService[DecoderService].configure { config =>
+    pipeline.service[DecoderService].configure { config =>
       config.addDefault(Map(
         Data.PREDICTED_JUMP -> False
       ))
@@ -89,7 +89,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
     jumpArea = jumpStage plug new JumpArea {
       import jumpStage._
 
-      val jumpService = pipeline.getService[JumpService]
+      val jumpService = pipeline.service[JumpService]
 
       jumpIo.mispredicted := False
       jumpIo.correctlyPredicted := False
@@ -101,7 +101,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
           case JumpType.Normal =>
             when (predictionWasCorrect(nextPc, getPredictedPc(stage))) {
               // cancel jump if it was correctly predicted in the fetch stage
-              pipeline.getService[JumpService].disableJump(stage)
+              pipeline.service[JumpService].disableJump(stage)
 
               stage.output(Data.PREDICTED_JUMP) := True
             }
@@ -159,7 +159,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
         predictionCount := predictionCount + 1
       }
 
-      val jumpService = pipeline.getService[JumpService]
+      val jumpService = pipeline.service[JumpService]
 
       // if a target was predicted, set the PC of the fetch stage to the prediction
       when (predictorComponent.predictIo.predictedAddress.valid && fetchStage.arbitration.isDone) {

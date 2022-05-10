@@ -14,7 +14,7 @@ private class RegScr(implicit context: Context) extends Area with Scr {
 
 class MachineMode(implicit context: Context) extends Plugin[Pipeline] {
   override def setup(): Unit = {
-    val scrService = pipeline.getService[ScrService]
+    val scrService = pipeline.service[ScrService]
 
     scrService.registerScr(ScrIndex.MTDC, new RegScr)
     scrService.registerScr(ScrIndex.MScratchC, new RegScr)

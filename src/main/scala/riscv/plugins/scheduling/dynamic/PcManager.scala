@@ -24,7 +24,7 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
       doJump()
     } else {
       when (target(1 downto 0) =/= 0) {
-        val trapHandler = pipeline.getService[TrapService]
+        val trapHandler = pipeline.service[TrapService]
         trapHandler.trap(stage, TrapCause.InstructionAddressMisaligned(target))
       }.otherwise {
         doJump()
@@ -49,12 +49,12 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
   }
 
   override def setFetchPc(pc: UInt): Unit = {
-    val staticPcManager = pipeline.issuePipeline.getService[JumpService]
+    val staticPcManager = pipeline.issuePipeline.service[JumpService]
     staticPcManager.setFetchPc(pc)
   }
 
   override def setup(): Unit = {
-    pipeline.getService[DecoderService].configure {config =>
+    pipeline.service[DecoderService].configure { config =>
       config.addDefault(PrivateRegisters.JUMP_REQUESTED, False)
     }
 
@@ -69,7 +69,7 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
       val jumpStage = pipeline.retirementStage
 
       when (jumpStage.arbitration.isDone && jumpRequested(jumpStage)) {
-        val staticPcManager = pipeline.issuePipeline.getService[JumpService]
+        val staticPcManager = pipeline.issuePipeline.service[JumpService]
         staticPcManager.jump(jumpStage.output(pipeline.data.NEXT_PC))
 
         pipeline.rob.reset()
@@ -82,7 +82,7 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
   }
 
   override def disableJump(stage: Stage): Unit = {
-    val staticPcManager = pipeline.issuePipeline.getService[JumpService]
+    val staticPcManager = pipeline.issuePipeline.service[JumpService]
     staticPcManager.disableJump(stage)
     stage.output(PrivateRegisters.JUMP_REQUESTED) := False
   }

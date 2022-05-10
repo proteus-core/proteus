@@ -17,10 +17,10 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
   }
 
   override def setup(): Unit = {
-    val alu = pipeline.getService[IntAluService]
-    val issuer = pipeline.getService[IssueService]
+    val alu = pipeline.service[IntAluService]
+    val issuer = pipeline.service[IssueService]
 
-    pipeline.getService[DecoderService].configure {config =>
+    pipeline.service[DecoderService].configure { config =>
       config.addDefault(Map(
         Data.BU_IS_BRANCH -> False,
         Data.BU_WRITE_RET_ADDR_TO_RD -> False,
@@ -77,7 +77,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
       stage plug new Area {
         import stage._
 
-        val aluResultData = pipeline.getService[IntAluService].resultData
+        val aluResultData = pipeline.service[IntAluService].resultData
         val target = aluResultData.dataType()
         target := value(aluResultData)
 
@@ -110,7 +110,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
           BranchCondition.GEU  -> geu
         )
 
-        val jumpService = pipeline.getService[JumpService]
+        val jumpService = pipeline.service[JumpService]
 
         when (arbitration.isValid && value(Data.BU_IS_BRANCH)) {
           when (condition =/= BranchCondition.NONE) {

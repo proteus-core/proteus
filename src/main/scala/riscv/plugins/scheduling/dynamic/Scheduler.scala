@@ -10,7 +10,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
   }
 
   override def setup(): Unit = {
-    pipeline.getService[DecoderService].configure { config =>
+    pipeline.service[DecoderService].configure { config =>
       config.addDefault(PrivateRegisters.DEST_FU, B(0))
     }
   }
@@ -90,7 +90,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
         s"Stage ${stage.stageName} is not an execute stage")
     }
 
-    pipeline.getService[DecoderService].configure { config =>
+    pipeline.service[DecoderService].configure { config =>
       var fuMask = 0
 
       for (exeStage <- pipeline.rsStages.reverse) {

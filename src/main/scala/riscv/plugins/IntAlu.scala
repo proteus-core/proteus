@@ -17,7 +17,7 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
                             op: SpinalEnumElement[AluOp.type],
                             src1: SpinalEnumElement[Src1Select.type],
                             src2: SpinalEnumElement[Src2Select.type]): Unit = {
-    pipeline.getService[DecoderService].configure {config =>
+    pipeline.service[DecoderService].configure { config =>
       config.addDecoding(opcode, Map(
         Data.ALU_OP -> op,
         Data.ALU_SRC1 -> src1,
@@ -29,8 +29,8 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
   override def resultData: PipelineData[UInt] = Data.ALU_RESULT
 
   override def setup(): Unit = {
-    val decoder = pipeline.getService[DecoderService]
-    val issuer = pipeline.getService[IssueService]
+    val decoder = pipeline.service[DecoderService]
+    val issuer = pipeline.service[IssueService]
 
     decoder.configure {config =>
       config.addDefault(Map(

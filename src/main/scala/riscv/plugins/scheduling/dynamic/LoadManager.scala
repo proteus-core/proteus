@@ -34,7 +34,7 @@ class LoadManager(pipeline: Pipeline,
     when (isAvailable) {
       ret := True
       storedMessage := rdbMessage
-      val address = pipeline.getService[LsuService].addressOfBundle(rdbMessage.registerMap)
+      val address = pipeline.service[LsuService].addressOfBundle(rdbMessage.registerMap)
       when (!rob.hasPendingStore(rdbMessage.robIndex, address)) {
         stateNext := State.EXECUTING
       } otherwise {
@@ -76,7 +76,7 @@ class LoadManager(pipeline: Pipeline,
     rdbStream.payload := outputCache
 
     when (state === State.WAITING_FOR_STORE && !activeFlush) {
-      val address = pipeline.getService[LsuService].addressOfBundle(storedMessage.registerMap)
+      val address = pipeline.service[LsuService].addressOfBundle(storedMessage.registerMap)
       when (!rob.hasPendingStore(storedMessage.robIndex, address)) {
         state := State.EXECUTING
       }

@@ -25,7 +25,7 @@ class TrapStageInvalidator() extends Plugin[StaticPipeline] {
         // before WB (which can trap).
         val laterStages = pipeline.stages.dropWhile(_ != stage).tail
         val laterStageTrapped = laterStages.map(s => {
-          s.arbitration.isValid && pipeline.getService[TrapService].hasTrapped(s)
+          s.arbitration.isValid && pipeline.service[TrapService].hasTrapped(s)
         }).orR
 
         when(laterStageTrapped) {
@@ -61,9 +61,9 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
   private val trapCommitCallbacks = mutable.ArrayBuffer[TrapCommitCallback]()
 
   override def setup(): Unit = {
-    val issuer = pipeline.getService[IssueService]
+    val issuer = pipeline.service[IssueService]
 
-    pipeline.getService[DecoderService].configure {decoder =>
+    pipeline.service[DecoderService].configure { decoder =>
       decoder.addDefault(Map(
         Data.MRET -> False
       ))
@@ -112,8 +112,8 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
       }
     }
 
-    val jumpService = pipeline.getService[JumpService]
-    val csrService = pipeline.getService[CsrService]
+    val jumpService = pipeline.service[JumpService]
+    val csrService = pipeline.service[CsrService]
 
     // TODO: hacking again
     pipeline.passThroughStage plug new Area {

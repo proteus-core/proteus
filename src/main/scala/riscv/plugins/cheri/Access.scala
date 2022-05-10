@@ -23,7 +23,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
   }
 
   override def setup(): Unit = {
-    pipeline.getService[DecoderService].configure {config =>
+    pipeline.service[DecoderService].configure { config =>
       config.addDefault(Map(
         Data.CGET -> False,
         Data.CMODIFY -> False,
@@ -124,7 +124,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           val cd = RegCapability()
           cd := cs
 
-          val exceptionHandler = pipeline.getService[ExceptionService]
+          val exceptionHandler = pipeline.service[ExceptionService]
 
           def except(cause: ExceptionCause) = {
             exceptionHandler.except(stage, cause, CapIdx.gpcr(value(pipeline.data.RS1)))

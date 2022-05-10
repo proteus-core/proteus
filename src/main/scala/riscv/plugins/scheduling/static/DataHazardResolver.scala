@@ -38,7 +38,7 @@ class DataHazardResolver(firstRsReadStage: Stage) extends Plugin[StaticPipeline]
 
   def resolveHazard[T <: Data](hazardInfo: DataHazardInfo[T]) {
     pipeline plug new Area {
-      val trapHandler = pipeline.getService[TrapService]
+      val trapHandler = pipeline.service[TrapService]
 
       // RS forwarding logic:
       //  - Values are forwarded ASAP: all stages are checked if their current

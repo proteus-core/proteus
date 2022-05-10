@@ -60,7 +60,7 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
       }
     }
 
-    val csrArea = pipeline.getService[CsrService].registerCsr(offsetCsr, new Csr {
+    val csrArea = pipeline.service[CsrService].registerCsr(offsetCsr, new Csr {
       val io = master(new CapOffsetIo).setPartialName(ioName)
       io.wdata.assignDontCare()
       io.write := False
@@ -152,7 +152,7 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
   }
 
   override def getPcc(stage: Stage): Capability = {
-    pipeline.getService[PccService].getPcc(stage)
+    pipeline.service[PccService].getPcc(stage)
   }
 
   override def getDdc(stage: Stage): Capability = {
@@ -170,7 +170,7 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
   }
 
   override def setup(): Unit = {
-    val decoder = pipeline.getService[DecoderService]
+    val decoder = pipeline.service[DecoderService]
 
     decoder.configure {config =>
       config.addDefault(Map(
@@ -264,11 +264,11 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
         }
 
         when (illegalScrId) {
-          val trapHandler = pipeline.getService[TrapService]
+          val trapHandler = pipeline.service[TrapService]
           val ir = value(pipeline.data.IR)
           trapHandler.trap(scrStage, riscv.TrapCause.IllegalInstruction(ir))
         } elsewhen (needAsr && !hasAsr) {
-          val exceptionHandler = pipeline.getService[ExceptionHandler]
+          val exceptionHandler = pipeline.service[ExceptionHandler]
           exceptionHandler.except(
             scrStage,
             ExceptionCause.AccessSystemRegistersViolation,
@@ -313,14 +313,14 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
       }
     }
 
-    val dbusStages = pipeline.getService[MemoryService].getDBusStages
+    val dbusStages = pipeline.service[MemoryService].getDBusStages
 
     // To resolve hazards on DDC, we make an simplifying assumption that all
     // stages that access DBUS always need DDC. They will be stalled whenever
     // a later stage will write to DDC. This is an overestimation but since DDC
     // will not often be written to, this will probably not have a large
     // performance impact in practice.
-    pipeline.getService[DataHazardService].resolveHazard({ (stage, nextStages) =>
+    pipeline.service[DataHazardService].resolveHazard({ (stage, nextStages) =>
       if (!dbusStages.contains(stage)) {
         False
       } else {

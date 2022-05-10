@@ -7,7 +7,7 @@ import spinal.core._
 class Ccsr extends Plugin[Pipeline] {
 
   override def setup(): Unit = {
-    val csrFile = pipeline.getService[CsrService]
+    val csrFile = pipeline.service[CsrService]
 
     csrFile.registerCsr(0xbc0, new Csr {
       val cause = Reg(UInt(5 bits)).init(0)
