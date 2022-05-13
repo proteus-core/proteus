@@ -93,7 +93,8 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
     internalIBus
   }
 
-  override def createInternalDBus(readStage: Stage, writeStage: Stage): (MemBus, MemBus) = {
+  override def createInternalDBus(readStages: Seq[Stage], writeStage: Stage): (Seq[MemBus], MemBus) = {
+    val readStage = readStages.head  // TODO: obviously not
     val readArea = readStage plug new Area {
       val dbusConfig = if (readStage == writeStage) {config.dbusConfig} else {config.readDbusConfig}
       val dbus = master(new MemBus(dbusConfig))
@@ -118,7 +119,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
     internalReadDBusStage = readStage
     internalWriteDBusStage = writeStage
 
-    (internalReadDBus, internalWriteDBus)
+    (Seq(internalReadDBus), internalWriteDBus)
   }
 
   override def getDBusStages: Seq[Stage] = {

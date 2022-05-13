@@ -44,7 +44,7 @@ object createStaticPipeline {
       new RegisterFileAccessor(pipeline.decode, pipeline.writeback),
       new IntAlu(Set(pipeline.execute)),
       new Shifter(Set(pipeline.execute)),
-      new Lsu(Set(pipeline.memory), pipeline.memory, pipeline.memory),
+      new Lsu(Set(pipeline.memory), Seq(pipeline.memory), pipeline.memory),
       new BranchUnit(Set(pipeline.execute)),
       new PcManager(0x80000000L),
       new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
@@ -189,9 +189,9 @@ object createDynamicPipeline {
       val intMul2 = new Stage("EX_MUL2")
       override val passThroughStage: Stage = intAlu1
       override val rsStages: Seq[Stage] = Seq(intAlu1, intAlu2, intMul1, intMul2)
-      override val loadStage: Stage = new Stage("LOAD")
+      override val loadStages: Seq[Stage] = Seq(new Stage("LOAD"))
       override val retirementStage = new Stage("RET")
-      override val unorderedStages: Seq[Stage] = rsStages :+ loadStage
+      override val unorderedStages: Seq[Stage] = rsStages ++ loadStages
       override val stages = issuePipeline.stages ++ unorderedStages :+ retirementStage
     }
 
@@ -214,7 +214,7 @@ object createDynamicPipeline {
         readStage  = pipeline.issuePipeline.decode,
         writeStage = pipeline.retirementStage
       ),
-      new Lsu(Set(pipeline.intAlu2), pipeline.loadStage, pipeline.retirementStage),
+      new Lsu(Set(pipeline.intAlu2), pipeline.loadStages, pipeline.retirementStage),
       new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage, 8, conf.xlen),
       new IntAlu(Set(pipeline.intAlu1, pipeline.intAlu2)),
       new Shifter(Set(pipeline.intAlu1, pipeline.intAlu2)),

@@ -21,7 +21,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       val registerBundle = new DynBundle[PipelineData[spinal.core.Data]]
 
       val ret = pipeline.retirementStage
-      val ls = pipeline.loadStage
+      val ls = pipeline.loadStages.head // TODO !!!
       for (register <- ret.lastValues.keys.toSet union ret.outputs.keys.toSet union ls.lastValues.keys.toSet union ls.outputs.keys.toSet) {
         registerBundle.addElement(register, register.dataType)
       }
@@ -41,7 +41,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
         rs.cdbStream >> cdb.inputs(index)
       }
 
-      val loadManager = new LoadManager(pipeline, pipeline.loadStage, rob, registerBundle, cdbBMetaData)
+      val loadManager = new LoadManager(pipeline, pipeline.loadStages.head /* TODO !!! */, rob, registerBundle, cdbBMetaData)
       loadManager.build()
       loadManager.cdbStream >> cdb.inputs(reservationStations.size)
 

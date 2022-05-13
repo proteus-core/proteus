@@ -4,7 +4,7 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class Lsu(addressStages: Set[Stage], loadStage: Stage, storeStage: Stage) extends Plugin[Pipeline] with LsuService {
+class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage) extends Plugin[Pipeline] with LsuService {
   private var addressTranslator = new LsuAddressTranslator {
     override def translate(stage: Stage,
                            address: UInt,
@@ -217,7 +217,11 @@ class Lsu(addressStages: Set[Stage], loadStage: Stage, storeStage: Stage) extend
     }
 
     val memService = pipeline.service[MemoryService]
-    val (loadDBus, storeDBus) = memService.createInternalDBus(loadStage, storeStage)
+    val (loadDBuses, storeDBus) = memService.createInternalDBus(loadStages, storeStage)
+
+    // TODO !!!
+    val loadStage = loadStages.head
+    // TODO !!!
 
     val formal = pipeline.serviceOption[FormalService] match {
       case Some(service) => service
@@ -245,7 +249,7 @@ class Lsu(addressStages: Set[Stage], loadStage: Stage, storeStage: Stage) extend
       val address = value(Data.LSU_TARGET_ADDRESS)
       val valid = value(Data.LSU_TARGET_VALID) // needed as a hack either way
 
-      val dbusCtrl = new MemBusControl(loadDBus)
+      val dbusCtrl = new MemBusControl(loadDBuses.head)
 
       val isActive = operation === LsuOperationType.LOAD
 
