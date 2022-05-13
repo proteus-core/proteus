@@ -17,6 +17,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
 
   override def finish(): Unit = {
     pipeline plug new Area {
+      val cdbBMetaData = new DynBundle[PipelineData[spinal.core.Data]]
       val registerBundle = new DynBundle[PipelineData[spinal.core.Data]]
 
       val ret = pipeline.retirementStage
@@ -25,22 +26,22 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
         registerBundle.addElement(register, register.dataType)
       }
 
-      pipeline.rob = new ReorderBuffer(pipeline, 16, registerBundle)
+      pipeline.rob = new ReorderBuffer(pipeline, 16, registerBundle, cdbBMetaData)
 
       val rob = pipeline.rob
       rob.build()
 
       val reservationStations = pipeline.rsStages.map(
-        stage => new ReservationStation(stage, rob, pipeline, registerBundle))
+        stage => new ReservationStation(stage, rob, pipeline, registerBundle, cdbBMetaData))
 
-      val cdb = new CommonDataBus(reservationStations, rob)
+      val cdb = new CommonDataBus(reservationStations, rob, cdbBMetaData)
       cdb.build()
       for ((rs, index) <- reservationStations.zipWithIndex) {
         rs.build()
         rs.cdbStream >> cdb.inputs(index)
       }
 
-      val loadManager = new LoadManager(pipeline, pipeline.loadStage, rob, registerBundle)
+      val loadManager = new LoadManager(pipeline, pipeline.loadStage, rob, registerBundle, cdbBMetaData)
       loadManager.build()
       loadManager.cdbStream >> cdb.inputs(reservationStations.size)
 

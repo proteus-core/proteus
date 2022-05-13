@@ -7,13 +7,14 @@ import spinal.lib.Stream
 class LoadManager(pipeline: Pipeline,
                   loadStage: Stage,
                   rob: ReorderBuffer,
-                  retirementRegisters: DynBundle[PipelineData[Data]])
+                  retirementRegisters: DynBundle[PipelineData[Data]],
+                  metaRegisters: DynBundle[PipelineData[Data]])
                  (implicit config: Config) extends Area with Resettable {
   val storedMessage: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
   val outputCache: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
   val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
-  val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
-  private val resultCdbMessage = RegInit(CdbMessage(rob.indexBits).getZero)
+  val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(metaRegisters, rob.indexBits)))
+  private val resultCdbMessage = RegInit(CdbMessage(metaRegisters, rob.indexBits).getZero)
   val rdbWaitingNext, cdbWaitingNext = Bool()
   val rdbWaiting: Bool = RegNext(rdbWaitingNext).init(False)
   val cdbWaiting: Bool = RegNext(cdbWaitingNext).init(False)
@@ -35,7 +36,7 @@ class LoadManager(pipeline: Pipeline,
       ret := True
       storedMessage := rdbMessage
       val address = pipeline.service[LsuService].addressOfBundle(rdbMessage.registerMap)
-      when (!rob.hasPendingStore(rdbMessage.robIndex, address)) {
+      when (!rob.hasPendingStoreForEntry(rdbMessage.robIndex, address)) {
         stateNext := State.EXECUTING
       } otherwise {
         stateNext := State.WAITING_FOR_STORE
@@ -77,7 +78,7 @@ class LoadManager(pipeline: Pipeline,
 
     when (state === State.WAITING_FOR_STORE && !activeFlush) {
       val address = pipeline.service[LsuService].addressOfBundle(storedMessage.registerMap)
-      when (!rob.hasPendingStore(storedMessage.robIndex, address)) {
+      when (!rob.hasPendingStoreForEntry(storedMessage.robIndex, address)) {
         state := State.EXECUTING
       }
     }
@@ -109,7 +110,7 @@ class LoadManager(pipeline: Pipeline,
     when (state === State.BROADCASTING_RESULT && !activeFlush) {
       rdbStream.valid := rdbWaiting
       cdbStream.valid := cdbWaiting
-      
+
       when (rdbStream.ready) {
         rdbWaitingNext := False
       }
@@ -121,7 +122,7 @@ class LoadManager(pipeline: Pipeline,
         isAvailable := True
       }
     }
-    
+
     // FIXME this doesn't seem the correct place to do this...
     loadStage.connectOutputDefaults()
     loadStage.connectLastValues()
