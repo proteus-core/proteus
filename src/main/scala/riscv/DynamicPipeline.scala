@@ -1,6 +1,6 @@
 package riscv
 
-import riscv.plugins.scheduling.dynamic.{ReorderBuffer, Resettable}
+import riscv.plugins.scheduling.dynamic.ReorderBuffer
 import spinal.core._
 
 import scala.reflect.ClassTag
@@ -56,9 +56,9 @@ trait DynamicPipeline extends Pipeline {
       stage.value(data.RS1_TYPE)
       stage.value(data.RS2_TYPE)
 
-      getService[BranchTargetPredictorService].predictedPc(stage)
-      getService[JumpService].jumpRequested(stage)
-      getService[BranchService].isBranch(stage)
+      service[BranchTargetPredictorService].predictedPc(stage)
+      service[JumpService].jumpRequested(stage)
+      service[BranchService].isBranch(stage)
     }
 
     // HACK make sure that all pipeline regs are routed through *all* exe stages.
@@ -120,11 +120,10 @@ trait DynamicPipeline extends Pipeline {
     }
   }
 
-  override def getService[T](implicit tag: ClassTag[T]): T = {
-    if (super.hasService[T]) {
-      super.getService[T]
-    } else {
-      issuePipeline.getService[T]
+  override def serviceOption[T](implicit tag: ClassTag[T]): Option[T] = {
+    super.serviceOption[T] match {
+      case None => issuePipeline.serviceOption[T]
+      case someService => someService
     }
   }
 

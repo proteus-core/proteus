@@ -472,3 +472,7 @@ trait ProspectService {
   def setSecretRegister(regId: UInt, secret: Bool): Unit
   def isSecretRegister(regId: UInt): Bool
 }
+
+trait Resettable {
+  def pipelineReset(): Unit
+}

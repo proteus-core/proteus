@@ -19,9 +19,9 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
   override def getImplementedExtensions = Seq('M')
 
   override def setup(): Unit = {
-    val issueService = pipeline.getService[IssueService]
+    val issueService = pipeline.service[IssueService]
 
-    pipeline.getService[DecoderService].configure {decoder =>
+    pipeline.service[DecoderService].configure { decoder =>
       decoder.addDefault(Map(
         Data.MUL -> False,
         Data.MUL_HIGH -> False,

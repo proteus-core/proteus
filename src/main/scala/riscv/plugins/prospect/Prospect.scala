@@ -16,7 +16,7 @@ class Prospect extends Plugin[DynamicPipeline] with ProspectService {
   }
 
   override def setup(): Unit = {
-    val lsu = pipeline.getService[LsuService]
+    val lsu = pipeline.service[LsuService]
     lsu.setAddressTranslator(new LsuAddressTranslator {
       override def translate(stage: Stage, address: UInt, operation: SpinalEnumCraft[LsuOperationType.type], width: SpinalEnumCraft[LsuAccessWidth.type]): UInt = {
         stage.output(PrivateRegs.SECRET_VALUE) := operation === LsuOperationType.LOAD && isSecret(address)

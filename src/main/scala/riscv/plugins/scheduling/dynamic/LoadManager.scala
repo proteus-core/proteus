@@ -35,7 +35,7 @@ class LoadManager(pipeline: Pipeline,
     when (isAvailable) {
       ret := True
       storedMessage := rdbMessage
-      val address = pipeline.getService[LsuService].addressOfBundle(rdbMessage.registerMap)
+      val address = pipeline.service[LsuService].addressOfBundle(rdbMessage.registerMap)
       when (!rob.hasPendingStoreForEntry(rdbMessage.robIndex, address)) {
         stateNext := State.EXECUTING
       } otherwise {
@@ -77,7 +77,7 @@ class LoadManager(pipeline: Pipeline,
     rdbStream.payload := outputCache
 
     when (state === State.WAITING_FOR_STORE && !activeFlush) {
-      val address = pipeline.getService[LsuService].addressOfBundle(storedMessage.registerMap)
+      val address = pipeline.service[LsuService].addressOfBundle(storedMessage.registerMap)
       when (!rob.hasPendingStoreForEntry(storedMessage.robIndex, address)) {
         state := State.EXECUTING
       }
@@ -96,11 +96,9 @@ class LoadManager(pipeline: Pipeline,
       cdbStream.metadata.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]) := loadStage.output(pipeline.data.NEXT_PC)
       cdbStream.payload.robIndex := storedMessage.robIndex
 
-      pipeline.withService[ProspectService](
-        context => {
-          context.isSecretOfBundle(cdbStream.payload.metadata) := context.isSecret(loadStage)
-        }
-      )
+      pipeline.serviceOption[ProspectService] foreach {prospect =>
+        prospect.isSecretOfBundle(cdbStream.payload.metadata) := prospect.isSecret(loadStage)
+      }
 
       resultCdbMessage := cdbStream.payload
 
@@ -118,7 +116,7 @@ class LoadManager(pipeline: Pipeline,
     when (state === State.BROADCASTING_RESULT && !activeFlush) {
       rdbStream.valid := rdbWaiting
       cdbStream.valid := cdbWaiting
-      
+
       when (rdbStream.ready) {
         rdbWaitingNext := False
       }
@@ -130,7 +128,7 @@ class LoadManager(pipeline: Pipeline,
         isAvailable := True
       }
     }
-    
+
     // FIXME this doesn't seem the correct place to do this...
     loadStage.connectOutputDefaults()
     loadStage.connectLastValues()

@@ -59,7 +59,7 @@ class SoC(
     val core = new ClockingArea(coreClockDomain) {
       val pipeline = createPipeline(config)
 
-      val memService = pipeline.getService[MemoryService]
+      val memService = pipeline.service[MemoryService]
       val ibus = memService.getExternalIBus
       val dbus = memService.getExternalDBus
     }
@@ -137,8 +137,8 @@ class SoC(
     val byteDev = new Apb3ByteDev
     io.byteDev <> byteDev.io.bytes
 
-    if (core.pipeline.hasService[InterruptService]) {
-      core.pipeline.getService[InterruptService].getExternalIrqIo <> byteDev.io.irq
+    core.pipeline.serviceOption[InterruptService] foreach {interruptService =>
+      interruptService.getExternalIrqIo <> byteDev.io.irq
     }
 
     val apbDecoder = Apb3Decoder(

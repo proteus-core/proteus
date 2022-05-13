@@ -149,8 +149,7 @@ class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
           }
         }
         default {
-          if (pipeline.hasService[TrapService]) {
-            val trapHandler = pipeline.getService[TrapService]
+          pipeline.serviceOption[TrapService] foreach {trapHandler =>
             trapHandler.trap(decodeStage, TrapCause.IllegalInstruction(ir))
           }
         }

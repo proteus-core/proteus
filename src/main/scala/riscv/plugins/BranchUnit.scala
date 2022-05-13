@@ -14,14 +14,14 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] with BranchS
     object BU_WRITE_RET_ADDR_TO_RD extends PipelineData(Bool())
     object BU_IGNORE_TARGET_LSB extends PipelineData(Bool())
     object BU_CONDITION extends PipelineData(BranchCondition())
-    object PENDING_BRANCH extends PipelineData(Flow(UInt(32 bits))) // TODO: this should be rob size and also isn't used in the static pipeline (or even outside context)F
+    object PENDING_BRANCH extends PipelineData(Flow(UInt(32 bits))) // TODO: this should be rob size and also isn't used in the static pipeline (or even outside context)
   }
 
   override def setup(): Unit = {
-    val alu = pipeline.getService[IntAluService]
-    val issuer = pipeline.getService[IssueService]
+    val alu = pipeline.service[IntAluService]
+    val issuer = pipeline.service[IssueService]
 
-    pipeline.getService[DecoderService].configure {config =>
+    pipeline.service[DecoderService].configure { config =>
       config.addDefault(Map(
         Data.BU_IS_BRANCH -> False,
         Data.BU_WRITE_RET_ADDR_TO_RD -> False,
@@ -78,7 +78,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] with BranchS
       stage plug new Area {
         import stage._
 
-        val aluResultData = pipeline.getService[IntAluService].resultData
+        val aluResultData = pipeline.service[IntAluService].resultData
         val target = aluResultData.dataType()
         target := value(aluResultData)
 
@@ -111,7 +111,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] with BranchS
           BranchCondition.GEU  -> geu
         )
 
-        val jumpService = pipeline.getService[JumpService]
+        val jumpService = pipeline.service[JumpService]
 
         when (arbitration.isValid && value(Data.BU_IS_BRANCH)) {
           when (condition =/= BranchCondition.NONE) {

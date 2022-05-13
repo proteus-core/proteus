@@ -38,7 +38,7 @@ class Lsu(addressStages: Set[Stage], loadStage: Stage, storeStage: Stage) extend
 
 
   override def addStore(opcode: MaskedLiteral, width: SpinalEnumCraft[LsuAccessWidth.type]): Unit = {
-    pipeline.getService[DecoderService].configure {config =>
+    pipeline.service[DecoderService].configure { config =>
       config.addDecoding(opcode, Map(
         Data.LSU_OPERATION_TYPE -> LsuOperationType.STORE,
         Data.LSU_ACCESS_WIDTH -> width,
@@ -49,13 +49,13 @@ class Lsu(addressStages: Set[Stage], loadStage: Stage, storeStage: Stage) extend
 
     hasExternalOps = true
 
-    pipeline.getService[IssueService].setDestinations(opcode, addressStages)
+    pipeline.service[IssueService].setDestinations(opcode, addressStages)
   }
 
   override def addLoad(opcode: MaskedLiteral,
                        width: SpinalEnumCraft[LsuAccessWidth.type],
                        unsigned: Boolean): Unit = {
-    pipeline.getService[DecoderService].configure {config =>
+    pipeline.service[DecoderService].configure { config =>
       config.addDecoding(opcode, Map(
         Data.LSU_OPERATION_TYPE -> LsuOperationType.LOAD,
         Data.LSU_ACCESS_WIDTH -> width,
@@ -67,7 +67,7 @@ class Lsu(addressStages: Set[Stage], loadStage: Stage, storeStage: Stage) extend
 
     hasExternalOps = true
 
-    pipeline.getService[IssueService].setDestinations(opcode, addressStages)
+    pipeline.service[IssueService].setDestinations(opcode, addressStages)
   }
 
   override def setAddress(address: UInt): Unit = {
@@ -106,7 +106,7 @@ class Lsu(addressStages: Set[Stage], loadStage: Stage, storeStage: Stage) extend
       }
     }
 
-    val intAlu = pipeline.getService[IntAluService]
+    val intAlu = pipeline.service[IntAluService]
 
     val allOpcodes = Seq(Opcodes.LB, Opcodes.LH, Opcodes.LW, Opcodes.LBU,
       Opcodes.LHU, Opcodes.SB, Opcodes.SH, Opcodes.SW)
@@ -115,7 +115,7 @@ class Lsu(addressStages: Set[Stage], loadStage: Stage, storeStage: Stage) extend
       intAlu.addOperation(opcode, intAlu.AluOp.ADD, intAlu.Src1Select.RS1, intAlu.Src2Select.IMM)
     }
 
-    val decoder = pipeline.getService[DecoderService]
+    val decoder = pipeline.service[DecoderService]
 
     decoder.configure {config =>
       config.addDefault(Map(
@@ -134,7 +134,7 @@ class Lsu(addressStages: Set[Stage], loadStage: Stage, storeStage: Stage) extend
           Data.LSU_TARGET_VALID -> False
         ))
 
-        pipeline.getService[IssueService].setDestinations(opcode, addressStages)
+        pipeline.service[IssueService].setDestinations(opcode, addressStages)
       }
 
       addLoad(Opcodes.LW,  LsuAccessWidth.W, False)
@@ -151,7 +151,7 @@ class Lsu(addressStages: Set[Stage], loadStage: Stage, storeStage: Stage) extend
           Data.LSU_TARGET_VALID -> False
         ))
 
-        pipeline.getService[IssueService].setDestinations(opcode, addressStages)
+        pipeline.service[IssueService].setDestinations(opcode, addressStages)
       }
 
       addStore(Opcodes.SW, LsuAccessWidth.W)
@@ -168,7 +168,7 @@ class Lsu(addressStages: Set[Stage], loadStage: Stage, storeStage: Stage) extend
         val operation = value(Data.LSU_OPERATION_TYPE)
         val accessWidth = value(Data.LSU_ACCESS_WIDTH)
         val unsigned = value(Data.LSU_IS_UNSIGNED) // TODO: another hack
-        val aluResult = value(pipeline.getService[IntAluService].resultData)
+        val aluResult = value(pipeline.service[IntAluService].resultData)
 
         val inputAddress = if (hasExternalOps) {
           // We keep track of whether we have external loads/stores to 1) prevent LSU_IS_EXTERNAL_OP
@@ -212,17 +212,16 @@ class Lsu(addressStages: Set[Stage], loadStage: Stage, storeStage: Stage) extend
     }
 
     def trap(cause: TrapCause, stage: Stage) = {
-      val trapHandler = pipeline.getService[TrapService]
+      val trapHandler = pipeline.service[TrapService]
       trapHandler.trap(stage, cause)
     }
 
-    val memService = pipeline.getService[MemoryService]
+    val memService = pipeline.service[MemoryService]
     val (loadDBus, storeDBus) = memService.createInternalDBus(loadStage, storeStage)
 
-    val formal = if (pipeline.hasService[FormalService]) {
-      pipeline.getService[FormalService]
-    } else {
-      new DummyFormalService
+    val formal = pipeline.serviceOption[FormalService] match {
+      case Some(service) => service
+      case None => new DummyFormalService
     }
 
     loadStage plug {

@@ -62,29 +62,22 @@ trait Pipeline {
   protected def init(): Unit
   protected def connectStages(): Unit
 
-  def getService[T](implicit tag: ClassTag[T]): T = {
+  def serviceOption[T](implicit tag: ClassTag[T]): Option[T] = {
     val services = plugins.filter(_ match {
       case _: T => true
       case _    => false
     })
 
-    assert(services.length == 1)
-    services.head.asInstanceOf[T]
+    assert(services.length <= 1)
+    services.headOption.map(_.asInstanceOf[T])
+  }
+
+  def service[T](implicit tag: ClassTag[T]): T = {
+    serviceOption[T].get
   }
 
   def hasService[T](implicit tag: ClassTag[T]): Boolean = {
-    plugins.exists(_ match {
-      case _: T => true
-      case _    => false
-    })
-  }
-
-  def withService[T](func: T => Unit, alternative: => Unit = () => {})(implicit tag: ClassTag[T]): Unit = {
-    if (hasService[T]) {
-      func(getService[T])
-    } else {
-      alternative
-    }
+    serviceOption[T].isDefined
   }
 
   def getImplementedExtensions: Seq[Extension] = {

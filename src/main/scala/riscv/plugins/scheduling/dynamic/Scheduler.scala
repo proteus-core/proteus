@@ -10,7 +10,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
   }
 
   override def setup(): Unit = {
-    pipeline.getService[DecoderService].configure { config =>
+    pipeline.service[DecoderService].configure { config =>
       config.addDefault(PrivateRegisters.DEST_FU, B(0))
     }
   }
@@ -20,17 +20,15 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       val cdbBMetaData = new DynBundle[PipelineData[spinal.core.Data]]
       val registerBundle = new DynBundle[PipelineData[spinal.core.Data]]
 
-      pipeline.withService[ProspectService](
-        context => {
-          val branchService = pipeline.getService[BranchService]
-          branchService.addIsBranchToBundle(registerBundle)
-          branchService.addPendingBranchToBundle(registerBundle)
-          branchService.addPendingBranchToBundle(cdbBMetaData)
+      pipeline.serviceOption[ProspectService] foreach {prospect =>
+        val branchService = pipeline.service[BranchService]
+        branchService.addIsBranchToBundle(registerBundle)
+        branchService.addPendingBranchToBundle(registerBundle)
+        branchService.addPendingBranchToBundle(cdbBMetaData)
 
-          context.addSecretToBundle(cdbBMetaData)
-          context.addSecretToBundle(registerBundle)
-        }
-      )
+        prospect.addSecretToBundle(cdbBMetaData)
+        prospect.addSecretToBundle(registerBundle)
+      }
 
       cdbBMetaData.addElement(pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]], pipeline.data.NEXT_PC.dataType)
 
@@ -105,7 +103,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
         s"Stage ${stage.stageName} is not an execute stage")
     }
 
-    pipeline.getService[DecoderService].configure { config =>
+    pipeline.service[DecoderService].configure { config =>
       var fuMask = 0
 
       for (exeStage <- pipeline.rsStages.reverse) {

@@ -103,17 +103,15 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     pushedEntry.ready := False
     pushedEntry.hasValue := False
     pushedEntry.registerMap.element(pipeline.data.PC.asInstanceOf[PipelineData[Data]]) := pc
-    pipeline.getService[BranchTargetPredictorService].predictedPcOfBundle(pushedEntry.registerMap) := predictedPc
+    pipeline.service[BranchTargetPredictorService].predictedPcOfBundle(pushedEntry.registerMap) := predictedPc
     pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := rd
     pushedEntry.registerMap.element(pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]) := rdType
-    pipeline.getService[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
-    pipeline.getService[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
-    pipeline.withService[ProspectService](
-      context => {
-        pipeline.getService[BranchService].isBranchOfBundle(pushedEntry.registerMap) := isBranch
-        context.isSecretOfBundle(pushedEntry.registerMap) := False
-      }
-    )
+    pipeline.service[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
+    pipeline.service[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
+    pipeline.serviceOption[ProspectService] foreach {prospect =>
+      pipeline.service[BranchService].isBranchOfBundle(pushedEntry.registerMap) := isBranch
+      prospect.isSecretOfBundle(pushedEntry.registerMap) := False
+    }
     newestIndex.value
   }
 
@@ -121,11 +119,9 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     robEntries(cdbMessage.robIndex).hasValue := True
     robEntries(cdbMessage.robIndex).registerMap.element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
     robEntries(cdbMessage.robIndex).registerMap.element(pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]) := cdbMessage.metadata.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]])
-    pipeline.withService[ProspectService](
-      context => {
-        context.isSecretOfBundle(robEntries(cdbMessage.robIndex).registerMap) := context.isSecretOfBundle(cdbMessage.metadata)
-      }
-    )
+    pipeline.serviceOption[ProspectService] foreach {prospect =>
+      prospect.isSecretOfBundle(robEntries(cdbMessage.robIndex).registerMap) := prospect.isSecretOfBundle(cdbMessage.metadata)
+    }
   }
 
   def findRegisterValue(regId: UInt): (Bool, Flow[CdbMessage]) = {
@@ -134,11 +130,9 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     target.valid := False
     target.payload.robIndex := 0
     target.payload.writeValue := 0
-    pipeline.withService[ProspectService](
-      context => {
-        context.isSecretOfBundle(target.metadata) := False
-      }
-    )
+    pipeline.serviceOption[ProspectService] foreach {prospect =>
+      prospect.isSecretOfBundle(target.metadata) := False
+    }
     found := False
 
     // loop through valid values and return the freshest if present
@@ -156,11 +150,9 @@ class ReorderBuffer(pipeline: DynamicPipeline,
         target.valid := entry.hasValue
         target.robIndex := absolute
         target.writeValue := entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
-        pipeline.withService[ProspectService](
-          context => {
-            context.isSecretOfBundle(target.metadata) := context.isSecretOfBundle(entry.registerMap)
-          }
-        )
+        pipeline.serviceOption[ProspectService] foreach {prospect =>
+          prospect.isSecretOfBundle(target.metadata) := prospect.isSecretOfBundle(entry.registerMap)
+        }
       }
     }
     (found, target)
@@ -176,9 +168,9 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       absolute := absoluteIndexForRelative(relative).resized
       val entry = robEntries(absolute)
 
-      val isBranch = pipeline.getService[BranchService].isBranchOfBundle(entry.registerMap)
+      val isBranch = pipeline.service[BranchService].isBranchOfBundle(entry.registerMap)
       val resolved = entry.hasValue
-      val incorrectlyPredicted = pipeline.getService[BranchTargetPredictorService].predictedPcOfBundle(entry.registerMap) =/= entry.registerMap.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]])
+      val incorrectlyPredicted = pipeline.service[BranchTargetPredictorService].predictedPcOfBundle(entry.registerMap) =/= entry.registerMap.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]])
       // TODO: since here we already know whether it was mispredicted, might as well reset the pipeline?
 
       // an instruction is transient if there is an instruction before it in the ROB which is either
@@ -202,7 +194,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
       val index = UInt(indexBits)
       index := nth
 
-      val lsuService = pipeline.getService[LsuService]
+      val lsuService = pipeline.service[LsuService]
       val entryIsStore = lsuService.operationOfBundle(entry.registerMap) === LsuOperationType.STORE
       val entryAddressValid = lsuService.addressValidOfBundle(entry.registerMap)
       val entryAddress = lsuService.addressOfBundle(entry.registerMap)
@@ -223,8 +215,8 @@ class ReorderBuffer(pipeline: DynamicPipeline,
   def onRdbMessage(rdbMessage: RdbMessage): Unit = {
     robEntries(rdbMessage.robIndex).registerMap := rdbMessage.registerMap
 
-    when (pipeline.getService[CsrService].isCsrInstruction(rdbMessage.registerMap)) {
-      pipeline.getService[JumpService].jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
+    when (pipeline.service[CsrService].isCsrInstruction(rdbMessage.registerMap)) {
+      pipeline.service[JumpService].jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
     }
 
     robEntries(rdbMessage.robIndex).ready := True
@@ -241,7 +233,6 @@ class ReorderBuffer(pipeline: DynamicPipeline,
 
   def build(): Unit = {
     isFullNext := isFull
-
     val oldestEntry = robEntries(oldestIndex.value)
     val updatedOldestIndex = UInt(indexBits)
     updatedOldestIndex := oldestIndex.value
@@ -264,9 +255,7 @@ class ReorderBuffer(pipeline: DynamicPipeline,
     }
 
     when (!isEmpty && oldestEntry.ready && ret.arbitration.isDone) {
-      pipeline.withService[ProspectService](
-        context => taintRegister(context, oldestEntry)
-      )
+      pipeline.serviceOption[ProspectService] foreach {prospect => taintRegister(prospect, oldestEntry)}
 
       // removing the oldest entry
       updatedOldestIndex := oldestIndex.valueNext

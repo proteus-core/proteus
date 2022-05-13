@@ -71,7 +71,7 @@ class Interrupts(interruptStage: Stage) extends Plugin[Pipeline] with InterruptS
   }
 
   override def setup(): Unit = {
-    val csr = pipeline.getService[CsrService]
+    val csr = pipeline.service[CsrService]
 
     csr.registerCsr(0x304, new Mie)
     csr.registerCsr(0x344, new Mip)
@@ -79,7 +79,7 @@ class Interrupts(interruptStage: Stage) extends Plugin[Pipeline] with InterruptS
 
   override def build(): Unit = {
     val interruptArea = interruptStage plug new Area {
-      val trapHandler = pipeline.getService[TrapService]
+      val trapHandler = pipeline.service[TrapService]
 
       val mtimer = slave(new IrqIo)
       val external = slave(new IrqIo)
@@ -125,7 +125,7 @@ class Interrupts(interruptStage: Stage) extends Plugin[Pipeline] with InterruptS
       val external = slave(new IrqIo)
       external <> interruptArea.external
 
-      val csr = pipeline.getService[CsrService]
+      val csr = pipeline.service[CsrService]
       interruptArea.mstatus <> csr.getCsr(0x300)
       interruptArea.mie <> csr.getCsr(0x304)
       interruptArea.mip <> csr.getCsr(0x344)

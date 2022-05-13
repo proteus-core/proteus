@@ -14,15 +14,15 @@ class ExceptionHandler extends Plugin[Pipeline] with ExceptionService {
   override def handleException(stage: Stage, cause: UInt, capIdx: CapIdx): Unit = {
     assert(cause.getBitsWidth <= 5)
 
-    val trapHandler = pipeline.getService[TrapService]
+    val trapHandler = pipeline.service[TrapService]
     trapHandler.trap(stage, TrapCause.CheriException)
     stage.output(Data.CEXC_CAUSE) := cause.resized
     stage.output(Data.CEXC_CAP_IDX) := capIdx
   }
 
   override def setup(): Unit = {
-    val trapHandler = pipeline.getService[TrapService]
-    val csrFile = pipeline.getService[CsrService]
+    val trapHandler = pipeline.service[TrapService]
+    val csrFile = pipeline.service[CsrService]
 
     trapHandler.onTrapCommit {(stage, isInterrupt, cause) =>
       val ccsr = slave(new CsrIo)

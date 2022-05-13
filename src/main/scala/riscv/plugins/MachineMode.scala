@@ -149,7 +149,7 @@ class MachineMode(ecallStage: Stage,
   }
 
   override def setup(): Unit = {
-    val csr = pipeline.getService[CsrService]
+    val csr = pipeline.service[CsrService]
 
     csr.registerCsr(0xF11, new Mvendorid)
     csr.registerCsr(0xF12, new Marchid)
@@ -172,9 +172,9 @@ class MachineMode(ecallStage: Stage,
     csr.registerCsr(0x342, new Mcause)
     csr.registerCsr(0x343, new Mtval)
 
-    val issuer = pipeline.getService[IssueService]
+    val issuer = pipeline.service[IssueService]
 
-    pipeline.getService[DecoderService].configure {config =>
+    pipeline.service[DecoderService].configure { config =>
       config.addDefault(Map(
         Data.ECALL  -> False,
         Data.EBREAK -> False
@@ -196,7 +196,7 @@ class MachineMode(ecallStage: Stage,
       import ecallStage._
 
       def trap(cause: TrapCause) = {
-        val trapHandler = pipeline.getService[TrapService]
+        val trapHandler = pipeline.service[TrapService]
         trapHandler.trap(ecallStage, cause)
       }
 

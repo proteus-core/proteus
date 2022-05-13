@@ -90,8 +90,8 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
   }
 
   override def setup(): Unit = {
-    val decoder = pipeline.getService[DecoderService]
-    val issuer = pipeline.getService[IssueService]
+    val decoder = pipeline.service[DecoderService]
+    val issuer = pipeline.service[IssueService]
 
     decoder.configure {config =>
       config.addDefault(Map(
@@ -226,7 +226,7 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
         }
 
         when (csrIo.error) {
-          val trapHandler = pipeline.getService[TrapService]
+          val trapHandler = pipeline.service[TrapService]
           trapHandler.trap(csrStage, TrapCause.IllegalInstruction(value(pipeline.data.IR)))
         }
       }

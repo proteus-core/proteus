@@ -7,7 +7,7 @@ import spinal.lib._
 class RegisterFile(readStage: Stage, writeStage: Stage)
                   (implicit context: Context) extends Plugin[Pipeline] {
   override def setup(): Unit = {
-    val decoder = pipeline.getService[DecoderService]
+    val decoder = pipeline.service[DecoderService]
 
     decoder.configure {config =>
       config.addDefault(context.data.CD_DATA, RegCapability.Null)
@@ -20,7 +20,7 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
       context.data.CD_DATA
     )
 
-    pipeline.getService[DataHazardService].addHazard(hazardInfo)
+    pipeline.service[DataHazardService].addHazard(hazardInfo)
   }
 
   override def build(): Unit = {
@@ -89,7 +89,7 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
       regFileIo.cd := value(pipeline.data.RD)
       regFileIo.data := value(context.data.CD_DATA)
 
-      val trapHandler = pipeline.getService[TrapService]
+      val trapHandler = pipeline.service[TrapService]
       val hasTrapped = trapHandler.hasTrapped(writeStage)
       regFileIo.write :=
         (value(pipeline.data.RD_TYPE) === RegisterType.CAP) &&

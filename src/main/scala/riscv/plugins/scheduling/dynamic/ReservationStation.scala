@@ -4,10 +4,6 @@ import riscv._
 import spinal.core._
 import spinal.lib.{Flow, Stream}
 
-trait Resettable {
-  def pipelineReset(): Unit
-}
-
 case class RegisterSource(indexBits: BitCount) extends Bundle {
   val priorInstructionNext: Flow[UInt] = Flow(UInt(indexBits))
   val priorInstruction: Flow[UInt] = RegNext(priorInstructionNext).init(priorInstructionNext.getZero)
@@ -119,7 +115,7 @@ class ReservationStation(exeStage: Stage,
     if (pipeline.hasService[ProspectService]) {
       // keep track of incoming branch updates, even if already executing
       when (branchWaiting.valid && cdbMessage.robIndex === branchWaiting.payload) {
-        val pending = pipeline.getService[BranchService].pendingBranchOfBundle(cdbMessage.metadata)
+        val pending = pipeline.service[BranchService].pendingBranchOfBundle(cdbMessage.metadata)
         when (pending.valid) {
           meta.priorBranch.push(pending.payload.resized) // TODO: resized
         } otherwise {
@@ -144,24 +140,20 @@ class ReservationStation(exeStage: Stage,
       sec2 := rs1secret
 
       when (currentRs1Prior.valid && cdbMessage.robIndex === currentRs1Prior.payload) {
-        pipeline.withService[ProspectService](
-          context => {
-            meta.rs1.isSecret := context.isSecretOfBundle(cdbMessage.metadata)
-            sec1 := context.isSecretOfBundle(cdbMessage.metadata)
-          }
-        )
+        pipeline.serviceOption[ProspectService] foreach {prospect =>
+          meta.rs1.isSecret := prospect.isSecretOfBundle(cdbMessage.metadata)
+          sec1 := prospect.isSecretOfBundle(cdbMessage.metadata)
+        }
         meta.rs1.priorInstruction.valid := False
         r1w := False
         regs.setReg(pipeline.data.RS1_DATA, cdbMessage.writeValue)
       }
 
       when (currentRs2Prior.valid && cdbMessage.robIndex === currentRs2Prior.payload) {
-        pipeline.withService[ProspectService](
-          context => {
-            meta.rs2.isSecret := context.isSecretOfBundle(cdbMessage.metadata)
-            sec2 := context.isSecretOfBundle(cdbMessage.metadata)
-          }
-        )
+        pipeline.serviceOption[ProspectService] foreach {prospect =>
+          meta.rs2.isSecret := prospect.isSecretOfBundle(cdbMessage.metadata)
+          sec2 := prospect.isSecretOfBundle(cdbMessage.metadata)
+        }
         meta.rs2.priorInstruction.valid := False
         r2w := False
         regs.setReg(pipeline.data.RS2_DATA, cdbMessage.writeValue)
@@ -227,44 +219,37 @@ class ReservationStation(exeStage: Stage,
 
       val outputIsSecret = Bool()
 
-      pipeline.withService[ProspectService](
-        context => {
+      pipeline.serviceOption[ProspectService] match {
+        case Some(prospect) => {
           // ProSpeCT: the output is tainted if one of the inputs is tainted or the execution stage tainted the result
-          outputIsSecret := meta.rs1.isSecret || meta.rs2.isSecret || context.isSecret(exeStage)
+          outputIsSecret := meta.rs1.isSecret || meta.rs2.isSecret || prospect.isSecret(exeStage)
           // propagate branch dependencies on the CDB
-          pipeline.getService[BranchService].pendingBranchOfBundle(cdbStream.payload.metadata) := meta.priorBranch.resized
-        },
-        {
-          outputIsSecret := False
+          pipeline.service[BranchService].pendingBranchOfBundle(cdbStream.payload.metadata) := meta.priorBranch.resized
         }
-      )
+        case None => outputIsSecret := False
+      }
 
-      pipeline.withService[ProspectService](
-        context => {
-          context.isSecretOfBundle(cdbStream.payload.metadata) := outputIsSecret
-        }
-      )
+      pipeline.serviceOption[ProspectService] foreach {prospect =>
+        prospect.isSecretOfBundle(cdbStream.payload.metadata) := outputIsSecret
+      }
 
       cdbStream.payload.robIndex := robEntryIndex
       dispatchStream.payload.robIndex := robEntryIndex
 
       for (register <- retirementRegisters.keys) {
-        pipeline.withService[ProspectService](
-          context => {
-            if (context.isSecretPipelineReg(register)) {
+        pipeline.serviceOption[ProspectService] match {
+          case Some(prospect) => {
+            if (prospect.isSecretPipelineReg(register)) {
               dispatchStream.payload.registerMap.element(register) := outputIsSecret
             } else {
               dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
             }
-          },
-          {
-            dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
           }
-        )
-
+          case None => dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
+        }
       }
 
-      when (exeStage.output(pipeline.data.RD_DATA_VALID) || pipeline.getService[BranchService].isBranch(exeStage)) {
+      when (exeStage.output(pipeline.data.RD_DATA_VALID) || pipeline.service[BranchService].isBranch(exeStage)) {
         cdbStream.valid := True
       }
       dispatchStream.valid := True
@@ -311,10 +296,10 @@ class ReservationStation(exeStage: Stage,
     robIndex := rob.pushEntry(
       dispatchStage.output(pipeline.data.RD),
       dispatchStage.output(pipeline.data.RD_TYPE),
-      pipeline.getService[LsuService].operationOutput(dispatchStage),
-      pipeline.getService[BranchService].isBranch(dispatchStage),
+      pipeline.service[LsuService].operationOutput(dispatchStage),
+      pipeline.service[BranchService].isBranch(dispatchStage),
       dispatchStage.output(pipeline.data.PC),
-      pipeline.getService[BranchTargetPredictorService].predictedPc(dispatchStage))
+      pipeline.service[BranchTargetPredictorService].predictedPc(dispatchStage))
 
     robEntryIndex := robIndex
 
@@ -342,21 +327,17 @@ class ReservationStation(exeStage: Stage,
 
         when(rsInRob) {
           when(rsValue.valid) {
-            pipeline.withService[ProspectService](
-              context => {
-                metaRs.isSecretNext := context.isSecretOfBundle(rsValue.payload.metadata)
-              }
-            )
+            pipeline.serviceOption[ProspectService] foreach {prospect =>
+              metaRs.isSecretNext := prospect.isSecretOfBundle(rsValue.payload.metadata)
+            }
             regs.setReg(regData, rsValue.payload.writeValue)
           } otherwise {
             metaRs.priorInstructionNext.push(rsValue.payload.robIndex)
           }
         } otherwise {
-          pipeline.withService[ProspectService](
-            context => {
-              metaRs.isSecretNext := context.isSecretRegister(rsReg)
-            }
-          )
+          pipeline.serviceOption[ProspectService] foreach {prospect =>
+            metaRs.isSecretNext := prospect.isSecretRegister(rsReg)
+          }
           regs.setReg(regData, dispatchStage.output(regData))
         }
 
