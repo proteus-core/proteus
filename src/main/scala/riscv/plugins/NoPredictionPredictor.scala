@@ -19,7 +19,7 @@ class NoPredictionPredictor(fetchStage: Stage, executeStage: Stage)
     }
   }
 
-  override def getPredictedPc(stage: Stage): UInt = {
+  override def predictedPc(stage: Stage): UInt = {
     stage.output(Data.PREDICTED_PC)
   }
 

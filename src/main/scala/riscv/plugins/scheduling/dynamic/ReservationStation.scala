@@ -2,26 +2,45 @@ package riscv.plugins.scheduling.dynamic
 
 import riscv._
 import spinal.core._
-import spinal.lib.Stream
+import spinal.lib.{Flow, Stream}
 
-trait Resettable {
-  def pipelineReset(): Unit
+case class RegisterSource(indexBits: BitCount) extends Bundle {
+  val priorInstructionNext: Flow[UInt] = Flow(UInt(indexBits))
+  val priorInstruction: Flow[UInt] = RegNext(priorInstructionNext).init(priorInstructionNext.getZero)
+
+  def build(): Unit = {
+    priorInstructionNext := priorInstruction
+  }
+
+  def reset(): Unit = {
+    priorInstructionNext.setIdle()
+  }
+}
+
+case class InstructionDependencies(indexBits: BitCount) extends Bundle {
+  val rs1: RegisterSource = RegisterSource(indexBits)
+  val rs2: RegisterSource = RegisterSource(indexBits)
+
+  def build(): Unit = {
+    rs1.build()
+    rs2.build()
+  }
+
+  def reset(): Unit = {
+    rs1.reset()
+    rs2.reset()
+  }
 }
 
 class ReservationStation(exeStage: Stage,
                          rob: ReorderBuffer,
                          pipeline: DynamicPipeline,
-                         retirementRegisters: DynBundle[PipelineData[Data]])
+                         retirementRegisters: DynBundle[PipelineData[Data]],
+                         metaRegisters: DynBundle[PipelineData[Data]])
                         (implicit config: Config) extends Area with CdbListener with Resettable {
   setPartialName(s"RS_${exeStage.stageName}")
 
-  private val rs1RobIndexNext, rs2RobIndexNext = UInt(rob.indexBits)
-  private val rs1WaitingNext, rs2WaitingNext = Bool()
-
-  private val rs1RobIndex = RegNext(rs1RobIndexNext).init(0)
-  private val rs2RobIndex = RegNext(rs2RobIndexNext).init(0)
-  private val rs1Waiting = RegNext(rs1WaitingNext).init(False)
-  private val rs2Waiting = RegNext(rs2WaitingNext).init(False)
+  private val meta = InstructionDependencies(rob.indexBits)
 
   private val robEntryIndex = Reg(UInt(rob.indexBits)).init(0)
 
@@ -36,10 +55,10 @@ class ReservationStation(exeStage: Stage,
   private val cdbWaiting = RegNext(cdbWaitingNext).init(False)
   private val dispatchWaiting = RegNext(dispatchWaitingNext).init(False)
 
-  private val resultCdbMessage = RegInit(CdbMessage(rob.indexBits).getZero)
+  private val resultCdbMessage = RegInit(CdbMessage(metaRegisters, rob.indexBits).getZero)
   private val resultDispatchMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
 
-  val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(rob.indexBits)))
+  val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(metaRegisters, rob.indexBits)))
   val dispatchStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
 
   private val regs = pipeline.pipelineRegs(exeStage) // TODO: do we need this?
@@ -51,38 +70,34 @@ class ReservationStation(exeStage: Stage,
   def reset(): Unit = {
     isAvailable := !activeFlush
     stateNext := State.IDLE
+    meta.reset()
   }
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
-    val currentRs1Waiting, currentRs2Waiting = Bool()
-    val currentRs1RobIndex, currentRs2RobIndex = UInt(rob.indexBits)
+    val currentRs1Prior, currentRs2Prior = Flow(UInt(rob.indexBits))
 
     when (state === State.WAITING_FOR_ARGS) {
-      currentRs1Waiting := rs1Waiting
-      currentRs2Waiting := rs2Waiting
-      currentRs1RobIndex := rs1RobIndex
-      currentRs2RobIndex := rs2RobIndex
+      currentRs1Prior := meta.rs1.priorInstruction
+      currentRs2Prior := meta.rs2.priorInstruction
     } otherwise {
-      currentRs1Waiting := rs1WaitingNext
-      currentRs2Waiting := rs2WaitingNext
-      currentRs1RobIndex := rs1RobIndexNext
-      currentRs2RobIndex := rs2RobIndexNext
+      currentRs1Prior := meta.rs1.priorInstructionNext
+      currentRs2Prior := meta.rs2.priorInstructionNext
     }
 
     when (state === State.WAITING_FOR_ARGS || stateNext === State.WAITING_FOR_ARGS) {
       val r1w = Bool()
-      r1w := currentRs1Waiting
+      r1w := currentRs1Prior.valid
       val r2w = Bool()
-      r2w := currentRs2Waiting
+      r2w := currentRs2Prior.valid
 
-      when (currentRs1Waiting && cdbMessage.robIndex === currentRs1RobIndex) {
-        rs1Waiting := False
+      when (currentRs1Prior.valid && cdbMessage.robIndex === currentRs1Prior.payload) {
+        meta.rs1.priorInstruction.valid := False
         r1w := False
         regs.setReg(pipeline.data.RS1_DATA, cdbMessage.writeValue)
       }
 
-      when (currentRs2Waiting && cdbMessage.robIndex === currentRs2RobIndex) {
-        rs2Waiting := False
+      when (currentRs2Prior.valid && cdbMessage.robIndex === currentRs2Prior.payload) {
+        meta.rs2.priorInstruction.valid := False
         r2w := False
         regs.setReg(pipeline.data.RS2_DATA, cdbMessage.writeValue)
       }
@@ -100,10 +115,7 @@ class ReservationStation(exeStage: Stage,
   }
 
   def build(): Unit = {
-    rs1RobIndexNext := rs1RobIndex
-    rs2RobIndexNext := rs2RobIndex
-    rs1WaitingNext := rs1Waiting
-    rs2WaitingNext := rs2Waiting
+    meta.build()
 
     cdbWaitingNext := cdbWaiting
     dispatchWaitingNext := dispatchWaiting
@@ -189,50 +201,45 @@ class ReservationStation(exeStage: Stage,
   def execute(): Unit = {
     val dispatchStage = pipeline.issuePipeline.stages.last
 
-    robEntryIndex := rob.pushEntry(
+    val robIndex = UInt()
+    robIndex := rob.pushEntry(
       dispatchStage.output(pipeline.data.RD),
       dispatchStage.output(pipeline.data.RD_TYPE),
       pipeline.service[LsuService].operationOutput(dispatchStage),
       dispatchStage.output(pipeline.data.PC))
 
+    robEntryIndex := robIndex
+
     stateNext := State.EXECUTING
     regs.shift := True
 
-    val rs2Used = dispatchStage.output(pipeline.data.RS2_TYPE) === RegisterType.GPR
+    meta.reset()
 
-    val rs1Id = dispatchStage.output(pipeline.data.RS1)
-    val rs2Id = dispatchStage.output(pipeline.data.RS2)
+    def dependencySetup(metaRs: RegisterSource, reg: PipelineData[UInt], regData: PipelineData[UInt], regType: PipelineData[SpinalEnumCraft[RegisterType.type]]): Unit = {
+      val rsUsed = dispatchStage.output(regType) === RegisterType.GPR
 
-    val (rs1Found, rs1Valid, rs1Value, rs1Index) = rob.getValue(rs1Id)
-    val (rs2Found, rs2Valid, rs2Value, rs2Index) = rob.getValue(rs2Id)
+      when(rsUsed) {
+        val rsReg = dispatchStage.output(reg)
+        val (rsInRob, rsValue) = rob.findRegisterValue(rsReg)
 
-    when (rs1Found) {
-      when (rs1Valid) {
-        rs1WaitingNext := False
-        regs.setReg(pipeline.data.RS1_DATA, rs1Value)
-      } otherwise {
-        stateNext := State.WAITING_FOR_ARGS
-        rs1WaitingNext := True
-        rs1RobIndexNext := rs1Index
+        when(rsInRob) {
+          when(rsValue.valid) {
+            regs.setReg(regData, rsValue.payload.writeValue)
+          } otherwise {
+            metaRs.priorInstructionNext.push(rsValue.payload.robIndex)
+          }
+        } otherwise {
+          regs.setReg(regData, dispatchStage.output(regData))
+        }
+
+        when ((rsInRob && !rsValue.valid)) {
+          stateNext := State.WAITING_FOR_ARGS
+        }
       }
-    } otherwise {
-      rs1WaitingNext := False
-      regs.setReg(pipeline.data.RS1_DATA, dispatchStage.output(pipeline.data.RS1_DATA))
     }
 
-    when (rs2Found) {
-      when (rs2Valid || !rs2Used) {
-        rs2WaitingNext := False
-        regs.setReg(pipeline.data.RS2_DATA, rs2Value)
-      } otherwise {
-        stateNext := State.WAITING_FOR_ARGS
-        rs2WaitingNext := True
-        rs2RobIndexNext := rs2Index
-      }
-    } otherwise {
-      rs2WaitingNext := False
-      regs.setReg(pipeline.data.RS2_DATA, dispatchStage.output(pipeline.data.RS2_DATA))
-    }
+    dependencySetup(meta.rs1, pipeline.data.RS1, pipeline.data.RS1_DATA, pipeline.data.RS1_TYPE)
+    dependencySetup(meta.rs2, pipeline.data.RS2, pipeline.data.RS2_DATA, pipeline.data.RS2_TYPE)
   }
 
   override def pipelineReset(): Unit = {

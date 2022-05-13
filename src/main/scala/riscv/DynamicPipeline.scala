@@ -1,6 +1,6 @@
 package riscv
 
-import riscv.plugins.scheduling.dynamic.{ReorderBuffer, Resettable}
+import riscv.plugins.scheduling.dynamic.ReorderBuffer
 import spinal.core._
 
 import scala.reflect.ClassTag
@@ -56,7 +56,7 @@ trait DynamicPipeline extends Pipeline {
       stage.value(data.RS1_TYPE)
       stage.value(data.RS2_TYPE)
 
-      service[BranchTargetPredictorService].getPredictedPc(stage)
+      service[BranchTargetPredictorService].predictedPc(stage)
       service[JumpService].jumpRequested(stage)
     }
 

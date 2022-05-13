@@ -324,7 +324,7 @@ trait JumpService {
 }
 
 trait BranchTargetPredictorService {
-  def getPredictedPc(stage: Stage): UInt
+  def predictedPc(stage: Stage): UInt
   def setPredictedPc(stage: Stage, pc: UInt): Unit
 }
 
@@ -453,4 +453,8 @@ trait FormalService {
   def lsuOnLoad(stage: Stage, addr: UInt, rmask: Bits, rdata: UInt)
   def lsuOnStore(stage: Stage, addr: UInt, wmask: Bits, wdata: UInt)
   def lsuOnMisaligned(stage: Stage): Unit
+}
+
+trait Resettable {
+  def pipelineReset(): Unit
 }
