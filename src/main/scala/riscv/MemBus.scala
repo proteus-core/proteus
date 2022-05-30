@@ -5,6 +5,10 @@ import spinal.lib._
 import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.amba4.axi._
 
+object Constants {
+  val ID_WIDTH = 3
+}
+
 case class MemBusConfig(
   addressWidth: Int,
   dataWidth: Int,
@@ -16,6 +20,7 @@ case class MemBusConfig(
 
 case class MemBusCmd(config: MemBusConfig) extends Bundle {
   val address = UInt(config.addressWidth bits)
+  val id = UInt(Constants.ID_WIDTH bits)
   val write = if (config.readWrite) Bool() else null
   val wdata = if (config.readWrite) UInt(config.dataWidth bits) else null
   val wmask = if (config.readWrite) Bits(config.dataWidth / 8 bits) else null
@@ -23,6 +28,7 @@ case class MemBusCmd(config: MemBusConfig) extends Bundle {
 
 case class MemBusRsp(config: MemBusConfig) extends Bundle {
   val rdata = UInt(config.dataWidth bits)
+  val id = UInt(Constants.ID_WIDTH bits)
 }
 
 class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
@@ -34,6 +40,7 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
     slave(rsp)
   }
 
+  // TODO: id implementation impossible with Apb3!
   def toApb3(): Apb3 = {
     assert(!isMasterInterface)
 
@@ -60,9 +67,11 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
 
     axi4Bus.readCmd.valid := cmd.valid
     axi4Bus.readCmd.addr := cmd.address
+    axi4Bus.readCmd.id := cmd.id
     cmd.ready := axi4Bus.readCmd.ready
 
     rsp.valid := axi4Bus.readRsp.valid
+    rsp.id := axi4Bus.readRsp.id
     rsp.rdata := axi4Bus.readRsp.data.asUInt
     axi4Bus.readRsp.ready := rsp.ready
 
@@ -78,6 +87,7 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
     axi4Bus.sharedCmd.valid := cmd.valid
     axi4Bus.sharedCmd.addr := cmd.address
     axi4Bus.sharedCmd.write := cmd.write
+    axi4Bus.sharedCmd.id := cmd.id
     cmd.ready := axi4Bus.sharedCmd.ready
 
     axi4Bus.writeData.valid := cmd.valid
@@ -89,6 +99,7 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
     axi4Bus.writeRsp.ready := rsp.ready
     axi4Bus.readRsp.ready := rsp.ready
     rsp.valid := axi4Bus.readRsp.valid
+    rsp.id := axi4Bus.readRsp.id
     rsp.rdata := axi4Bus.readRsp.data.asUInt
 
     axi4Bus
@@ -106,7 +117,8 @@ object MemBus {
   def getAxi4Config(config: MemBusConfig) = Axi4Config(
     addressWidth = config.addressWidth,
     dataWidth = config.dataWidth,
-    useId = false,
+    useId = true,
+    idWidth = Constants.ID_WIDTH,
     useRegion = false,
     useBurst = false,
     useLock = false,
@@ -135,11 +147,15 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     def isWrite = if (bus.config.readWrite) cmd.write else False
   }
 
+  val cnt = Counter(Constants.ID_WIDTH bits)
+  currentCmd.cmd.id := cnt.value
+
   def isReady: Bool = {
     !currentCmd.isIssued
   }
 
   bus.cmd.valid := currentCmd.valid
+  bus.cmd.id := currentCmd.cmd.id
   bus.cmd.address := currentCmd.cmd.address
 
   if (bus.config.readWrite) {
@@ -200,6 +216,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     when (!currentCmd.isIssued) {
       issueCommand(address)
       issuedThisCycle := True
+      cnt.increment()
     } elsewhen (currentCmd.cmd.address =/= address) {
       dropRsp := True
     }

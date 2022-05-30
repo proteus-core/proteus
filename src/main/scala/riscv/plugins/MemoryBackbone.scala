@@ -55,6 +55,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
         // StreamArbiterFactory
         val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig))
         fullReadDBusCmd.valid := internalReadDBus.cmd.valid
+        fullReadDBusCmd.id := internalReadDBus.cmd.id
         internalReadDBus.cmd.ready := fullReadDBusCmd.ready
         fullReadDBusCmd.write := False
         fullReadDBusCmd.wmask.assignDontCare()
@@ -88,6 +89,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
 
     stage plug new Area {
       internalIBus = master(new MemBus(config.ibusConfig))
+      internalIBus.cmd.id.assignDontCare()
     }
 
     internalIBus
