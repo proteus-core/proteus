@@ -63,11 +63,11 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       loadManager.rdbStream >> robDataBus.inputs(1)
 
       // Dispatch
-      val dispatchStage = pipeline.issuePipeline.stages.last
-      dispatchStage.arbitration.isStalled := False
+      val issueStage = pipeline.issuePipeline.stages.last
+      issueStage.arbitration.isStalled := False
 
-      when (dispatchStage.arbitration.isValid && dispatchStage.arbitration.isReady) {
-        val fuMask = dispatchStage.output(PrivateRegisters.DEST_FU)
+      when (issueStage.arbitration.isValid && issueStage.arbitration.isReady) {
+        val fuMask = issueStage.output(PrivateRegisters.DEST_FU)
         val illegalInstruction = fuMask === 0
 
         var context = when (False) {}
@@ -79,7 +79,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
         }
 
         context.otherwise {
-          dispatchStage.arbitration.isStalled := True
+          issueStage.arbitration.isStalled := True
         }
       }
     }

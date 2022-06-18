@@ -199,14 +199,14 @@ class ReservationStation(exeStage: Stage,
   }
 
   def execute(): Unit = {
-    val dispatchStage = pipeline.issuePipeline.stages.last
+    val issueStage = pipeline.issuePipeline.stages.last
 
     val robIndex = UInt()
     robIndex := rob.pushEntry(
-      dispatchStage.output(pipeline.data.RD),
-      dispatchStage.output(pipeline.data.RD_TYPE),
-      pipeline.service[LsuService].operationOutput(dispatchStage),
-      dispatchStage.output(pipeline.data.PC))
+      issueStage.output(pipeline.data.RD),
+      issueStage.output(pipeline.data.RD_TYPE),
+      pipeline.service[LsuService].operationOutput(issueStage),
+      issueStage.output(pipeline.data.PC))
 
     robEntryIndex := robIndex
 
@@ -216,10 +216,10 @@ class ReservationStation(exeStage: Stage,
     meta.reset()
 
     def dependencySetup(metaRs: RegisterSource, reg: PipelineData[UInt], regData: PipelineData[UInt], regType: PipelineData[SpinalEnumCraft[RegisterType.type]]): Unit = {
-      val rsUsed = dispatchStage.output(regType) === RegisterType.GPR
+      val rsUsed = issueStage.output(regType) === RegisterType.GPR
 
       when(rsUsed) {
-        val rsReg = dispatchStage.output(reg)
+        val rsReg = issueStage.output(reg)
         val (rsInRob, rsValue) = rob.findRegisterValue(rsReg)
 
         when(rsInRob) {
@@ -229,7 +229,7 @@ class ReservationStation(exeStage: Stage,
             metaRs.priorInstructionNext.push(rsValue.payload.robIndex)
           }
         } otherwise {
-          regs.setReg(regData, dispatchStage.output(regData))
+          regs.setReg(regData, issueStage.output(regData))
         }
 
         when ((rsInRob && !rsValue.valid)) {
