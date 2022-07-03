@@ -11,9 +11,9 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
   private var externalIBus: MemBus = null
   private var internalIBus: MemBus = null
   private var externalDBus: MemBus = null
-  private var internalReadDBus: MemBus = null
+  private var internalReadDBuses: Seq[MemBus] = null
   private var internalWriteDBus: MemBus = null
-  private var internalReadDBusStage: Stage = null
+  private var internalReadDBusStages: Seq[Stage] = null
   private var internalWriteDBusStage: Stage = null
   private var dbusFilter: Option[MemBusFilter] = None
   private val dbusObservers = mutable.ArrayBuffer[MemBusObserver]()
@@ -47,29 +47,31 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
     pipeline plug new Area {
       externalDBus = master(new MemBus(config.dbusConfig)).setName("dbus")
 
-      if (internalReadDBus == internalWriteDBus) {
+      if (internalReadDBuses.contains(internalWriteDBus)) {  // TODO: update this to also support multiple loads?
         dbusFilter.foreach(_(internalWriteDBusStage, internalWriteDBus, externalDBus))
         dbusObservers.foreach(_(internalWriteDBusStage, internalWriteDBus))
       } else {
         // Create a RW version of the RO internalReadDBus so that we can use it with
         // StreamArbiterFactory
-        val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig))
-        fullReadDBusCmd.valid := internalReadDBus.cmd.valid
-        fullReadDBusCmd.id := internalReadDBus.cmd.id
-        internalReadDBus.cmd.ready := fullReadDBusCmd.ready
-        fullReadDBusCmd.write := False
-        fullReadDBusCmd.wmask.assignDontCare()
-        fullReadDBusCmd.wdata.assignDontCare()
-        fullReadDBusCmd.address := internalReadDBus.cmd.address
+        val fullDBusCmds = internalReadDBuses.map(internalReadDBus => {
+          val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig))
+          fullReadDBusCmd.valid := internalReadDBus.cmd.valid
+          fullReadDBusCmd.id := internalReadDBus.cmd.id
+          internalReadDBus.cmd.ready := fullReadDBusCmd.ready
+          fullReadDBusCmd.write := False
+          fullReadDBusCmd.wmask.assignDontCare()
+          fullReadDBusCmd.wdata.assignDontCare()
+          fullReadDBusCmd.address := internalReadDBus.cmd.address
 
-        externalDBus.cmd <> StreamArbiterFactory.roundRobin.onArgs(
-          fullReadDBusCmd,
-          internalWriteDBus.cmd
+          externalDBus.rsp <> internalReadDBus.rsp
+
+          fullReadDBusCmd
+
+          // TODO filter and observers
+        }
         )
 
-        externalDBus.rsp <> internalReadDBus.rsp
-
-        // TODO filter and observers
+        externalDBus.cmd <> StreamArbiterFactory.roundRobin.on(fullDBusCmds :+ internalWriteDBus.cmd)
       }
     }
   }
@@ -96,16 +98,23 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
   }
 
   override def createInternalDBus(readStages: Seq[Stage], writeStage: Stage): (Seq[MemBus], MemBus) = {
-    val readStage = readStages.head  // TODO: obviously not
-    val readArea = readStage plug new Area {
-      val dbusConfig = if (readStage == writeStage) {config.dbusConfig} else {config.readDbusConfig}
-      val dbus = master(new MemBus(dbusConfig))
-    }
+    internalReadDBuses = readStages.map(readStage => {
+      val readArea = readStage plug new Area {
+        val dbusConfig = if (readStage == writeStage) {
+          config.dbusConfig
+        } else {
+          config.readDbusConfig
+        }
+        val dbus = master(new MemBus(dbusConfig))
+      }
+      readArea.dbus
+      }
+    )
 
-    internalReadDBus = readArea.dbus
+    val writeIndex = readStages.indexOf(writeStage)
 
-    internalWriteDBus = if (readStage == writeStage) {
-      internalReadDBus
+    internalWriteDBus = if (writeIndex != -1) {
+      internalReadDBuses(writeIndex)
     } else {
       val writeArea = writeStage plug new Area {
         val dbus = master(new MemBus(config.dbusConfig))
@@ -118,14 +127,14 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
       writeArea.dbus
     }
 
-    internalReadDBusStage = readStage
+    internalReadDBusStages = readStages
     internalWriteDBusStage = writeStage
 
-    (Seq(internalReadDBus), internalWriteDBus)
+    (internalReadDBuses, internalWriteDBus)
   }
 
   override def getDBusStages: Seq[Stage] = {
-    Seq(internalReadDBusStage, internalReadDBusStage).filter(_ != null).distinct
+    (internalReadDBusStages ++ internalReadDBusStages).filter(_ != null).distinct  // TODO: not sure what this does
   }
 
   override def filterDBus(filter: MemBusFilter): Unit = {
