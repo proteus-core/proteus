@@ -63,13 +63,16 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
           fullReadDBusCmd.wdata.assignDontCare()
           fullReadDBusCmd.address := internalReadDBus.cmd.address
 
-          externalDBus.rsp <> internalReadDBus.rsp
+          externalDBus.rsp.valid <> internalReadDBus.rsp.valid
+          externalDBus.rsp.payload <> internalReadDBus.rsp.payload
 
           fullReadDBusCmd
 
           // TODO filter and observers
         }
         )
+
+        externalDBus.rsp.ready <> True  // TODO: definitely not
 
         externalDBus.cmd <> StreamArbiterFactory.roundRobin.on(fullDBusCmds :+ internalWriteDBus.cmd)
       }
