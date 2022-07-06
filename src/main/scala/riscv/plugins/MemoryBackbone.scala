@@ -47,13 +47,18 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
     pipeline plug new Area {
       externalDBus = master(new MemBus(config.dbusConfig)).setName("dbus")
 
+      val outstandingLoads: Vec[Bool] = Vec.fill(internalReadDBuses.size + 1)(RegInit(False))  // TODO: +1 for the write bus?
+
       if (internalReadDBuses.contains(internalWriteDBus)) {  // TODO: update this to also support multiple loads?
         dbusFilter.foreach(_(internalWriteDBusStage, internalWriteDBus, externalDBus))
         dbusObservers.foreach(_(internalWriteDBusStage, internalWriteDBus))
       } else {
         // Create a RW version of the RO internalReadDBus so that we can use it with
         // StreamArbiterFactory
-        val fullDBusCmds = internalReadDBuses.map(internalReadDBus => {
+        val fullDBusCmds = internalReadDBuses.zipWithIndex.map(tuple => {
+          val internalReadDBus = tuple._1
+          val index = tuple._2
+
           val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig))
           fullReadDBusCmd.valid := internalReadDBus.cmd.valid
           fullReadDBusCmd.id := internalReadDBus.cmd.id
@@ -63,7 +68,15 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
           fullReadDBusCmd.wdata.assignDontCare()
           fullReadDBusCmd.address := internalReadDBus.cmd.address
 
-          externalDBus.rsp.valid <> internalReadDBus.rsp.valid
+          val busValid = Bool()
+          busValid := False
+
+          // only set valid bit for the corresponding load bus
+          when (externalDBus.rsp.id === index) {
+            busValid := externalDBus.rsp.valid
+          }
+
+          busValid <> internalReadDBus.rsp.valid
           externalDBus.rsp.payload <> internalReadDBus.rsp.payload
 
           fullReadDBusCmd
@@ -72,9 +85,72 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
         }
         )
 
-        externalDBus.rsp.ready <> True  // TODO: definitely not
+        val rspReady = Bool()
+        rspReady := False
 
-        externalDBus.cmd <> StreamArbiterFactory.roundRobin.on(fullDBusCmds :+ internalWriteDBus.cmd)
+        // check whether the correct load bus is ready to receive
+        when (externalDBus.rsp.valid) {
+          rspReady := internalReadDBuses(externalDBus.rsp.id.resized).rsp.ready
+          when (rspReady) {
+            outstandingLoads(externalDBus.rsp.id.resized) := False
+          }
+        }
+
+        externalDBus.rsp.ready <> rspReady
+
+//        val saf = StreamArbiterFactory.roundRobin.on(fullDBusCmds :+ internalWriteDBus.cmd)
+        // TODO: is it possible to do this with an arbiter?
+
+        val cmds = fullDBusCmds :+ internalWriteDBus.cmd
+
+        val cmdValid = Bool()
+        cmdValid := False
+        val cmdAddress = UInt(config.xlen bits)
+        cmdAddress.assignDontCare()
+        val cmdId = UInt(Constants.ID_WIDTH bits)
+        cmdId.assignDontCare()
+        val cmdWrite = Bool()
+        cmdWrite := False
+        val cmdWdata = UInt(config.dbusConfig.dataWidth bits)
+        cmdWdata.assignDontCare()
+        val cmdWmask = Bits(config.dbusConfig.dataWidth / 8 bits)
+        cmdWmask.assignDontCare()
+
+        var context = when (False) {}
+
+        cmds.zipWithIndex.foreach(tuple => {
+          val cmd = tuple._1
+          val index = tuple._2
+
+          val ready = Bool()
+          ready := False
+
+          when (externalDBus.cmd.id === index) {
+            ready := externalDBus.cmd.ready
+          }
+
+          cmd.ready := ready
+
+          context = context.elsewhen(cmd.valid && !outstandingLoads(index)) {
+            cmdValid := True
+            cmdAddress := cmd.address
+            cmdId := index
+            cmdWrite := cmd.write
+            cmdWdata := cmd.wdata
+            cmdWmask := cmd.wmask
+
+            when (!cmdWrite) {
+              outstandingLoads(index) := True
+            }
+          }
+        })
+
+        externalDBus.cmd.valid <> cmdValid
+        externalDBus.cmd.address <> cmdAddress
+        externalDBus.cmd.id <> cmdId
+        externalDBus.cmd.write <> cmdWrite
+        externalDBus.cmd.wdata <> cmdWdata
+        externalDBus.cmd.wmask <> cmdWmask
       }
     }
   }

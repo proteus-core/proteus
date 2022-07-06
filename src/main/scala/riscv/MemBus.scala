@@ -6,7 +6,7 @@ import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.amba4.axi._
 
 object Constants {
-  val ID_WIDTH = 3
+  val ID_WIDTH = 3  // TODO: make this the number of load stages (can also get rid of some .resized)
 }
 
 case class MemBusConfig(
@@ -31,7 +31,7 @@ case class MemBusRsp(config: MemBusConfig) extends Bundle {
   val id = UInt(Constants.ID_WIDTH bits)
 }
 
-class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
+case class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
   val cmd = Stream(MemBusCmd(config))
   val rsp = Stream(MemBusRsp(config))
 
