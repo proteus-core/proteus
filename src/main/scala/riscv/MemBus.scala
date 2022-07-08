@@ -147,6 +147,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     def isWrite = if (bus.config.readWrite) cmd.write else False
   }
 
+  // TODO: can be don't care here?
   val cnt = Counter(Constants.ID_WIDTH bits)
   currentCmd.cmd.id := cnt.value
 

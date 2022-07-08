@@ -47,6 +47,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
     pipeline plug new Area {
       externalDBus = master(new MemBus(config.dbusConfig)).setName("dbus")
 
+      // TODO: do we even have to track outstanding loads? can stages issue multiple loads concurrently?
       val outstandingLoads: Vec[Bool] = Vec.fill(internalReadDBuses.size + 1)(RegInit(False))  // TODO: +1 for the write bus?
 
       if (internalReadDBuses.contains(internalWriteDBus)) {  // TODO: update this to also support multiple loads?
@@ -105,6 +106,9 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
 
         val cmdValid = Bool()
         cmdValid := False
+//        val cmdAddressNext = UInt(config.xlen bits)
+//        val cmdAddress = RegNext(cmdAddressNext).init(cmdAddressNext.getZero)
+//        cmdAddressNext := cmdAddress
         val cmdAddress = UInt(config.xlen bits)
         cmdAddress.assignDontCare()
         val cmdId = UInt(Constants.ID_WIDTH bits)
@@ -139,7 +143,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
             cmdWdata := cmd.wdata
             cmdWmask := cmd.wmask
 
-            when (!cmdWrite) {
+            when (!cmdWrite && ready) {
               outstandingLoads(index) := True
             }
           }
