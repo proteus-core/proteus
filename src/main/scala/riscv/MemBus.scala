@@ -96,7 +96,7 @@ case class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
     axi4Bus.writeData.last := True
 
     // TODO: Set useResp to true and verify response?
-    axi4Bus.writeRsp.ready := rsp.ready
+    axi4Bus.writeRsp.ready := True // FIXME is this ok?
     axi4Bus.readRsp.ready := rsp.ready
     rsp.valid := axi4Bus.readRsp.valid
     rsp.id := axi4Bus.readRsp.id
