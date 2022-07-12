@@ -195,7 +195,6 @@ object createDynamicPipeline {
       override val stages = issuePipeline.stages ++ unorderedStages :+ retirementStage
     }
 
-
     pipeline.issuePipeline.addPlugins(Seq(
       new scheduling.static.Scheduler(canStallExternally = true),
       new scheduling.static.PcManager(0x80000000L),
@@ -275,7 +274,7 @@ object CoreDynamicSim {
 
 object CoreDynamicExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 16))
+    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 32))
   }
 }
 

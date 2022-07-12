@@ -47,9 +47,6 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
     pipeline plug new Area {
       externalDBus = master(new MemBus(config.dbusConfig)).setName("dbus")
 
-      // TODO: do we even have to track outstanding loads? can stages issue multiple loads concurrently?
-      val outstandingLoads: Vec[Bool] = Vec.fill(internalReadDBuses.size + 1)(RegInit(False))  // TODO: +1 for the write bus?
-
       if (internalReadDBuses.contains(internalWriteDBus)) {  // TODO: update this to also support multiple loads?
         dbusFilter.foreach(_(internalWriteDBusStage, internalWriteDBus, externalDBus))
         dbusObservers.foreach(_(internalWriteDBusStage, internalWriteDBus))
@@ -92,23 +89,16 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
         // check whether the correct load bus is ready to receive
         when (externalDBus.rsp.valid) {
           rspReady := internalReadDBuses(externalDBus.rsp.id.resized).rsp.ready
-          when (rspReady) {
-            outstandingLoads(externalDBus.rsp.id.resized) := False
-          }
         }
 
         externalDBus.rsp.ready <> rspReady
 
-//        val saf = StreamArbiterFactory.roundRobin.on(fullDBusCmds :+ internalWriteDBus.cmd)
-        // TODO: is it possible to do this with an arbiter?
+        // TODO: is it possible to do the following with an arbiter instead of this manual mess?
 
         val cmds = fullDBusCmds :+ internalWriteDBus.cmd
 
         val cmdValid = Bool()
         cmdValid := False
-//        val cmdAddressNext = UInt(config.xlen bits)
-//        val cmdAddress = RegNext(cmdAddressNext).init(cmdAddressNext.getZero)
-//        cmdAddressNext := cmdAddress
         val cmdAddress = UInt(config.xlen bits)
         cmdAddress.assignDontCare()
         val cmdId = UInt(Constants.ID_WIDTH bits)
@@ -135,17 +125,13 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
 
           cmd.ready := ready
 
-          context = context.elsewhen(cmd.valid && !outstandingLoads(index)) {
+          context = context.elsewhen(cmd.valid) {
             cmdValid := True
             cmdAddress := cmd.address
             cmdId := index
             cmdWrite := cmd.write
             cmdWdata := cmd.wdata
             cmdWmask := cmd.wmask
-
-            when (!cmdWrite && ready) {
-              outstandingLoads(index) := True
-            }
           }
         })
 
