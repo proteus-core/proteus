@@ -47,7 +47,10 @@ class MemoryBackbone(loadStageCount: Int = 1)(implicit config: Config) extends P
     pipeline plug new Area {
       externalDBus = master(new MemBus(config.dbusConfig, loadStageCount)).setName("dbus")
 
-      if (internalReadDBuses.contains(internalWriteDBus)) {  // TODO: update this to also support multiple loads?
+      if (internalReadDBuses.contains(internalWriteDBus)) {
+        // TODO: update this to also support multiple loads? or separate into different modules
+        //       for static/dynamic?
+        //       currently this is basically `if (staticPipeline)` i think
         dbusFilter.foreach(_(internalWriteDBusStage, internalWriteDBus, externalDBus))
         dbusObservers.foreach(_(internalWriteDBusStage, internalWriteDBus))
       } else {

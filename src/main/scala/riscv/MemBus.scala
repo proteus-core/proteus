@@ -255,6 +255,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
   }
 }
 
+// TODO: can the following be simplified by using AXI transaction IDs such as for parallel loads?
 class IBusControl(
    bus: MemBus,
    ibusLatency: Int,
