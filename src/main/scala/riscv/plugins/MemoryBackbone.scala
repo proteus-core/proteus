@@ -7,7 +7,7 @@ import spinal.lib._
 
 import scala.collection.mutable
 
-class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService {
+class MemoryBackbone(loadStageCount: Int = 1)(implicit config: Config) extends Plugin with MemoryService {
   private var externalIBus: MemBus = null
   private var internalIBus: MemBus = null
   private var externalDBus: MemBus = null
@@ -27,7 +27,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
 
     // IBUS
     pipeline plug new Area {
-      externalIBus = master(new MemBus(config.ibusConfig)).setName("ibus")
+      externalIBus = master(new MemBus(config.ibusConfig, loadStageCount)).setName("ibus")
 
       if (internalIBus != null) {
         externalIBus <> internalIBus
@@ -45,7 +45,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
     }
 
     pipeline plug new Area {
-      externalDBus = master(new MemBus(config.dbusConfig)).setName("dbus")
+      externalDBus = master(new MemBus(config.dbusConfig, loadStageCount)).setName("dbus")
 
       if (internalReadDBuses.contains(internalWriteDBus)) {  // TODO: update this to also support multiple loads?
         dbusFilter.foreach(_(internalWriteDBusStage, internalWriteDBus, externalDBus))
@@ -57,7 +57,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
           val internalReadDBus = tuple._1
           val index = tuple._2
 
-          val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig))
+          val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig, loadStageCount))
           fullReadDBusCmd.valid := internalReadDBus.cmd.valid
           fullReadDBusCmd.id := internalReadDBus.cmd.id
           internalReadDBus.cmd.ready := fullReadDBusCmd.ready
@@ -88,7 +88,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
 
         // check whether the correct load bus is ready to receive
         when (externalDBus.rsp.valid) {
-          rspReady := internalReadDBuses(externalDBus.rsp.id.resized).rsp.ready
+          rspReady := internalReadDBuses(externalDBus.rsp.id).rsp.ready
         }
 
         externalDBus.rsp.ready <> rspReady
@@ -101,7 +101,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
         cmdValid := False
         val cmdAddress = UInt(config.xlen bits)
         cmdAddress.assignDontCare()
-        val cmdId = UInt(Constants.ID_WIDTH bits)
+        val cmdId = UInt(log2Up(loadStageCount) bits)
         cmdId.assignDontCare()
         val cmdWrite = Bool()
         cmdWrite := False
@@ -159,7 +159,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
     assert(internalIBus == null)
 
     stage plug new Area {
-      internalIBus = master(new MemBus(config.ibusConfig))
+      internalIBus = master(new MemBus(config.ibusConfig, loadStageCount))
       internalIBus.cmd.id.assignDontCare()
     }
 
@@ -174,7 +174,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
         } else {
           config.readDbusConfig
         }
-        val dbus = master(new MemBus(dbusConfig))
+        val dbus = master(new MemBus(dbusConfig, loadStageCount))
       }
       readArea.dbus
       }
@@ -186,7 +186,7 @@ class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService 
       internalReadDBuses(writeIndex)
     } else {
       val writeArea = writeStage plug new Area {
-        val dbus = master(new MemBus(config.dbusConfig))
+        val dbus = master(new MemBus(config.dbusConfig, loadStageCount))
       }
 
       pipeline plug {
