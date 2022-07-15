@@ -38,7 +38,7 @@ object createStaticPipeline {
     }
 
     pipeline.addPlugins(Seq(
-      new MemoryBackbone,
+      new StaticMemoryBackbone,
       new Fetcher(pipeline.fetch),
       new Decoder(pipeline.decode),
       new RegisterFileAccessor(pipeline.decode, pipeline.writeback),
@@ -198,7 +198,7 @@ object createDynamicPipeline {
     pipeline.issuePipeline.addPlugins(Seq(
       new scheduling.static.Scheduler(canStallExternally = true),
       new scheduling.static.PcManager(0x80000000L),
-      new MemoryBackbone(pipeline.loadStages.size),
+      new DynamicMemoryBackbone(pipeline.loadStages.size),
       new Fetcher(pipeline.issuePipeline.fetch)
     ))
 

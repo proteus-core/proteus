@@ -1,6 +1,7 @@
 package riscv.plugins.cheri
 
 import riscv._
+import riscv.plugins.StaticMemoryBackbone
 import riscv.sim._
 import riscv.soc._
 import spinal.core._
@@ -31,7 +32,7 @@ object createCheriPipeline {
       new rvp.scheduling.static.DataHazardResolver(firstRsReadStage = pipeline.execute),
       new rvp.TrapHandler(pipeline.writeback),
       new rvp.TrapStageInvalidator, // TODO: ?
-      new rvp.MemoryBackbone,
+      new StaticMemoryBackbone,
       new rvp.Fetcher(pipeline.fetch),
       new rvp.Decoder(pipeline.decode),
       new rvp.RegisterFileAccessor(pipeline.decode, pipeline.writeback),
