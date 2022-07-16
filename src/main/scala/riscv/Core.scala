@@ -198,7 +198,7 @@ object createDynamicPipeline {
     pipeline.issuePipeline.addPlugins(Seq(
       new scheduling.static.Scheduler(canStallExternally = true),
       new scheduling.static.PcManager(0x80000000L),
-      new DynamicMemoryBackbone(log2Up(pipeline.loadStages.size) bits),
+      new DynamicMemoryBackbone(log2Up(pipeline.loadStages.size + 1) bits),  // +1 for write stage (which also uses an ID currently)
       new Fetcher(pipeline.issuePipeline.fetch)
     ))
 

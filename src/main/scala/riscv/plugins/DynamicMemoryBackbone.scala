@@ -80,7 +80,7 @@ class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends 
 
       // check whether the correct load bus is ready to receive
       when (externalDBus.rsp.valid) {
-        rspReady := internalReadDBuses(externalDBus.rsp.id).rsp.ready
+        rspReady := internalReadDBuses(externalDBus.rsp.id.resized).rsp.ready
       }
 
       externalDBus.rsp.ready <> rspReady
@@ -118,7 +118,7 @@ class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends 
           context = context.elsewhen(cmd.valid) {
             cmdValid := True
             cmdAddress := cmd.address
-            cmdId := index  // TODO: this is +1 on the id, causing width mismatches!!
+            cmdId := index
             cmdWrite := cmd.write
             cmdWdata := cmd.wdata
             cmdWmask := cmd.wmask
