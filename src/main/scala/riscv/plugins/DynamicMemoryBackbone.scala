@@ -6,7 +6,7 @@ import spinal.lib._
 
 import scala.collection.mutable
 
-class DynamicMemoryBackbone(loadStageCount: Int = 1)(implicit config: Config) extends Plugin with MemoryService {
+class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends Plugin with MemoryService {
   private var externalIBus: MemBus = null
   private var internalIBus: MemBus = null
   private var externalDBus: MemBus = null
@@ -26,7 +26,7 @@ class DynamicMemoryBackbone(loadStageCount: Int = 1)(implicit config: Config) ex
 
     // IBUS
     pipeline plug new Area {
-      externalIBus = master(new MemBus(config.ibusConfig, loadStageCount)).setName("ibus")
+      externalIBus = master(new MemBus(config.ibusConfig, idWidth)).setName("ibus")
 
       if (internalIBus != null) {
         externalIBus <> internalIBus
@@ -44,13 +44,13 @@ class DynamicMemoryBackbone(loadStageCount: Int = 1)(implicit config: Config) ex
     }
 
     pipeline plug new Area {
-      externalDBus = master(new MemBus(config.dbusConfig, loadStageCount)).setName("dbus")
+      externalDBus = master(new MemBus(config.dbusConfig, idWidth)).setName("dbus")
 
       // Create a RW version of the RO internalReadDBus so that we can use it with
       // StreamArbiterFactory
       val fullDBusCmds = internalReadDBuses.zipWithIndex.map {
         case (internalReadDBus, index) =>
-          val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig, loadStageCount))
+          val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig, idWidth))
           fullReadDBusCmd.valid := internalReadDBus.cmd.valid
           fullReadDBusCmd.id := internalReadDBus.cmd.id
           internalReadDBus.cmd.ready := fullReadDBusCmd.ready
@@ -93,7 +93,7 @@ class DynamicMemoryBackbone(loadStageCount: Int = 1)(implicit config: Config) ex
       cmdValid := False
       val cmdAddress = UInt(config.xlen bits)
       cmdAddress.assignDontCare()
-      val cmdId = UInt(log2Up(loadStageCount) bits)
+      val cmdId = UInt(idWidth)
       cmdId.assignDontCare()
       val cmdWrite = Bool()
       cmdWrite := False
@@ -148,7 +148,7 @@ class DynamicMemoryBackbone(loadStageCount: Int = 1)(implicit config: Config) ex
     assert(internalIBus == null)
 
     stage plug new Area {
-      internalIBus = master(new MemBus(config.ibusConfig, loadStageCount))
+      internalIBus = master(new MemBus(config.ibusConfig, idWidth))
       internalIBus.cmd.id.assignDontCare()
     }
 
@@ -156,16 +156,18 @@ class DynamicMemoryBackbone(loadStageCount: Int = 1)(implicit config: Config) ex
   }
 
   override def createInternalDBus(readStages: Seq[Stage], writeStage: Stage): (Seq[MemBus], MemBus) = {
+    assert(!readStages.contains(writeStage))
+
     internalReadDBuses = readStages.map(readStage => {
       val readArea = readStage plug new Area {
-        val dbus = master(new MemBus(config.readDbusConfig, loadStageCount))
+        val dbus = master(new MemBus(config.readDbusConfig, idWidth))
       }
       readArea.dbus
     }
     )
 
     writeStage plug new Area {
-      internalWriteDBus = master(new MemBus(config.dbusConfig, loadStageCount))
+      internalWriteDBus = master(new MemBus(config.dbusConfig, idWidth))
     }
 
     pipeline plug {

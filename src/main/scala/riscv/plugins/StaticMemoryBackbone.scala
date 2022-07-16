@@ -24,7 +24,7 @@ class StaticMemoryBackbone(implicit config: Config) extends Plugin with MemorySe
 
     // IBUS
     pipeline plug new Area {
-      externalIBus = master(new MemBus(config.ibusConfig, 1)).setName("ibus")
+      externalIBus = master(new MemBus(config.ibusConfig, 0 bits)).setName("ibus")
 
       if (internalIBus != null) {
         externalIBus <> internalIBus
@@ -42,7 +42,7 @@ class StaticMemoryBackbone(implicit config: Config) extends Plugin with MemorySe
     }
 
     pipeline plug new Area {
-      externalDBus = master(new MemBus(config.dbusConfig, 1)).setName("dbus")
+      externalDBus = master(new MemBus(config.dbusConfig, 0 bits)).setName("dbus")
       dbusFilter.foreach(_(internalDBusStage, internalDBus, externalDBus))
       dbusObservers.foreach(_(internalDBusStage, internalDBus))
     }
@@ -62,7 +62,7 @@ class StaticMemoryBackbone(implicit config: Config) extends Plugin with MemorySe
     assert(internalIBus == null)
 
     stage plug new Area {
-      internalIBus = master(new MemBus(config.ibusConfig, 1))
+      internalIBus = master(new MemBus(config.ibusConfig, 0 bits))
       internalIBus.cmd.id.assignDontCare()
     }
 
@@ -76,7 +76,7 @@ class StaticMemoryBackbone(implicit config: Config) extends Plugin with MemorySe
     internalDBusStage = readStages.head
 
     internalDBusStage plug new Area {
-      val dbus = master(new MemBus(config.dbusConfig, 1))
+      val dbus = master(new MemBus(config.dbusConfig, 0 bits))
       internalDBus = dbus
     }
 

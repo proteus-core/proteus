@@ -14,22 +14,22 @@ case class MemBusConfig(
   def word2ByteAddress(wa: UInt): UInt = wa << log2Up(dataWidth / 8)
 }
 
-case class MemBusCmd(config: MemBusConfig, loadStageCount: Int) extends Bundle {
+case class MemBusCmd(config: MemBusConfig, idWidth: BitCount) extends Bundle {
   val address = UInt(config.addressWidth bits)
-  val id = UInt(log2Up(loadStageCount) bits)
+  val id = UInt(idWidth)
   val write = if (config.readWrite) Bool() else null
   val wdata = if (config.readWrite) UInt(config.dataWidth bits) else null
   val wmask = if (config.readWrite) Bits(config.dataWidth / 8 bits) else null
 }
 
-case class MemBusRsp(config: MemBusConfig, loadStageCount: Int) extends Bundle {
+case class MemBusRsp(config: MemBusConfig, idWidth: BitCount) extends Bundle {
   val rdata = UInt(config.dataWidth bits)
-  val id = UInt(log2Up(loadStageCount) bits)
+  val id = UInt(idWidth)
 }
 
-case class MemBus(val config: MemBusConfig, val loadStageCount: Int) extends Bundle with IMasterSlave {
-  val cmd = Stream(MemBusCmd(config, loadStageCount))
-  val rsp = Stream(MemBusRsp(config, loadStageCount))
+case class MemBus(val config: MemBusConfig, val idWidth: BitCount) extends Bundle with IMasterSlave {
+  val cmd = Stream(MemBusCmd(config, idWidth))
+  val rsp = Stream(MemBusRsp(config, idWidth))
 
   override def asMaster(): Unit = {
     master(cmd)
@@ -58,7 +58,7 @@ case class MemBus(val config: MemBusConfig, val loadStageCount: Int) extends Bun
   def toAxi4ReadOnly(): Axi4ReadOnly = {
     assert(isMasterInterface)
 
-    val axi4Config = MemBus.getAxi4Config(config, loadStageCount)
+    val axi4Config = MemBus.getAxi4Config(config, idWidth)
     val axi4Bus = Axi4ReadOnly(axi4Config)
 
     axi4Bus.readCmd.valid := cmd.valid
@@ -77,7 +77,7 @@ case class MemBus(val config: MemBusConfig, val loadStageCount: Int) extends Bun
   def toAxi4Shared(): Axi4Shared = {
     assert(isMasterInterface)
 
-    val axi4Config = MemBus.getAxi4Config(config, loadStageCount)
+    val axi4Config = MemBus.getAxi4Config(config, idWidth)
     val axi4Bus = Axi4Shared(axi4Config)
 
     axi4Bus.sharedCmd.valid := cmd.valid
@@ -110,11 +110,11 @@ object MemBus {
     useSlaveError = false
   )
 
-  def getAxi4Config(config: MemBusConfig, loadStageCount: Int) = Axi4Config(
+  def getAxi4Config(config: MemBusConfig, idWidth: BitCount) = Axi4Config(
     addressWidth = config.addressWidth,
     dataWidth = config.dataWidth,
     useId = true,
-    idWidth = log2Up(loadStageCount),
+    idWidth = idWidth.value,
     useRegion = false,
     useBurst = false,
     useLock = false,
@@ -137,7 +137,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
   val currentCmd = new Bundle {
     val valid = Reg(Bool()).init(False)
     val ready = Reg(Bool()).init(False)
-    val cmd = Reg(MemBusCmd(bus.config, bus.loadStageCount))
+    val cmd = Reg(MemBusCmd(bus.config, bus.idWidth))
 
     def isIssued = valid || ready
     def isWrite = if (bus.config.readWrite) cmd.write else False
