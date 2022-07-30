@@ -14,26 +14,29 @@ case class MemBusConfig(
   def word2ByteAddress(wa: UInt): UInt = wa << log2Up(dataWidth / 8)
 }
 
-case class MemBusCmd(config: MemBusConfig) extends Bundle {
+case class MemBusCmd(config: MemBusConfig, idWidth: BitCount) extends Bundle {
   val address = UInt(config.addressWidth bits)
+  val id = UInt(idWidth)
   val write = if (config.readWrite) Bool() else null
   val wdata = if (config.readWrite) UInt(config.dataWidth bits) else null
   val wmask = if (config.readWrite) Bits(config.dataWidth / 8 bits) else null
 }
 
-case class MemBusRsp(config: MemBusConfig) extends Bundle {
+case class MemBusRsp(config: MemBusConfig, idWidth: BitCount) extends Bundle {
   val rdata = UInt(config.dataWidth bits)
+  val id = UInt(idWidth)
 }
 
-class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
-  val cmd = Stream(MemBusCmd(config))
-  val rsp = Stream(MemBusRsp(config))
+case class MemBus(val config: MemBusConfig, val idWidth: BitCount) extends Bundle with IMasterSlave {
+  val cmd = Stream(MemBusCmd(config, idWidth))
+  val rsp = Stream(MemBusRsp(config, idWidth))
 
   override def asMaster(): Unit = {
     master(cmd)
     slave(rsp)
   }
 
+  // TODO: id implementation impossible with Apb3!
   def toApb3(): Apb3 = {
     assert(!isMasterInterface)
 
@@ -55,14 +58,16 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
   def toAxi4ReadOnly(): Axi4ReadOnly = {
     assert(isMasterInterface)
 
-    val axi4Config = MemBus.getAxi4Config(config)
+    val axi4Config = MemBus.getAxi4Config(config, idWidth)
     val axi4Bus = Axi4ReadOnly(axi4Config)
 
     axi4Bus.readCmd.valid := cmd.valid
     axi4Bus.readCmd.addr := cmd.address
+    axi4Bus.readCmd.id := cmd.id
     cmd.ready := axi4Bus.readCmd.ready
 
     rsp.valid := axi4Bus.readRsp.valid
+    rsp.id := axi4Bus.readRsp.id
     rsp.rdata := axi4Bus.readRsp.data.asUInt
     axi4Bus.readRsp.ready := rsp.ready
 
@@ -72,12 +77,13 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
   def toAxi4Shared(): Axi4Shared = {
     assert(isMasterInterface)
 
-    val axi4Config = MemBus.getAxi4Config(config)
+    val axi4Config = MemBus.getAxi4Config(config, idWidth)
     val axi4Bus = Axi4Shared(axi4Config)
 
     axi4Bus.sharedCmd.valid := cmd.valid
     axi4Bus.sharedCmd.addr := cmd.address
     axi4Bus.sharedCmd.write := cmd.write
+    axi4Bus.sharedCmd.id := cmd.id
     cmd.ready := axi4Bus.sharedCmd.ready
 
     axi4Bus.writeData.valid := cmd.valid
@@ -86,9 +92,10 @@ class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
     axi4Bus.writeData.last := True
 
     // TODO: Set useResp to true and verify response?
-    axi4Bus.writeRsp.ready := rsp.ready
+    axi4Bus.writeRsp.ready := True // FIXME is this ok?
     axi4Bus.readRsp.ready := rsp.ready
     rsp.valid := axi4Bus.readRsp.valid
+    rsp.id := axi4Bus.readRsp.id
     rsp.rdata := axi4Bus.readRsp.data.asUInt
 
     axi4Bus
@@ -103,10 +110,11 @@ object MemBus {
     useSlaveError = false
   )
 
-  def getAxi4Config(config: MemBusConfig) = Axi4Config(
+  def getAxi4Config(config: MemBusConfig, idWidth: BitCount) = Axi4Config(
     addressWidth = config.addressWidth,
     dataWidth = config.dataWidth,
-    useId = false,
+    useId = true,
+    idWidth = idWidth.value,
     useRegion = false,
     useBurst = false,
     useLock = false,
@@ -129,17 +137,20 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
   val currentCmd = new Bundle {
     val valid = Reg(Bool()).init(False)
     val ready = Reg(Bool()).init(False)
-    val cmd = Reg(MemBusCmd(bus.config))
+    val cmd = Reg(MemBusCmd(bus.config, bus.idWidth))
 
     def isIssued = valid || ready
     def isWrite = if (bus.config.readWrite) cmd.write else False
   }
+
+  currentCmd.cmd.id.assignDontCare()
 
   def isReady: Bool = {
     !currentCmd.isIssued
   }
 
   bus.cmd.valid := currentCmd.valid
+  bus.cmd.id := currentCmd.cmd.id
   bus.cmd.address := currentCmd.cmd.address
 
   if (bus.config.readWrite) {
@@ -244,6 +255,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
   }
 }
 
+// TODO: can the following be simplified by using AXI transaction IDs such as for parallel loads?
 class IBusControl(
    bus: MemBus,
    ibusLatency: Int,

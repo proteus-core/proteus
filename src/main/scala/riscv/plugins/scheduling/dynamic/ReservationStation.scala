@@ -290,16 +290,16 @@ class ReservationStation(exeStage: Stage,
   }
 
   def execute(): Unit = {
-    val dispatchStage = pipeline.issuePipeline.stages.last
+    val issueStage = pipeline.issuePipeline.stages.last
 
     val robIndex = UInt()
     robIndex := rob.pushEntry(
-      dispatchStage.output(pipeline.data.RD),
-      dispatchStage.output(pipeline.data.RD_TYPE),
-      pipeline.service[LsuService].operationOutput(dispatchStage),
-      pipeline.service[BranchService].isBranch(dispatchStage),
-      dispatchStage.output(pipeline.data.PC),
-      pipeline.service[BranchTargetPredictorService].predictedPc(dispatchStage))
+      issueStage.output(pipeline.data.RD),
+      issueStage.output(pipeline.data.RD_TYPE),
+      pipeline.service[LsuService].operationOutput(issueStage),
+      pipeline.service[BranchService].isBranch(issueStage),
+      issueStage.output(pipeline.data.PC),
+      pipeline.service[BranchTargetPredictorService].predictedPc(issueStage))
 
     robEntryIndex := robIndex
 
@@ -319,10 +319,10 @@ class ReservationStation(exeStage: Stage,
     }
 
     def dependencySetup(metaRs: RegisterSource, reg: PipelineData[UInt], regData: PipelineData[UInt], regType: PipelineData[SpinalEnumCraft[RegisterType.type]]): Unit = {
-      val rsUsed = dispatchStage.output(regType) === RegisterType.GPR
+      val rsUsed = issueStage.output(regType) === RegisterType.GPR
 
       when(rsUsed) {
-        val rsReg = dispatchStage.output(reg)
+        val rsReg = issueStage.output(reg)
         val (rsInRob, rsValue) = rob.findRegisterValue(rsReg)
 
         when(rsInRob) {
@@ -338,7 +338,7 @@ class ReservationStation(exeStage: Stage,
           pipeline.serviceOption[ProspectService] foreach {prospect =>
             metaRs.isSecretNext := prospect.isSecretRegister(rsReg)
           }
-          regs.setReg(regData, dispatchStage.output(regData))
+          regs.setReg(regData, issueStage.output(regData))
         }
 
         // ProSpeCT: condition for waiting: either the operand is pending in ROB, or the operand is secret and there is a pending branch

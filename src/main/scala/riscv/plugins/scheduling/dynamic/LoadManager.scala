@@ -27,9 +27,9 @@ class LoadManager(pipeline: Pipeline,
 
   private val stateNext = State()
   private val state = RegNext(stateNext).init(State.IDLE)
-  private val isAvailable = Bool()
+  val isAvailable: Bool = Bool()
 
-  def receiveMessage(rdbMessage: RdbMessage): Bool = { // TODO: can we make sure that this method is only called once per cycle?
+  def receiveMessage(rdbMessage: RdbMessage): Bool = {
     val ret = Bool()
     ret := False
     when (isAvailable) {
@@ -48,12 +48,11 @@ class LoadManager(pipeline: Pipeline,
   def build(): Unit = {
     stateNext := state
     isAvailable := False
+    activeFlush := False
 
     when (state === State.IDLE) {
       isAvailable := !activeFlush
     }
-
-    activeFlush := False
 
     cdbWaitingNext := cdbWaiting
     rdbWaitingNext := rdbWaiting

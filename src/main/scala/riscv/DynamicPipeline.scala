@@ -9,7 +9,7 @@ trait DynamicPipeline extends Pipeline {
   val issuePipeline: StaticPipeline
   val rsStages: Seq[Stage]
   var rob: ReorderBuffer = null
-  val loadStage: Stage
+  val loadStages: Seq[Stage]
 
   val unorderedStages: Seq[Stage]
   var components: Seq[Resettable] = null
@@ -100,7 +100,7 @@ trait DynamicPipeline extends Pipeline {
     }
 
     for (stage <- rsStages) {
-      for (reg <- retirementStage.inputs.keys.toSet union loadStage.inputs.keys.toSet) {
+      for (reg <- retirementStage.inputs.keys.toSet union loadStages.head.inputs.keys.toSet) {
         stage.output(reg)
       }
     }
