@@ -22,7 +22,7 @@ trait MemoryService {
   /**
     * Creates a new data bus to be used in stage.
     */
-  def createInternalDBus(readStage: Stage, writeStage: Stage): (MemBus, MemBus)
+  def createInternalDBus(readStages: Seq[Stage], writeStage: Stage): (Seq[MemBus], MemBus)
 
   /**
    * Return all stages that have an internal DBUS. I.e., the stages that are
