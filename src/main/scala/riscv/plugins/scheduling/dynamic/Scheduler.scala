@@ -20,54 +20,58 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       val cdbBMetaData = new DynBundle[PipelineData[spinal.core.Data]]
       val registerBundle = new DynBundle[PipelineData[spinal.core.Data]]
 
-      val ret = pipeline.retirementStage
-      val ls = pipeline.loadStage
+      private val ret = pipeline.retirementStage
+      private val ls = pipeline.loadStages.head // TODO !!!
       for (register <- ret.lastValues.keys.toSet union ret.outputs.keys.toSet union ls.lastValues.keys.toSet union ls.outputs.keys.toSet) {
         registerBundle.addElement(register, register.dataType)
       }
 
       pipeline.rob = new ReorderBuffer(pipeline, 16, registerBundle, cdbBMetaData)
 
-      val rob = pipeline.rob
+      private val rob = pipeline.rob
       rob.build()
 
-      val reservationStations = pipeline.rsStages.map(
+      private val reservationStations = pipeline.rsStages.map(
         stage => new ReservationStation(stage, rob, pipeline, registerBundle, cdbBMetaData))
 
-      val cdb = new CommonDataBus(reservationStations, rob, cdbBMetaData)
+      private val loadManagers = pipeline.loadStages.map(stage => new LoadManager(pipeline, stage, rob, registerBundle, cdbBMetaData))
+
+      val cdb = new CommonDataBus(reservationStations, rob, cdbBMetaData, loadManagers.size)
       cdb.build()
       for ((rs, index) <- reservationStations.zipWithIndex) {
         rs.build()
         rs.cdbStream >> cdb.inputs(index)
       }
 
-      val loadManager = new LoadManager(pipeline, pipeline.loadStage, rob, registerBundle, cdbBMetaData)
-      loadManager.build()
-      loadManager.cdbStream >> cdb.inputs(reservationStations.size)
+      val robDataBus = new RobDataBus(rob, registerBundle, loadManagers.size)
+      robDataBus.build()
 
-      val dispatcher = new Dispatcher(pipeline, rob, loadManager, registerBundle) // TODO: confusing name regarding instruction dispatch later
+      for (index <- loadManagers.indices) {
+        loadManagers(index).build()
+        loadManagers(index).cdbStream >> cdb.inputs(reservationStations.size + index)
+        loadManagers(index).rdbStream >> robDataBus.inputs(1 + index)
+      }
+
+      val dispatcher = new Dispatcher(pipeline, rob, loadManagers, registerBundle)
       dispatcher.build()
-
-      pipeline.components = reservationStations :+ loadManager :+ dispatcher
 
       val dispatchBus = new DispatchBus(reservationStations, rob, dispatcher, registerBundle)
       dispatchBus.build()
+
+      dispatcher.rdbStream >> robDataBus.inputs(0)
 
       for ((rs, index) <- reservationStations.zipWithIndex) {
         rs.dispatchStream >> dispatchBus.inputs(index)
       }
 
-      val robDataBus = new RobDataBus(rob, registerBundle)
-      robDataBus.build()
-      dispatcher.rdbStream >> robDataBus.inputs(0)
-      loadManager.rdbStream >> robDataBus.inputs(1)
+      pipeline.components = reservationStations ++ loadManagers :+ dispatcher
 
       // Dispatch
-      val dispatchStage = pipeline.issuePipeline.stages.last
-      dispatchStage.arbitration.isStalled := False
+      private val issueStage = pipeline.issuePipeline.stages.last
+      issueStage.arbitration.isStalled := False
 
-      when (dispatchStage.arbitration.isValid && dispatchStage.arbitration.isReady) {
-        val fuMask = dispatchStage.output(PrivateRegisters.DEST_FU)
+      when (issueStage.arbitration.isValid && issueStage.arbitration.isReady) {
+        val fuMask = issueStage.output(PrivateRegisters.DEST_FU)
         val illegalInstruction = fuMask === 0
 
         var context = when (False) {}
@@ -79,7 +83,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
         }
 
         context.otherwise {
-          dispatchStage.arbitration.isStalled := True
+          issueStage.arbitration.isStalled := True
         }
       }
     }
