@@ -321,6 +321,7 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage) 
             }
           } otherwise {
             loadActive := False
+            dbusCtrl.invalidate()
           }
         }
     }

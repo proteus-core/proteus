@@ -6,7 +6,9 @@ import spinal.lib._
 
 import scala.collection.mutable
 
-class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends Plugin with MemoryService {
+class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config) extends Plugin with MemoryService {
+  private val idWidth: BitCount = log2Up(stageCount) bits
+
   private var externalIBus: MemBus = null
   private var internalIBus: MemBus = null
   private var externalDBus: MemBus = null
@@ -46,6 +48,10 @@ class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends 
     pipeline plug new Area {
       externalDBus = master(new MemBus(config.dbusConfig, idWidth)).setName("dbus")
 
+      val pendingCount = Vec.fill(stageCount)(RegInit(UInt(3 bits).getZero))  // 3 bits: guess
+      val increaseCount = Vec.fill(stageCount)(False)
+      val decreaseCount = Vec.fill(stageCount)(False)
+
       // Create a RW version of the RO internalReadDBus so that we can use it with
       // StreamArbiterFactory
       val fullDBusCmds = internalReadDBuses.zipWithIndex.map {
@@ -63,8 +69,11 @@ class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends 
           busValid := False
 
           // only set valid bit for the corresponding load bus
-          when(externalDBus.rsp.id === index) {
-            busValid := externalDBus.rsp.valid
+          when(externalDBus.rsp.id === index && externalDBus.rsp.valid) {
+            when (pendingCount(index) === 1 && !internalReadDBus.cmd.valid) {  // only forward the response if there's no contending load and it also wasn't issued in this same cycle
+              busValid := externalDBus.rsp.valid
+            }
+            decreaseCount(index) := True
           }
 
           busValid <> internalReadDBus.rsp.valid
@@ -122,6 +131,9 @@ class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends 
             cmdWrite := cmd.write
             cmdWdata := cmd.wdata
             cmdWmask := cmd.wmask
+            when (ready) {
+              increaseCount(index) := True
+            }
           }
       }
 
@@ -131,6 +143,15 @@ class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends 
       externalDBus.cmd.write <> cmdWrite
       externalDBus.cmd.wdata <> cmdWdata
       externalDBus.cmd.wmask <> cmdWmask
+
+      for (i <- 0 until stageCount) {
+        when (increaseCount(i) && !decreaseCount(i)) {
+          pendingCount(i) := pendingCount(i) + 1
+        }
+        when (!increaseCount(i) && decreaseCount(i)) {
+          pendingCount(i) := pendingCount(i) - 1
+        }
+      }
     }
   }
 
