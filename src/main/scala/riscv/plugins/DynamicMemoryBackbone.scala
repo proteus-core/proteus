@@ -124,7 +124,7 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config) extends Pl
 
           cmd.ready := ready
 
-          context = context.elsewhen(cmd.valid) {
+          context = context.elsewhen(cmd.valid && (pendingCount(index) < pendingCount(index).maxValue || cmd.write)) {  // prevent overflowing the pending counter for loads
             cmdValid := True
             cmdAddress := cmd.address
             cmdId := index
