@@ -11,7 +11,7 @@ abstract class Plugin[-PipelineT <: Pipeline] {
     this.pipeline = pipeline
   }
 
-  def getName = getClass.getSimpleName.replace("$","")
+  def getName = getClass.getSimpleName.replace("$", "")
   def setup(): Unit = ()
   def build(): Unit = ()
   def finish(): Unit = ()

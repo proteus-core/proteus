@@ -16,7 +16,9 @@ case class ImmediateDecoder(ir: Bits) {
   def s = signExtend(ir(31 downto 25) ## ir(11 downto 7))
   def b = signExtend(ir(31) ## ir(7) ## ir(30 downto 25) ## ir(11 downto 8) ## False)
   def u = (ir(31 downto 12) << 12).asUInt
-  def j = signExtend(ir(31) ## ir(19 downto 12) ## ir(20) ## ir(30 downto 25) ## ir(24 downto 21) ## False)
+  def j = signExtend(
+    ir(31) ## ir(19 downto 12) ## ir(20) ## ir(30 downto 25) ## ir(24 downto 21) ## False
+  )
 }
 
 class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
@@ -37,11 +39,12 @@ class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
       irMapper = mapper
     }
 
-    override def addDecoding(opcode: MaskedLiteral,
-                             itype: InstructionType,
-                             action: Action): Unit = {
-      assert(!instructionTypes.contains(opcode),
-        s"Multiple instruction types set for $opcode")
+    override def addDecoding(
+        opcode: MaskedLiteral,
+        itype: InstructionType,
+        action: Action
+    ): Unit = {
+      assert(!instructionTypes.contains(opcode), s"Multiple instruction types set for $opcode")
 
       instructionTypes(opcode) = itype
       addDecoding(opcode, action)
@@ -51,20 +54,22 @@ class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
       val currentAction = decodings.getOrElse(opcode, Map())
 
       for ((key, data) <- currentAction) {
-        assert(!action.contains(key),
-          s"Conflicting decodings for opcode $opcode: $key overspecified")
+        assert(
+          !action.contains(key),
+          s"Conflicting decodings for opcode $opcode: $key overspecified"
+        )
       }
 
       decodings(opcode) = currentAction ++ action
     }
 
-
-    override def setFixedRegisters(opcode: MaskedLiteral,
-                                   rs1: Option[Int],
-                                   rs2: Option[Int],
-                                   rd:  Option[Int]): Unit = {
-      assert(!fixedRegisters.contains(opcode),
-        s"Fixed registers already set for $opcode")
+    override def setFixedRegisters(
+        opcode: MaskedLiteral,
+        rs1: Option[Int],
+        rs2: Option[Int],
+        rd: Option[Int]
+    ): Unit = {
+      assert(!fixedRegisters.contains(opcode), s"Fixed registers already set for $opcode")
 
       def check(reg: Int) = assert(reg >= 0 && reg < 32)
       rs1.foreach(check)
@@ -84,11 +89,13 @@ class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
   }
 
   override def setup(): Unit = {
-    configure {config =>
-      config.addDefault(Map(
-        pipeline.data.RD_DATA_VALID -> False,
-        pipeline.data.IMM -> U(0)
-      ))
+    configure { config =>
+      config.addDefault(
+        Map(
+          pipeline.data.RD_DATA_VALID -> False,
+          pipeline.data.IMM -> U(0)
+        )
+      )
     }
   }
 
@@ -108,13 +115,15 @@ class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
 
       val immDecoder = ImmediateDecoder(ir.asBits)
 
-      switch (ir) {
+      switch(ir) {
         for ((key, action) <- decodings) {
-          is (key) {
+          is(key) {
             applyAction(decodeStage, action)
 
-            assert(instructionTypes.contains(key),
-              s"Opcode $key has decodings but no instruction type set")
+            assert(
+              instructionTypes.contains(key),
+              s"Opcode $key has decodings but no instruction type set"
+            )
 
             val instructionType = instructionTypes(key)
 
@@ -149,7 +158,7 @@ class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
           }
         }
         default {
-          pipeline.serviceOption[TrapService] foreach {trapHandler =>
+          pipeline.serviceOption[TrapService] foreach { trapHandler =>
             trapHandler.trap(decodeStage, TrapCause.IllegalInstruction(ir))
           }
         }

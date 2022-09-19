@@ -26,11 +26,11 @@ class Fetcher(fetchStage: Stage, ibusLatency: Int = 2) extends Plugin[Pipeline] 
       val pc = input(pipeline.data.PC)
       val nextPc = pc + 4
 
-      when (arbitration.isRunning) {
+      when(arbitration.isRunning) {
         val fetchAddress = addressTranslator.translate(fetchStage, pc)
         val (valid, rdata) = ibusCtrl.read(fetchAddress)
 
-        when (valid) {
+        when(valid) {
           arbitration.isReady := True
 
           output(pipeline.data.NEXT_PC) := nextPc

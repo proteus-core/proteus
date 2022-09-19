@@ -8,7 +8,9 @@ import spinal.lib._
 import collection.mutable
 
 class Scheduler(canStallExternally: Boolean = false)
-  extends Plugin[StaticPipeline] with ScheduleService with IssueService {
+    extends Plugin[StaticPipeline]
+    with ScheduleService
+    with IssueService {
   private class ClaimPipelineArea extends Area {
     val claimPipeline = out(Bool())
     val pipelineFlushed = in(Bool())
@@ -26,7 +28,7 @@ class Scheduler(canStallExternally: Boolean = false)
       for ((stage, nextStage) <- stages.zip(stages.tail)) {
         stage.arbitration.isStalled :=
           nextStage.arbitration.isStalled ||
-          (nextStage.arbitration.isValid && !nextStage.arbitration.isReady)
+            (nextStage.arbitration.isValid && !nextStage.arbitration.isReady)
       }
 
       if (!canStallExternally) {
@@ -37,7 +39,7 @@ class Scheduler(canStallExternally: Boolean = false)
         val isValidReg = Reg(Bool()).init(False)
         stage.arbitration.isValid := isValidReg
 
-        when (stage.arbitration.isDone || !stage.arbitration.isValid) {
+        when(stage.arbitration.isDone || !stage.arbitration.isValid) {
           isValidReg := prevStage.arbitration.isDone
         }
       }
@@ -49,30 +51,32 @@ class Scheduler(canStallExternally: Boolean = false)
   }
 
   override def claimPipeline(stage: Stage): Bool = {
-    val area = claimPipelineAreas.getOrElseUpdate(stage, {
-      val stageArea = stage plug new ClaimPipelineArea
+    val area = claimPipelineAreas.getOrElseUpdate(
+      stage, {
+        val stageArea = stage plug new ClaimPipelineArea
 
-      pipeline plug new Area {
-        val laterStagesEmpty = if (stage == pipeline.retirementStage) {
-          True
-        } else {
-          val laterStages = pipeline.stages.dropWhile(_ != stage).tail
-          !laterStages.map(_.arbitration.isValid).orR
-        }
-
-        stageArea.pipelineFlushed := laterStagesEmpty
-
-        when (stageArea.claimPipeline) {
-          for (prevStage <- pipeline.stages.takeWhile(_ != stage)) {
-            prevStage.arbitration.isValid := False
+        pipeline plug new Area {
+          val laterStagesEmpty = if (stage == pipeline.retirementStage) {
+            True
+          } else {
+            val laterStages = pipeline.stages.dropWhile(_ != stage).tail
+            !laterStages.map(_.arbitration.isValid).orR
           }
 
-          pipeline.service[JumpService].setFetchPc(stage.input(pipeline.data.NEXT_PC))
-        }
-      }
+          stageArea.pipelineFlushed := laterStagesEmpty
 
-      stageArea
-    })
+          when(stageArea.claimPipeline) {
+            for (prevStage <- pipeline.stages.takeWhile(_ != stage)) {
+              prevStage.arbitration.isValid := False
+            }
+
+            pipeline.service[JumpService].setFetchPc(stage.input(pipeline.data.NEXT_PC))
+          }
+        }
+
+        stageArea
+      }
+    )
 
     area.claimPipeline := True
     area.pipelineFlushed

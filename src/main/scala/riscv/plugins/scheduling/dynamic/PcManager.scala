@@ -12,7 +12,12 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
 
   private val jumpObservers = mutable.Buffer[JumpObserver]()
 
-  override def jump(stage: Stage, target: UInt, jumpType: JumpType, checkAlignment: Boolean): Unit = {
+  override def jump(
+      stage: Stage,
+      target: UInt,
+      jumpType: JumpType,
+      checkAlignment: Boolean
+  ): Unit = {
     def doJump() = {
       stage.output(pipeline.data.NEXT_PC) := target
       stage.output(PrivateRegisters.JUMP_REQUESTED) := True
@@ -23,7 +28,7 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
     if (!checkAlignment) {
       doJump()
     } else {
-      when (target(1 downto 0) =/= 0) {
+      when(target(1 downto 0) =/= 0) {
         val trapHandler = pipeline.service[TrapService]
         trapHandler.trap(stage, TrapCause.InstructionAddressMisaligned(target))
       }.otherwise {
@@ -68,7 +73,7 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
     pipeline plug new Area {
       val jumpStage = pipeline.retirementStage
 
-      when (jumpStage.arbitration.isDone && jumpRequested(jumpStage)) {
+      when(jumpStage.arbitration.isDone && jumpRequested(jumpStage)) {
         val staticPcManager = pipeline.issuePipeline.service[JumpService]
         staticPcManager.jump(jumpStage.output(pipeline.data.NEXT_PC))
 

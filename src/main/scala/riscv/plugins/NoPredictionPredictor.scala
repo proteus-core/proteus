@@ -4,7 +4,8 @@ import riscv._
 import spinal.core._
 
 class NoPredictionPredictor(fetchStage: Stage, executeStage: Stage)
-  extends Plugin[Pipeline] with BranchTargetPredictorService {
+    extends Plugin[Pipeline]
+    with BranchTargetPredictorService {
   private object Data {
     object PREDICTED_PC extends PipelineData(UInt(config.xlen bits))
   }
@@ -31,7 +32,9 @@ class NoPredictionPredictor(fetchStage: Stage, executeStage: Stage)
     nextPc === predictedPc
   }
 
-  override def predictedPcOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt = {
+  override def predictedPcOfBundle(
+      bundle: Bundle with DynBundleAccess[PipelineData[Data]]
+  ): UInt = {
     bundle.elementAs[UInt](Data.PREDICTED_PC.asInstanceOf[PipelineData[Data]])
   }
 }

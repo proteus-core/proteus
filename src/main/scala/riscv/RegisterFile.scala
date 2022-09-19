@@ -29,9 +29,38 @@ case class RegisterFileWriteIo()(implicit config: Config) extends Bundle with IM
 class RegisterFile()(implicit config: Config) extends Component {
 
   private val registerNames = Seq(
-    "zero", "ra", "sp", "gp", "tp", "t0", "t1", "t2", "s0_fp", "s1", "a0", "a1",
-    "a2", "a3", "a4", "a5", "a6", "a7", "s2", "s3", "s4", "s5", "s6", "s7",
-    "s8", "s9", "s10", "s11", "t3", "t4", "t5", "t6"
+    "zero",
+    "ra",
+    "sp",
+    "gp",
+    "tp",
+    "t0",
+    "t1",
+    "t2",
+    "s0_fp",
+    "s1",
+    "a0",
+    "a1",
+    "a2",
+    "a3",
+    "a4",
+    "a5",
+    "a6",
+    "a7",
+    "s2",
+    "s3",
+    "s4",
+    "s5",
+    "s6",
+    "s7",
+    "s8",
+    "s9",
+    "s10",
+    "s11",
+    "t3",
+    "t4",
+    "t5",
+    "t6"
   )
 
   val readIo = master(RegisterFileReadIo())
@@ -60,7 +89,7 @@ class RegisterFile()(implicit config: Config) extends Component {
   readIo.rs1Data := readReg(readIo.rs1)
   readIo.rs2Data := readReg(readIo.rs2)
 
-  when (writeIo.write && writeIo.rd =/= 0) {
+  when(writeIo.write && writeIo.rd =/= 0) {
     regs(writeIo.rd) := writeIo.data
   }
 }

@@ -30,7 +30,7 @@ class Apb3ByteDev(implicit config: Config) extends Component {
 
   io.bytes.rdata.ready := !rbufFull
 
-  when (io.bytes.rdata.valid && !rbufFull) {
+  when(io.bytes.rdata.valid && !rbufFull) {
     rbuf := io.bytes.rdata.payload
     rbufFull := True
     io.irq.postInterrupt()
@@ -41,7 +41,7 @@ class Apb3ByteDev(implicit config: Config) extends Component {
 
   private val rdata = U(0, 8 bits)
 
-  when (rbufFull) {
+  when(rbufFull) {
     rdata := rbuf
   } elsewhen (io.bytes.rdata.valid) {
     rdata := io.bytes.rdata.payload

@@ -6,7 +6,9 @@ import spinal.lib._
 
 import scala.collection.mutable
 
-class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config) extends Plugin with MemoryService {
+class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
+    extends Plugin
+    with MemoryService {
   private val idWidth: BitCount = log2Up(stageCount) bits
 
   private var externalIBus: MemBus = null
@@ -48,47 +50,46 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config) extends Pl
     pipeline plug new Area {
       externalDBus = master(new MemBus(config.dbusConfig, idWidth)).setName("dbus")
 
-      val pendingCount = Vec.fill(stageCount)(RegInit(UInt(3 bits).getZero))  // 3 bits: guess
+      val pendingCount = Vec.fill(stageCount)(RegInit(UInt(3 bits).getZero)) // 3 bits: guess
       val increaseCount = Vec.fill(stageCount)(False)
       val decreaseCount = Vec.fill(stageCount)(False)
 
       // Create a RW version of the RO internalReadDBus so that we can use it with
       // StreamArbiterFactory
-      val fullDBusCmds = internalReadDBuses.zipWithIndex.map {
-        case (internalReadDBus, index) =>
-          val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig, idWidth))
-          fullReadDBusCmd.valid := internalReadDBus.cmd.valid
-          fullReadDBusCmd.id := internalReadDBus.cmd.id
-          internalReadDBus.cmd.ready := fullReadDBusCmd.ready
-          fullReadDBusCmd.write := False
-          fullReadDBusCmd.wmask.assignDontCare()
-          fullReadDBusCmd.wdata.assignDontCare()
-          fullReadDBusCmd.address := internalReadDBus.cmd.address
+      val fullDBusCmds = internalReadDBuses.zipWithIndex.map { case (internalReadDBus, index) =>
+        val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig, idWidth))
+        fullReadDBusCmd.valid := internalReadDBus.cmd.valid
+        fullReadDBusCmd.id := internalReadDBus.cmd.id
+        internalReadDBus.cmd.ready := fullReadDBusCmd.ready
+        fullReadDBusCmd.write := False
+        fullReadDBusCmd.wmask.assignDontCare()
+        fullReadDBusCmd.wdata.assignDontCare()
+        fullReadDBusCmd.address := internalReadDBus.cmd.address
 
-          val busValid = Bool()
-          busValid := False
+        val busValid = Bool()
+        busValid := False
 
-          // only set valid bit for the corresponding load bus
-          when(externalDBus.rsp.id === index && externalDBus.rsp.valid) {
-            when (pendingCount(index) === 1 && !internalReadDBus.cmd.valid) {  // only forward the response if there's no contending load and it also wasn't issued in this same cycle
-              busValid := externalDBus.rsp.valid
-            }
-            decreaseCount(index) := True
+        // only set valid bit for the corresponding load bus
+        when(externalDBus.rsp.id === index && externalDBus.rsp.valid) {
+          when(pendingCount(index) === 1 && !internalReadDBus.cmd.valid) { // only forward the response if there's no contending load and it also wasn't issued in this same cycle
+            busValid := externalDBus.rsp.valid
           }
+          decreaseCount(index) := True
+        }
 
-          busValid <> internalReadDBus.rsp.valid
-          externalDBus.rsp.payload <> internalReadDBus.rsp.payload
+        busValid <> internalReadDBus.rsp.valid
+        externalDBus.rsp.payload <> internalReadDBus.rsp.payload
 
-          fullReadDBusCmd
+        fullReadDBusCmd
 
-        // TODO filter and observers
+      // TODO filter and observers
       }
 
       val rspReady = Bool()
       rspReady := False
 
       // check whether the correct load bus is ready to receive
-      when (externalDBus.rsp.valid) {
+      when(externalDBus.rsp.valid) {
         rspReady := internalReadDBuses(externalDBus.rsp.id.resized).rsp.ready
       }
 
@@ -111,30 +112,31 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config) extends Pl
       val cmdWmask = Bits(config.dbusConfig.dataWidth / 8 bits)
       cmdWmask.assignDontCare()
 
-      var context = when (False) {}
+      var context = when(False) {}
 
-      cmds.zipWithIndex.foreach {
-        case (cmd, index) =>
-          val ready = Bool()
-          ready := False
+      cmds.zipWithIndex.foreach { case (cmd, index) =>
+        val ready = Bool()
+        ready := False
 
-          when (externalDBus.cmd.id === index) {
-            ready := externalDBus.cmd.ready
+        when(externalDBus.cmd.id === index) {
+          ready := externalDBus.cmd.ready
+        }
+
+        cmd.ready := ready
+
+        context = context.elsewhen(
+          cmd.valid && (pendingCount(index) < pendingCount(index).maxValue || cmd.write)
+        ) { // prevent overflowing the pending counter for loads
+          cmdValid := True
+          cmdAddress := cmd.address
+          cmdId := index
+          cmdWrite := cmd.write
+          cmdWdata := cmd.wdata
+          cmdWmask := cmd.wmask
+          when(ready) {
+            increaseCount(index) := True
           }
-
-          cmd.ready := ready
-
-          context = context.elsewhen(cmd.valid && (pendingCount(index) < pendingCount(index).maxValue || cmd.write)) {  // prevent overflowing the pending counter for loads
-            cmdValid := True
-            cmdAddress := cmd.address
-            cmdId := index
-            cmdWrite := cmd.write
-            cmdWdata := cmd.wdata
-            cmdWmask := cmd.wmask
-            when (ready) {
-              increaseCount(index) := True
-            }
-          }
+        }
       }
 
       externalDBus.cmd.valid <> cmdValid
@@ -145,10 +147,10 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config) extends Pl
       externalDBus.cmd.wmask <> cmdWmask
 
       for (i <- 0 until stageCount) {
-        when (increaseCount(i) && !decreaseCount(i)) {
+        when(increaseCount(i) && !decreaseCount(i)) {
           pendingCount(i) := pendingCount(i) + 1
         }
-        when (!increaseCount(i) && decreaseCount(i)) {
+        when(!increaseCount(i) && decreaseCount(i)) {
           pendingCount(i) := pendingCount(i) - 1
         }
       }
@@ -176,7 +178,10 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config) extends Pl
     internalIBus
   }
 
-  override def createInternalDBus(readStages: Seq[Stage], writeStage: Stage): (Seq[MemBus], MemBus) = {
+  override def createInternalDBus(
+      readStages: Seq[Stage],
+      writeStage: Stage
+  ): (Seq[MemBus], MemBus) = {
     assert(!readStages.contains(writeStage))
 
     internalReadDBuses = readStages.map(readStage => {
@@ -184,8 +189,7 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config) extends Pl
         val dbus = master(new MemBus(config.readDbusConfig, idWidth))
       }
       readArea.dbus
-    }
-    )
+    })
 
     writeStage plug new Area {
       internalWriteDBus = master(new MemBus(config.dbusConfig, idWidth))
@@ -202,7 +206,7 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config) extends Pl
   }
 
   override def getDBusStages: Seq[Stage] = {
-    internalReadDBusStages.filter(_ != null).distinct  // TODO: not sure what this does
+    internalReadDBusStages.filter(_ != null).distinct // TODO: not sure what this does
   }
 
   override def filterDBus(filter: MemBusFilter): Unit = {

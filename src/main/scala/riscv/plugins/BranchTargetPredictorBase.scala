@@ -4,29 +4,25 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-/**
-  * This abstract class can be used to implement different branch predictors.
-  * Derived classes should implement the logic of `predictorComponent`.
-  * This component is connected to the fetch stage through `predictIo`
-  * and to the jump stage through `jumpIo`.
+/** This abstract class can be used to implement different branch predictors. Derived classes should
+  * implement the logic of `predictorComponent`. This component is connected to the fetch stage
+  * through `predictIo` and to the jump stage through `jumpIo`.
   *
   * PredictIo can be used by the predictor to set the predicted PC in the fetch stage.
-  * PredictIo.currentPc always contains the PC in the fetch stage. If a valid prediction
-  * can be made, the predictor should set PredictIo.predictedAddress, which will update the next
-  * PC in the fetch stage.
-  * If no prediction is given, the predicted PC is set to equal the next PC.
+  * PredictIo.currentPc always contains the PC in the fetch stage. If a valid prediction can be
+  * made, the predictor should set PredictIo.predictedAddress, which will update the next PC in the
+  * fetch stage. If no prediction is given, the predicted PC is set to equal the next PC.
   *
-  * JumpIo can be used by the predictor to record jump targets. JumpIo.valid is high
-  * whenever a misprediction is detected (either because of a mispredicted jump target,
-  * an instruction that had no associated prediction / was not predicted to jump but did,
-  * or an instruction that was predicted to jump but did not).
-  * In this case, JumpIo.currentPc will contain the
-  * value of the PC in the execute stage (belonging to the mispredicted instruction),
-  * and JumpIo.target will contain the correct jump target (or the NEXT_PC, in case no jump
-  * was taken).
+  * JumpIo can be used by the predictor to record jump targets. JumpIo.valid is high whenever a
+  * misprediction is detected (either because of a mispredicted jump target, an instruction that had
+  * no associated prediction / was not predicted to jump but did, or an instruction that was
+  * predicted to jump but did not). In this case, JumpIo.currentPc will contain the value of the PC
+  * in the execute stage (belonging to the mispredicted instruction), and JumpIo.target will contain
+  * the correct jump target (or the NEXT_PC, in case no jump was taken).
   */
 abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
-  extends Plugin[Pipeline] with BranchTargetPredictorService {
+    extends Plugin[Pipeline]
+    with BranchTargetPredictorService {
 
   case class PredictIo() extends Bundle with IMasterSlave {
     val currentPc = UInt(config.xlen bits)
@@ -75,7 +71,9 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
     stage.output(Data.PREDICTED_PC)
   }
 
-  override def predictedPcOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt = {
+  override def predictedPcOfBundle(
+      bundle: Bundle with DynBundleAccess[PipelineData[Data]]
+  ): UInt = {
     bundle.elementAs[UInt](Data.PREDICTED_PC.asInstanceOf[PipelineData[Data]])
   }
 
@@ -85,9 +83,11 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
 
   override def setup(): Unit = {
     pipeline.service[DecoderService].configure { config =>
-      config.addDefault(Map(
-        Data.PREDICTED_JUMP -> False
-      ))
+      config.addDefault(
+        Map(
+          Data.PREDICTED_JUMP -> False
+        )
+      )
     }
 
     jumpArea = jumpStage plug new JumpArea {
@@ -103,7 +103,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
       jumpService.onJump { (stage, _, nextPc, jumpType) =>
         jumpType match {
           case JumpType.Normal =>
-            when (predictionWasCorrect(nextPc, predictedPc(stage))) {
+            when(predictionWasCorrect(nextPc, predictedPc(stage))) {
               // cancel jump if it was correctly predicted in the fetch stage
               pipeline.service[JumpService].disableJump(stage)
 
@@ -115,8 +115,10 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
 
       // in case of an incorrect prediction, issue a jump to the correct target
       // and notify the predictor
-      when (arbitration.isDone &&
-            !predictionWasCorrect(value(pipeline.data.NEXT_PC), value(Data.PREDICTED_PC))) {
+      when(
+        arbitration.isDone &&
+          !predictionWasCorrect(value(pipeline.data.NEXT_PC), value(Data.PREDICTED_PC))
+      ) {
         jumpIo.mispredicted := True
         jumpIo.currentPc := value(pipeline.data.PC)
         jumpIo.target := value(pipeline.data.NEXT_PC)
@@ -125,7 +127,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
         jumpService.jumpRequested(jumpStage) := True
       }
 
-      when (arbitration.isDone && value(Data.PREDICTED_JUMP)) {
+      when(arbitration.isDone && value(Data.PREDICTED_JUMP)) {
         jumpIo.correctlyPredicted := True
       }
     }
@@ -139,7 +141,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
       // otherwise set it to NEXT_PC
       // this is necessary because this register is used later on to determine whether
       // the correct next instruction was fetched
-      when (predictIo.predictedAddress.valid) {
+      when(predictIo.predictedAddress.valid) {
         fetchStage.output(Data.PREDICTED_PC) := predictIo.predictedAddress.payload
       } otherwise {
         fetchStage.output(Data.PREDICTED_PC) := fetchStage.value(pipeline.data.NEXT_PC)
@@ -155,18 +157,18 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
       predictorComponent.predictIo <> fetchArea.predictIo
       predictorComponent.jumpIo <> jumpArea.jumpIo
 
-      when (predictorComponent.jumpIo.mispredicted) {
+      when(predictorComponent.jumpIo.mispredicted) {
         mispredictionCount := mispredictionCount + 1
       }
 
-      when (predictorComponent.jumpIo.correctlyPredicted) {
+      when(predictorComponent.jumpIo.correctlyPredicted) {
         predictionCount := predictionCount + 1
       }
 
       val jumpService = pipeline.service[JumpService]
 
       // if a target was predicted, set the PC of the fetch stage to the prediction
-      when (predictorComponent.predictIo.predictedAddress.valid && fetchStage.arbitration.isDone) {
+      when(predictorComponent.predictIo.predictedAddress.valid && fetchStage.arbitration.isDone) {
         jumpService.setFetchPc(predictorComponent.predictIo.predictedAddress.payload)
       }
     }

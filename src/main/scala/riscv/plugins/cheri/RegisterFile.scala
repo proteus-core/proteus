@@ -4,12 +4,12 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class RegisterFile(readStage: Stage, writeStage: Stage)
-                  (implicit context: Context) extends Plugin[Pipeline] {
+class RegisterFile(readStage: Stage, writeStage: Stage)(implicit context: Context)
+    extends Plugin[Pipeline] {
   override def setup(): Unit = {
     val decoder = pipeline.service[DecoderService]
 
-    decoder.configure {config =>
+    decoder.configure { config =>
       config.addDefault(context.data.CD_DATA, RegCapability.Null)
     }
 
@@ -51,7 +51,7 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
 
       val readIo = master(ReadIo())
       val writeIo = master(WriteIo())
-      val regs = Mem(RegCapability(), Seq.fill(config.numRegs) {RegCapability.Null})
+      val regs = Mem(RegCapability(), Seq.fill(config.numRegs) { RegCapability.Null })
 
       // Add a wire for each register with a readable name. This is to easily
       // view register values in a wave dump.
@@ -65,7 +65,7 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
       readIo.cs1Data := readReg(readIo.cs1)
       readIo.cs2Data := readReg(readIo.cs2)
 
-      when (writeIo.write && writeIo.cd =/= 0) {
+      when(writeIo.write && writeIo.cd =/= 0) {
         regs.write(writeIo.cd, writeIo.data)
       }
     }
@@ -93,8 +93,8 @@ class RegisterFile(readStage: Stage, writeStage: Stage)
       val hasTrapped = trapHandler.hasTrapped(writeStage)
       regFileIo.write :=
         (value(pipeline.data.RD_TYPE) === RegisterType.CAP) &&
-        arbitration.isDone &&
-        !hasTrapped
+          arbitration.isDone &&
+          !hasTrapped
     }
 
     pipeline plug new Area {

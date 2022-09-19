@@ -7,7 +7,8 @@ import spinal.lib.fsm._
 
 // noinspection ForwardReference
 class MemoryTagger(memoryStart: BigInt, memorySize: BigInt)(implicit context: Context)
-  extends Plugin[Pipeline] with TaggedMemoryService {
+    extends Plugin[Pipeline]
+    with TaggedMemoryService {
   assert(memorySize % (context.clen / 8) == 0)
   private val numTags = memorySize / (context.clen / 8)
 
@@ -23,7 +24,7 @@ class MemoryTagger(memoryStart: BigInt, memorySize: BigInt)(implicit context: Co
 
   def build(stage: Stage, dbusIn: MemBus, cbusIn: CapBus, dbusOut: MemBus): Unit = {
     pipeline plug new StateMachine {
-      val tags = Mem(Seq.fill(numTags.toInt) {False})
+      val tags = Mem(Seq.fill(numTags.toInt) { False })
 
       dbusIn.cmd.ready := False
       dbusIn.rsp.valid := False
@@ -50,40 +51,40 @@ class MemoryTagger(memoryStart: BigInt, memorySize: BigInt)(implicit context: Co
 
       val PASS_THROUGH: State = new State with EntryPoint {
         whenIsActive {
-          when (dbusIn.cmd.valid) {
+          when(dbusIn.cmd.valid) {
             val payload = dbusIn.cmd.payload
 
-            when (payload.write) {
+            when(payload.write) {
               val accepted = dbusControl.write(payload.address, payload.wdata, payload.wmask)
 
-              when (accepted) {
+              when(accepted) {
                 dbusIn.cmd.ready := True
 
-                when (addressInMemory) {
+                when(addressInMemory) {
                   tags(tagIndex) := False
                 }
               }
             } otherwise {
               val (valid, rdata) = dbusControl.read(payload.address)
 
-              when (valid) {
+              when(valid) {
                 dbusIn.cmd.ready := True
                 dbusIn.rsp.valid := True
                 dbusIn.rsp.payload.rdata := rdata
               }
             }
           } elsewhen (cbusIn.cmd.valid) {
-            when (cbusPayload.write) {
+            when(cbusPayload.write) {
               val accepted = dbusControl.write(cbusWordAddress, cbusWord, B"1111")
 
-              when (accepted) {
+              when(accepted) {
                 cbusWordCtr.increment()
                 goto(CAP_OP)
               }
             } otherwise {
               val (valid, rdata) = dbusControl.read(cbusWordAddress)
 
-              when (valid) {
+              when(valid) {
                 cbusReadWords(cbusWordCtr) := rdata
                 cbusWordCtr.increment()
                 goto(CAP_OP)
@@ -95,12 +96,12 @@ class MemoryTagger(memoryStart: BigInt, memorySize: BigInt)(implicit context: Co
 
       val CAP_OP = new State {
         whenIsActive {
-          when (cbusPayload.write) {
+          when(cbusPayload.write) {
             val accepted = dbusControl.write(cbusWordAddress, cbusWord, B"1111")
 
-            when (accepted) {
-              when (cbusWordCtr.willOverflowIfInc) {
-                when (addressInMemory) {
+            when(accepted) {
+              when(cbusWordCtr.willOverflowIfInc) {
+                when(addressInMemory) {
                   tags(tagIndex) := cbusTag
                 }
 
@@ -113,8 +114,8 @@ class MemoryTagger(memoryStart: BigInt, memorySize: BigInt)(implicit context: Co
           } otherwise {
             val (valid, rdata) = dbusControl.read(cbusWordAddress)
 
-            when (valid) {
-              when (cbusWordCtr.willOverflowIfInc) {
+            when(valid) {
+              when(cbusWordCtr.willOverflowIfInc) {
                 cbusIn.rsp.rdata.assignValue((rdata ## cbusReadWords).asUInt)
                 cbusIn.rsp.rdata.tag := tags(tagIndex)
                 cbusIn.cmd.ready := True
@@ -131,7 +132,6 @@ class MemoryTagger(memoryStart: BigInt, memorySize: BigInt)(implicit context: Co
       }
     }
   }
-
 
   override def finish(): Unit = {
     pipeline plug {

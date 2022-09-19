@@ -17,23 +17,29 @@ class Shifter(exeStages: Set[Stage]) extends Plugin[Pipeline] {
     val issuer = pipeline.service[IssueService]
 
     pipeline.service[DecoderService].configure { config =>
-      config.addDefault(Map(
-        Data.SHIFT_OP -> ShiftOp.NONE
-      ))
+      config.addDefault(
+        Map(
+          Data.SHIFT_OP -> ShiftOp.NONE
+        )
+      )
 
       val ops = Seq(
         (Opcodes.SLLI, ShiftOp.SLL, InstructionType.I),
         (Opcodes.SRLI, ShiftOp.SRL, InstructionType.I),
         (Opcodes.SRAI, ShiftOp.SRA, InstructionType.I),
-        (Opcodes.SLL,  ShiftOp.SLL, InstructionType.R),
-        (Opcodes.SRL,  ShiftOp.SRL, InstructionType.R),
-        (Opcodes.SRA,  ShiftOp.SRA, InstructionType.R)
+        (Opcodes.SLL, ShiftOp.SLL, InstructionType.R),
+        (Opcodes.SRL, ShiftOp.SRL, InstructionType.R),
+        (Opcodes.SRA, ShiftOp.SRA, InstructionType.R)
       )
 
       for ((opcode, op, itype) <- ops) {
-        config.addDecoding(opcode, itype, Map(
-          Data.SHIFT_OP -> op
-        ))
+        config.addDecoding(
+          opcode,
+          itype,
+          Map(
+            Data.SHIFT_OP -> op
+          )
+        )
         issuer.setDestinations(opcode, exeStages)
       }
     }
@@ -49,7 +55,7 @@ class Shifter(exeStages: Set[Stage]) extends Plugin[Pipeline] {
         val shamt = UInt(5 bits)
         val useImm = value(pipeline.data.IMM_USED)
 
-        when (useImm) {
+        when(useImm) {
           shamt := value(pipeline.data.IMM)(4 downto 0)
         } otherwise {
           shamt := value(pipeline.data.RS2_DATA)(4 downto 0)
@@ -59,12 +65,12 @@ class Shifter(exeStages: Set[Stage]) extends Plugin[Pipeline] {
 
         val result = op.mux(
           ShiftOp.NONE -> U(0),
-          ShiftOp.SLL  -> (src |<< shamt),
-          ShiftOp.SRL  -> (src |>> shamt),
-          ShiftOp.SRA  -> (src.asSInt >> shamt).asUInt
+          ShiftOp.SLL -> (src |<< shamt),
+          ShiftOp.SRL -> (src |>> shamt),
+          ShiftOp.SRA -> (src.asSInt >> shamt).asUInt
         )
 
-        when (arbitration.isValid && op =/= ShiftOp.NONE) {
+        when(arbitration.isValid && op =/= ShiftOp.NONE) {
           arbitration.rs1Needed := True
           arbitration.rs2Needed := !useImm
           output(pipeline.data.RD_DATA) := result

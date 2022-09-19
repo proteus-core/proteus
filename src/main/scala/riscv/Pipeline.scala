@@ -65,7 +65,7 @@ trait Pipeline {
   def serviceOption[T](implicit tag: ClassTag[T]): Option[T] = {
     val services = plugins.filter(_ match {
       case _: T => true
-      case _    => false
+      case _ => false
     })
 
     assert(services.length <= 1)
