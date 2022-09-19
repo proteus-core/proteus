@@ -2,7 +2,8 @@
 .vscode/
 /*.v
 /*.bin
-/project/
+/project/*
+!/project/plugins.sbt
 /simWorkspace/
 /target/
 /tmp/
