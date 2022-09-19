@@ -54,8 +54,8 @@ private class Mstatus(implicit config: Config) extends Csr {
   val sd = False
 
   val mstatus = sd ## B(0, 8 bits) ## tsr ## tw ## tvm ## mxr ## sum ## mprv ##
-                xs ## fs ## mpp ## B"00" ## spp ## mpie ## False ## spie ##
-                upie ## mie ## False ## sie ## uie
+    xs ## fs ## mpp ## B"00" ## spp ## mpie ## False ## spie ##
+    upie ## mie ## False ## sie ## uie
 
   val writableRanges = Map[Range, BaseType](
     (3 downto 3) -> mie,
@@ -140,21 +140,20 @@ private class Mhartid(implicit config: Config) extends Csr {
   override def read(): UInt = U(0, config.xlen bits)
 }
 
-class MachineMode(ecallStage: Stage,
-                  addMtvec: Boolean = true,
-                  addMepc: Boolean = true) extends Plugin[Pipeline] {
+class MachineMode(ecallStage: Stage, addMtvec: Boolean = true, addMepc: Boolean = true)
+    extends Plugin[Pipeline] {
   object Data {
-    object ECALL  extends PipelineData(Bool())
+    object ECALL extends PipelineData(Bool())
     object EBREAK extends PipelineData(Bool())
   }
 
   override def setup(): Unit = {
     val csr = pipeline.service[CsrService]
 
-    csr.registerCsr(0xF11, new Mvendorid)
-    csr.registerCsr(0xF12, new Marchid)
-    csr.registerCsr(0xF13, new Mimpid)
-    csr.registerCsr(0xF14, new Mhartid)
+    csr.registerCsr(0xf11, new Mvendorid)
+    csr.registerCsr(0xf12, new Marchid)
+    csr.registerCsr(0xf13, new Mimpid)
+    csr.registerCsr(0xf14, new Mhartid)
 
     csr.registerCsr(0x300, new Mstatus)
     csr.registerCsr(0x301, new Misa(pipeline))
@@ -175,15 +174,15 @@ class MachineMode(ecallStage: Stage,
     val issuer = pipeline.service[IssueService]
 
     pipeline.service[DecoderService].configure { config =>
-      config.addDefault(Map(
-        Data.ECALL  -> False,
-        Data.EBREAK -> False
-      ))
+      config.addDefault(
+        Map(
+          Data.ECALL -> False,
+          Data.EBREAK -> False
+        )
+      )
 
-      config.addDecoding(Opcodes.ECALL, InstructionType.I,
-                         Map(Data.ECALL -> True))
-      config.addDecoding(Opcodes.EBREAK, InstructionType.I,
-                         Map(Data.EBREAK -> True))
+      config.addDecoding(Opcodes.ECALL, InstructionType.I, Map(Data.ECALL -> True))
+      config.addDecoding(Opcodes.EBREAK, InstructionType.I, Map(Data.EBREAK -> True))
 
       issuer.setDestination(Opcodes.ECALL, ecallStage)
       issuer.setDestination(Opcodes.EBREAK, ecallStage)
@@ -200,10 +199,10 @@ class MachineMode(ecallStage: Stage,
         trapHandler.trap(ecallStage, cause)
       }
 
-      when (arbitration.isValid) {
-        when (value(Data.ECALL)) {
+      when(arbitration.isValid) {
+        when(value(Data.ECALL)) {
           trap(TrapCause.EnvironmentCallFromMMode)
-        }.elsewhen (value(Data.EBREAK)) {
+        }.elsewhen(value(Data.EBREAK)) {
           trap(TrapCause.Breakpoint)
         }
       }

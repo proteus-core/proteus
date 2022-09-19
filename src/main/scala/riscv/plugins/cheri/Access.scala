@@ -24,57 +24,74 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
 
   override def setup(): Unit = {
     pipeline.service[DecoderService].configure { config =>
-      config.addDefault(Map(
-        Data.CGET -> False,
-        Data.CMODIFY -> False,
-        Data.IMM_IS_UNSIGNED -> False,
-        Data.CMOVE -> False
-      ))
+      config.addDefault(
+        Map(
+          Data.CGET -> False,
+          Data.CMODIFY -> False,
+          Data.IMM_IS_UNSIGNED -> False,
+          Data.CMOVE -> False
+        )
+      )
 
       val getters = Map(
-        Opcodes.CGetPerm   -> FieldSelect.PERM,
-        Opcodes.CGetType   -> FieldSelect.TYPE,
-        Opcodes.CGetBase   -> FieldSelect.BASE,
-        Opcodes.CGetLen    -> FieldSelect.LEN,
-        Opcodes.CGetTag    -> FieldSelect.TAG,
+        Opcodes.CGetPerm -> FieldSelect.PERM,
+        Opcodes.CGetType -> FieldSelect.TYPE,
+        Opcodes.CGetBase -> FieldSelect.BASE,
+        Opcodes.CGetLen -> FieldSelect.LEN,
+        Opcodes.CGetTag -> FieldSelect.TAG,
         Opcodes.CGetSealed -> FieldSelect.SEALED,
         Opcodes.CGetOffset -> FieldSelect.OFFSET,
-        Opcodes.CGetAddr   -> FieldSelect.ADDR
+        Opcodes.CGetAddr -> FieldSelect.ADDR
       )
 
       for ((opcode, selector) <- getters) {
-        config.addDecoding(opcode, InstructionType.R_CxR, Map(
-          Data.CGET -> True,
-          Data.CFIELD -> selector
-        ))
+        config.addDecoding(
+          opcode,
+          InstructionType.R_CxR,
+          Map(
+            Data.CGET -> True,
+            Data.CFIELD -> selector
+          )
+        )
       }
 
       val modifiers = Seq(
-        (Opcodes.CAndPerm,        Modification.AND_PERM,   InstructionType.R_CRC),
-        (Opcodes.CSetOffset,      Modification.SET_OFFSET, InstructionType.R_CRC),
-        (Opcodes.CSetAddr,        Modification.SET_ADDR,   InstructionType.R_CRC),
-        (Opcodes.CIncOffset,      Modification.INC_OFFSET, InstructionType.R_CRC),
-        (Opcodes.CIncOffsetImm,   Modification.INC_OFFSET, InstructionType.I_CxC),
-        (Opcodes.CSetBounds,      Modification.SET_BOUNDS, InstructionType.R_CRC),
+        (Opcodes.CAndPerm, Modification.AND_PERM, InstructionType.R_CRC),
+        (Opcodes.CSetOffset, Modification.SET_OFFSET, InstructionType.R_CRC),
+        (Opcodes.CSetAddr, Modification.SET_ADDR, InstructionType.R_CRC),
+        (Opcodes.CIncOffset, Modification.INC_OFFSET, InstructionType.R_CRC),
+        (Opcodes.CIncOffsetImm, Modification.INC_OFFSET, InstructionType.I_CxC),
+        (Opcodes.CSetBounds, Modification.SET_BOUNDS, InstructionType.R_CRC),
         (Opcodes.CSetBoundsExact, Modification.SET_BOUNDS, InstructionType.R_CRC),
-        (Opcodes.CSetBoundsImm,   Modification.SET_BOUNDS, InstructionType.I_CxC),
-        (Opcodes.CClearTag,       Modification.CLEAR_TAG,  InstructionType.R_CxC)
+        (Opcodes.CSetBoundsImm, Modification.SET_BOUNDS, InstructionType.I_CxC),
+        (Opcodes.CClearTag, Modification.CLEAR_TAG, InstructionType.R_CxC)
       )
 
       for ((opcode, modification, itype) <- modifiers) {
-        config.addDecoding(opcode, itype, Map(
-          Data.CMODIFY -> True,
-          Data.CMODIFICATION -> modification
-        ))
+        config.addDecoding(
+          opcode,
+          itype,
+          Map(
+            Data.CMODIFY -> True,
+            Data.CMODIFICATION -> modification
+          )
+        )
       }
 
-      config.addDecoding(Opcodes.CSetBoundsImm, Map(
-        Data.IMM_IS_UNSIGNED -> True
-      ))
+      config.addDecoding(
+        Opcodes.CSetBoundsImm,
+        Map(
+          Data.IMM_IS_UNSIGNED -> True
+        )
+      )
 
-      config.addDecoding(Opcodes.CMove, InstructionType.R_CxC, Map(
-        Data.CMOVE -> True
-      ))
+      config.addDecoding(
+        Opcodes.CMove,
+        InstructionType.R_CxC,
+        Map(
+          Data.CMOVE -> True
+        )
+      )
     }
   }
 
@@ -82,12 +99,12 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
     stage plug new Area {
       import stage._
 
-      when (arbitration.isValid) {
-        when (value(Data.CGET)) {
+      when(arbitration.isValid) {
+        when(value(Data.CGET)) {
           arbitration.rs1Needed := True
           val cap = value(context.data.CS1_DATA)
 
-          when (!arbitration.isStalled) {
+          when(!arbitration.isStalled) {
             val rd = value(Data.CFIELD).mux(
               FieldSelect.PERM -> cap.perms.asIsaBits.asUInt.resized,
               FieldSelect.TYPE -> cap.otype.extendedValue,
@@ -104,14 +121,14 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           }
         }
 
-        when (value(Data.CMODIFY)) {
+        when(value(Data.CMODIFY)) {
           arbitration.rs1Needed := True
           val cs = value(context.data.CS1_DATA)
 
           val rhs = UInt(config.xlen bits)
 
-          when (value(pipeline.data.IMM_USED)) {
-            when (value(Data.IMM_IS_UNSIGNED)) {
+          when(value(pipeline.data.IMM_USED)) {
+            when(value(Data.IMM_IS_UNSIGNED)) {
               rhs := value(pipeline.data.IMM)(11 downto 0).resized
             } otherwise {
               rhs := value(pipeline.data.IMM)
@@ -130,21 +147,21 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
             exceptionHandler.except(stage, cause, CapIdx.gpcr(value(pipeline.data.RS1)))
           }
 
-          when (!arbitration.isStalled) {
+          when(!arbitration.isStalled) {
             switch(value(Data.CMODIFICATION)) {
-              is (Modification.AND_PERM) {
-                when (!cs.tag) {
+              is(Modification.AND_PERM) {
+                when(!cs.tag) {
                   except(ExceptionCause.TagViolation)
                 } otherwise {
                   val newPerms = cs.perms.asIsaBits & rhs.asBits
                   cd.perms.assignFromIsaBits(newPerms)
                 }
               }
-              is (Modification.SET_OFFSET) {
+              is(Modification.SET_OFFSET) {
                 cd.offset := rhs
               }
-              is (Modification.SET_ADDR) {
-                when (cs.tag && cs.isSealed) {
+              is(Modification.SET_ADDR) {
+                when(cs.tag && cs.isSealed) {
                   except(ExceptionCause.SealViolation)
                 } elsewhen (rhs < cs.base) {
                   cd.base := rhs
@@ -156,7 +173,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
                   cd.tag := cs.tag && (offset < cs.length)
                 }
               }
-              is (Modification.INC_OFFSET) {
+              is(Modification.INC_OFFSET) {
                 cd.offset := cs.offset + rhs // TODO use IntAlu?
               }
               is(Modification.SET_BOUNDS) {
@@ -174,7 +191,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
                   cd.offset := 0
                 }
               }
-              is (Modification.CLEAR_TAG) {
+              is(Modification.CLEAR_TAG) {
                 cd.tag := False
               }
             }
@@ -184,10 +201,10 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           }
         }
 
-        when (value(Data.CMOVE)) {
+        when(value(Data.CMOVE)) {
           arbitration.rs1Needed := True
 
-          when (!arbitration.isStalled) {
+          when(!arbitration.isStalled) {
             output(context.data.CD_DATA) := value(context.data.CS1_DATA)
             output(pipeline.data.RD_DATA_VALID) := True
           }

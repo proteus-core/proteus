@@ -33,11 +33,13 @@ trait DynamicPipeline extends Pipeline {
   }
 
   override def init(): Unit = {
-    pipelineRegs = rsStages.map(stage => {
-      val regs = new PipelineRegs(stage)
-      regs.setName(s"pipelineRegs_${stage.stageName}")
-      stage -> regs
-    }).toMap
+    pipelineRegs = rsStages
+      .map(stage => {
+        val regs = new PipelineRegs(stage)
+        regs.setName(s"pipelineRegs_${stage.stageName}")
+        stage -> regs
+      })
+      .toMap
   }
 
   override def connectStages(): Unit = {

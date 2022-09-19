@@ -21,53 +21,64 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
     val issuer = pipeline.service[IssueService]
 
     pipeline.service[DecoderService].configure { config =>
-      config.addDefault(Map(
-        Data.BU_IS_BRANCH -> False,
-        Data.BU_WRITE_RET_ADDR_TO_RD -> False,
-        Data.BU_IGNORE_TARGET_LSB -> False,
-        Data.BU_CONDITION -> BranchCondition.NONE
-      ))
+      config.addDefault(
+        Map(
+          Data.BU_IS_BRANCH -> False,
+          Data.BU_WRITE_RET_ADDR_TO_RD -> False,
+          Data.BU_IGNORE_TARGET_LSB -> False,
+          Data.BU_CONDITION -> BranchCondition.NONE
+        )
+      )
 
-      config.addDecoding(Opcodes.JAL, InstructionType.J, Map(
-        Data.BU_IS_BRANCH -> True,
-        Data.BU_WRITE_RET_ADDR_TO_RD -> True
-      ))
+      config.addDecoding(
+        Opcodes.JAL,
+        InstructionType.J,
+        Map(
+          Data.BU_IS_BRANCH -> True,
+          Data.BU_WRITE_RET_ADDR_TO_RD -> True
+        )
+      )
 
       issuer.setDestinations(Opcodes.JAL, branchStages)
 
-      alu.addOperation(Opcodes.JAL, alu.AluOp.ADD,
-                       alu.Src1Select.PC, alu.Src2Select.IMM)
+      alu.addOperation(Opcodes.JAL, alu.AluOp.ADD, alu.Src1Select.PC, alu.Src2Select.IMM)
 
-      config.addDecoding(Opcodes.JALR, InstructionType.I, Map(
-        Data.BU_IS_BRANCH -> True,
-        Data.BU_WRITE_RET_ADDR_TO_RD -> True,
-        Data.BU_IGNORE_TARGET_LSB -> True
-      ))
+      config.addDecoding(
+        Opcodes.JALR,
+        InstructionType.I,
+        Map(
+          Data.BU_IS_BRANCH -> True,
+          Data.BU_WRITE_RET_ADDR_TO_RD -> True,
+          Data.BU_IGNORE_TARGET_LSB -> True
+        )
+      )
 
       issuer.setDestinations(Opcodes.JALR, branchStages)
 
-      alu.addOperation(Opcodes.JALR, alu.AluOp.ADD,
-                       alu.Src1Select.RS1, alu.Src2Select.IMM)
+      alu.addOperation(Opcodes.JALR, alu.AluOp.ADD, alu.Src1Select.RS1, alu.Src2Select.IMM)
 
       val branchConditions = Map(
-        Opcodes.BEQ  -> BranchCondition.EQ,
-        Opcodes.BNE  -> BranchCondition.NE,
-        Opcodes.BLT  -> BranchCondition.LT,
-        Opcodes.BGE  -> BranchCondition.GE,
+        Opcodes.BEQ -> BranchCondition.EQ,
+        Opcodes.BNE -> BranchCondition.NE,
+        Opcodes.BLT -> BranchCondition.LT,
+        Opcodes.BGE -> BranchCondition.GE,
         Opcodes.BLTU -> BranchCondition.LTU,
         Opcodes.BGEU -> BranchCondition.GEU
       )
 
       for ((opcode, condition) <- branchConditions) {
-        config.addDecoding(opcode, InstructionType.B, Map(
-          Data.BU_IS_BRANCH -> True,
-          Data.BU_CONDITION -> condition
-        ))
+        config.addDecoding(
+          opcode,
+          InstructionType.B,
+          Map(
+            Data.BU_IS_BRANCH -> True,
+            Data.BU_CONDITION -> condition
+          )
+        )
 
         issuer.setDestinations(opcode, branchStages)
 
-        alu.addOperation(opcode, alu.AluOp.ADD,
-                         alu.Src1Select.PC, alu.Src2Select.IMM)
+        alu.addOperation(opcode, alu.AluOp.ADD, alu.Src1Select.PC, alu.Src2Select.IMM)
       }
     }
   }
@@ -81,7 +92,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
         val target = aluResultData.dataType()
         target := value(aluResultData)
 
-        when (value(Data.BU_IGNORE_TARGET_LSB)) {
+        when(value(Data.BU_IGNORE_TARGET_LSB)) {
           target(0) := False
         }
 
@@ -102,26 +113,26 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
 
         val branchTaken = condition.mux(
           BranchCondition.NONE -> True,
-          BranchCondition.EQ   -> eq,
-          BranchCondition.NE   -> ne,
-          BranchCondition.LT   -> lt,
-          BranchCondition.GE   -> ge,
-          BranchCondition.LTU  -> ltu,
-          BranchCondition.GEU  -> geu
+          BranchCondition.EQ -> eq,
+          BranchCondition.NE -> ne,
+          BranchCondition.LT -> lt,
+          BranchCondition.GE -> ge,
+          BranchCondition.LTU -> ltu,
+          BranchCondition.GEU -> geu
         )
 
         val jumpService = pipeline.service[JumpService]
 
-        when (arbitration.isValid && value(Data.BU_IS_BRANCH)) {
-          when (condition =/= BranchCondition.NONE) {
+        when(arbitration.isValid && value(Data.BU_IS_BRANCH)) {
+          when(condition =/= BranchCondition.NONE) {
             arbitration.rs1Needed := True
             arbitration.rs2Needed := True
           }
 
-          when (branchTaken && !arbitration.isStalled) {
+          when(branchTaken && !arbitration.isStalled) {
             jumpService.jump(stage, target)
 
-            when (value(Data.BU_WRITE_RET_ADDR_TO_RD)) {
+            when(value(Data.BU_WRITE_RET_ADDR_TO_RD)) {
               output(pipeline.data.RD_DATA) := input(pipeline.data.NEXT_PC)
               output(pipeline.data.RD_DATA_VALID) := True
             }

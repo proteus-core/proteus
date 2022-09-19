@@ -6,10 +6,11 @@ import spinal.core._
 import spinal.core.sim._
 
 object createStaticPipeline {
-  def apply(disablePipelining: Boolean = false,
-            extraPlugins: Seq[Plugin[Pipeline]] = Seq(),
-            build: Boolean = true)
-           (implicit conf: Config): StaticPipeline = {
+  def apply(
+      disablePipelining: Boolean = false,
+      extraPlugins: Seq[Plugin[Pipeline]] = Seq(),
+      build: Boolean = true
+  )(implicit conf: Config): StaticPipeline = {
     import riscv.plugins.scheduling.static._
 
     val pipeline = new Component with StaticPipeline {
@@ -31,31 +32,35 @@ object createStaticPipeline {
     if (disablePipelining) {
       pipeline.addPlugin(new NoPipeliningScheduler)
     } else {
-      pipeline.addPlugins(Seq(
-        new Scheduler,
-        new DataHazardResolver(firstRsReadStage = pipeline.execute)
-      ))
+      pipeline.addPlugins(
+        Seq(
+          new Scheduler,
+          new DataHazardResolver(firstRsReadStage = pipeline.execute)
+        )
+      )
     }
 
-    pipeline.addPlugins(Seq(
-      new StaticMemoryBackbone,
-      new Fetcher(pipeline.fetch),
-      new Decoder(pipeline.decode),
-      new RegisterFileAccessor(pipeline.decode, pipeline.writeback),
-      new IntAlu(Set(pipeline.execute)),
-      new Shifter(Set(pipeline.execute)),
-      new Lsu(Set(pipeline.memory), Seq(pipeline.memory), pipeline.memory),
-      new BranchUnit(Set(pipeline.execute)),
-      new PcManager(0x80000000L),
-      new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
-      new CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
-      new Timers,
-      new MachineMode(pipeline.execute),
-      new TrapHandler(pipeline.writeback),
-      new TrapStageInvalidator,
-      new Interrupts(pipeline.writeback),
-      new MulDiv(Set(pipeline.execute))
-    ) ++ extraPlugins)
+    pipeline.addPlugins(
+      Seq(
+        new StaticMemoryBackbone,
+        new Fetcher(pipeline.fetch),
+        new Decoder(pipeline.decode),
+        new RegisterFileAccessor(pipeline.decode, pipeline.writeback),
+        new IntAlu(Set(pipeline.execute)),
+        new Shifter(Set(pipeline.execute)),
+        new Lsu(Set(pipeline.memory), Seq(pipeline.memory), pipeline.memory),
+        new BranchUnit(Set(pipeline.execute)),
+        new PcManager(0x80000000L),
+        new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
+        new CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
+        new Timers,
+        new MachineMode(pipeline.execute),
+        new TrapHandler(pipeline.writeback),
+        new TrapStageInvalidator,
+        new Interrupts(pipeline.writeback),
+        new MulDiv(Set(pipeline.execute))
+      ) ++ extraPlugins
+    )
 
     if (build) {
       pipeline.build()
@@ -161,8 +166,9 @@ object CoreExtMem {
 }
 
 object createDynamicPipeline {
-  def apply(extraPlugins: Seq[Plugin[Pipeline]] = Seq(), build: Boolean = true)
-           (implicit conf: Config): DynamicPipeline = {
+  def apply(extraPlugins: Seq[Plugin[Pipeline]] = Seq(), build: Boolean = true)(implicit
+      conf: Config
+  ): DynamicPipeline = {
     val pipeline = new Component with DynamicPipeline {
       setDefinitionName("Pipeline")
 
@@ -189,42 +195,54 @@ object createDynamicPipeline {
       val intMul2 = new Stage("EX_MUL2")
       override val passThroughStage: Stage = intAlu1
       override val rsStages: Seq[Stage] = Seq(intAlu1, intAlu2, intMul1, intMul2)
-      override val loadStages: Seq[Stage] = Seq(new Stage("LOAD1"), new Stage("LOAD2"), new Stage("LOAD3"))
+      override val loadStages: Seq[Stage] =
+        Seq(new Stage("LOAD1"), new Stage("LOAD2"), new Stage("LOAD3"))
       override val retirementStage = new Stage("RET")
       override val unorderedStages: Seq[Stage] = rsStages ++ loadStages
       override val stages = issuePipeline.stages ++ unorderedStages :+ retirementStage
     }
 
-    pipeline.issuePipeline.addPlugins(Seq(
-      new scheduling.static.Scheduler(canStallExternally = true),
-      new scheduling.static.PcManager(0x80000000L),
-      new DynamicMemoryBackbone(log2Up(pipeline.loadStages.size + 1) bits),  // +1 for write stage (which also uses an ID currently)
-      new Fetcher(pipeline.issuePipeline.fetch)
-    ))
+    pipeline.issuePipeline.addPlugins(
+      Seq(
+        new scheduling.static.Scheduler(canStallExternally = true),
+        new scheduling.static.PcManager(0x80000000L),
+        new DynamicMemoryBackbone(
+          log2Up(pipeline.loadStages.size + 1) bits
+        ), // +1 for write stage (which also uses an ID currently)
+        new Fetcher(pipeline.issuePipeline.fetch)
+      )
+    )
 
-    pipeline.addPlugins(Seq(
-      new Decoder(pipeline.issuePipeline.decode), // TODO: ugly alert!!
-      new scheduling.dynamic.Scheduler,
-      new scheduling.dynamic.PcManager,
-      new RegisterFileAccessor(
-        // FIXME this works since there is no delay between ID and dispatch. It would probably be
-        // safer to create an explicit dispatch stage in the dynamic pipeline and read the registers
-        // there. It could still be zero-delay of course.
-        readStage  = pipeline.issuePipeline.decode,
-        writeStage = pipeline.retirementStage
-      ),
-      new Lsu(Set(pipeline.intAlu2), pipeline.loadStages, pipeline.retirementStage),
-      new BranchTargetPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage, 8, conf.xlen),
-      new IntAlu(Set(pipeline.intAlu1, pipeline.intAlu2)),
-      new Shifter(Set(pipeline.intAlu1, pipeline.intAlu2)),
-      new MulDiv(Set(pipeline.intMul1, pipeline.intMul2)),
-      new BranchUnit(Set(pipeline.intAlu1, pipeline.intAlu2)),
-      new CsrFile(pipeline.retirementStage, pipeline.intAlu1),
-      new TrapHandler(pipeline.retirementStage),
-      new MachineMode(pipeline.intAlu1),
-      new Interrupts(pipeline.retirementStage),
-      new Timers
-    ) ++ extraPlugins)
+    pipeline.addPlugins(
+      Seq(
+        new Decoder(pipeline.issuePipeline.decode), // TODO: ugly alert!!
+        new scheduling.dynamic.Scheduler,
+        new scheduling.dynamic.PcManager,
+        new RegisterFileAccessor(
+          // FIXME this works since there is no delay between ID and dispatch. It would probably be
+          // safer to create an explicit dispatch stage in the dynamic pipeline and read the registers
+          // there. It could still be zero-delay of course.
+          readStage = pipeline.issuePipeline.decode,
+          writeStage = pipeline.retirementStage
+        ),
+        new Lsu(Set(pipeline.intAlu2), pipeline.loadStages, pipeline.retirementStage),
+        new BranchTargetPredictor(
+          pipeline.issuePipeline.fetch,
+          pipeline.retirementStage,
+          8,
+          conf.xlen
+        ),
+        new IntAlu(Set(pipeline.intAlu1, pipeline.intAlu2)),
+        new Shifter(Set(pipeline.intAlu1, pipeline.intAlu2)),
+        new MulDiv(Set(pipeline.intMul1, pipeline.intMul2)),
+        new BranchUnit(Set(pipeline.intAlu1, pipeline.intAlu2)),
+        new CsrFile(pipeline.retirementStage, pipeline.intAlu1),
+        new TrapHandler(pipeline.retirementStage),
+        new MachineMode(pipeline.intAlu1),
+        new Interrupts(pipeline.retirementStage),
+        new Timers
+      ) ++ extraPlugins
+    )
 
     if (build) {
       pipeline.build()
@@ -242,7 +260,7 @@ object CoreDynamic {
 
 object CoreDynamicSim {
   def main(args: Array[String]) {
-    SimConfig.withWave.compile(SoC.dynamic(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim {dut =>
+    SimConfig.withWave.compile(SoC.dynamic(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
       var done = false

@@ -17,7 +17,7 @@ private class Mip(implicit config: Config) extends Csr {
   val meip = Reg(Bool()).init(False)
 
   val mip = B(0, config.xlen - 12 bits) ## meip ## False ## seip ## ueip ##
-            mtip ## False ## stip ## utip ## msip ## False ## ssip ## usip
+    mtip ## False ## stip ## utip ## msip ## False ## ssip ## usip
 
   override def read(): UInt = {
     mip.asUInt
@@ -44,7 +44,7 @@ private class Mie(implicit config: Config) extends Csr {
   val meie = Reg(Bool()).init(False)
 
   val mie = B(0, config.xlen - 12 bits) ## meie ## False ## seie ## ueie ##
-            mtie ## False ## stie ## utie ## msie ## False ## ssie ## usie
+    mtie ## False ## stie ## utie ## msie ## False ## ssie ## usie
 
   override def read(): UInt = {
     mie.asUInt
@@ -87,15 +87,15 @@ class Interrupts(interruptStage: Stage) extends Plugin[Pipeline] with InterruptS
       val mie = slave(new CsrIo)
       val mip = slave(new CsrIo)
 
-      when (mtimer.update || external.update) {
+      when(mtimer.update || external.update) {
         val mipValue = UInt(config.xlen bits)
         mipValue := mip.read()
 
-        when (mtimer.update) {
+        when(mtimer.update) {
           mipValue(7) := mtimer.interruptPending // mtip bit
         }
 
-        when (external.update) {
+        when(external.update) {
           mipValue(11) := external.interruptPending // meip bit
         }
 
@@ -108,12 +108,12 @@ class Interrupts(interruptStage: Stage) extends Plugin[Pipeline] with InterruptS
       val meie = mie.read()(11)
       val meip = mip.read()(11)
 
-      when (gie) {
-        when (mtie && mtip) {
+      when(gie) {
+        when(mtie && mtip) {
           trapHandler.trap(interruptStage, TrapCause.MachineTimerInterrupt)
         }
 
-        when (meie && meip) {
+        when(meie && meip) {
           trapHandler.trap(interruptStage, TrapCause.MachineExternalInterrupt)
         }
       }

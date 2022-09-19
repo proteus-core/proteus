@@ -22,7 +22,10 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
 
       private val ret = pipeline.retirementStage
       private val ls = pipeline.loadStages.head // TODO !!!
-      for (register <- ret.lastValues.keys.toSet union ret.outputs.keys.toSet union ls.lastValues.keys.toSet union ls.outputs.keys.toSet) {
+      for (
+        register <-
+          ret.lastValues.keys.toSet union ret.outputs.keys.toSet union ls.lastValues.keys.toSet union ls.outputs.keys.toSet
+      ) {
         registerBundle.addElement(register, register.dataType)
       }
 
@@ -31,10 +34,13 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       private val rob = pipeline.rob
       rob.build()
 
-      private val reservationStations = pipeline.rsStages.map(
-        stage => new ReservationStation(stage, rob, pipeline, registerBundle, cdbBMetaData))
+      private val reservationStations = pipeline.rsStages.map(stage =>
+        new ReservationStation(stage, rob, pipeline, registerBundle, cdbBMetaData)
+      )
 
-      private val loadManagers = pipeline.loadStages.map(stage => new LoadManager(pipeline, stage, rob, registerBundle, cdbBMetaData))
+      private val loadManagers = pipeline.loadStages.map(stage =>
+        new LoadManager(pipeline, stage, rob, registerBundle, cdbBMetaData)
+      )
 
       val cdb = new CommonDataBus(reservationStations, rob, cdbBMetaData, loadManagers.size)
       cdb.build()
@@ -70,14 +76,16 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       private val issueStage = pipeline.issuePipeline.stages.last
       issueStage.arbitration.isStalled := False
 
-      when (issueStage.arbitration.isValid && issueStage.arbitration.isReady) {
+      when(issueStage.arbitration.isValid && issueStage.arbitration.isReady) {
         val fuMask = issueStage.output(PrivateRegisters.DEST_FU)
         val illegalInstruction = fuMask === 0
 
-        var context = when (False) {}
+        var context = when(False) {}
 
         for ((rs, index) <- reservationStations.zipWithIndex) {
-          context = context.elsewhen ((fuMask(index) || illegalInstruction) && rs.isAvailable && rob.isAvailable) {
+          context = context.elsewhen(
+            (fuMask(index) || illegalInstruction) && rs.isAvailable && rob.isAvailable
+          ) {
             rs.execute()
           }
         }
@@ -91,8 +99,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
 
   override def setDestinations(opcode: MaskedLiteral, stages: Set[Stage]): Unit = {
     for (stage <- stages) {
-      assert(pipeline.rsStages.contains(stage),
-        s"Stage ${stage.stageName} is not an execute stage")
+      assert(pipeline.rsStages.contains(stage), s"Stage ${stage.stageName} is not an execute stage")
     }
 
     pipeline.service[DecoderService].configure { config =>

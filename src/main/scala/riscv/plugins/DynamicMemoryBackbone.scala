@@ -6,7 +6,9 @@ import spinal.lib._
 
 import scala.collection.mutable
 
-class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends Plugin with MemoryService {
+class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config)
+    extends Plugin
+    with MemoryService {
   private var externalIBus: MemBus = null
   private var internalIBus: MemBus = null
   private var externalDBus: MemBus = null
@@ -48,38 +50,37 @@ class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends 
 
       // Create a RW version of the RO internalReadDBus so that we can use it with
       // StreamArbiterFactory
-      val fullDBusCmds = internalReadDBuses.zipWithIndex.map {
-        case (internalReadDBus, index) =>
-          val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig, idWidth))
-          fullReadDBusCmd.valid := internalReadDBus.cmd.valid
-          fullReadDBusCmd.id := internalReadDBus.cmd.id
-          internalReadDBus.cmd.ready := fullReadDBusCmd.ready
-          fullReadDBusCmd.write := False
-          fullReadDBusCmd.wmask.assignDontCare()
-          fullReadDBusCmd.wdata.assignDontCare()
-          fullReadDBusCmd.address := internalReadDBus.cmd.address
+      val fullDBusCmds = internalReadDBuses.zipWithIndex.map { case (internalReadDBus, index) =>
+        val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig, idWidth))
+        fullReadDBusCmd.valid := internalReadDBus.cmd.valid
+        fullReadDBusCmd.id := internalReadDBus.cmd.id
+        internalReadDBus.cmd.ready := fullReadDBusCmd.ready
+        fullReadDBusCmd.write := False
+        fullReadDBusCmd.wmask.assignDontCare()
+        fullReadDBusCmd.wdata.assignDontCare()
+        fullReadDBusCmd.address := internalReadDBus.cmd.address
 
-          val busValid = Bool()
-          busValid := False
+        val busValid = Bool()
+        busValid := False
 
-          // only set valid bit for the corresponding load bus
-          when(externalDBus.rsp.id === index) {
-            busValid := externalDBus.rsp.valid
-          }
+        // only set valid bit for the corresponding load bus
+        when(externalDBus.rsp.id === index) {
+          busValid := externalDBus.rsp.valid
+        }
 
-          busValid <> internalReadDBus.rsp.valid
-          externalDBus.rsp.payload <> internalReadDBus.rsp.payload
+        busValid <> internalReadDBus.rsp.valid
+        externalDBus.rsp.payload <> internalReadDBus.rsp.payload
 
-          fullReadDBusCmd
+        fullReadDBusCmd
 
-        // TODO filter and observers
+      // TODO filter and observers
       }
 
       val rspReady = Bool()
       rspReady := False
 
       // check whether the correct load bus is ready to receive
-      when (externalDBus.rsp.valid) {
+      when(externalDBus.rsp.valid) {
         rspReady := internalReadDBuses(externalDBus.rsp.id.resized).rsp.ready
       }
 
@@ -102,27 +103,26 @@ class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends 
       val cmdWmask = Bits(config.dbusConfig.dataWidth / 8 bits)
       cmdWmask.assignDontCare()
 
-      var context = when (False) {}
+      var context = when(False) {}
 
-      cmds.zipWithIndex.foreach {
-        case (cmd, index) =>
-          val ready = Bool()
-          ready := False
+      cmds.zipWithIndex.foreach { case (cmd, index) =>
+        val ready = Bool()
+        ready := False
 
-          when (externalDBus.cmd.id === index) {
-            ready := externalDBus.cmd.ready
-          }
+        when(externalDBus.cmd.id === index) {
+          ready := externalDBus.cmd.ready
+        }
 
-          cmd.ready := ready
+        cmd.ready := ready
 
-          context = context.elsewhen(cmd.valid) {
-            cmdValid := True
-            cmdAddress := cmd.address
-            cmdId := index
-            cmdWrite := cmd.write
-            cmdWdata := cmd.wdata
-            cmdWmask := cmd.wmask
-          }
+        context = context.elsewhen(cmd.valid) {
+          cmdValid := True
+          cmdAddress := cmd.address
+          cmdId := index
+          cmdWrite := cmd.write
+          cmdWdata := cmd.wdata
+          cmdWmask := cmd.wmask
+        }
       }
 
       externalDBus.cmd.valid <> cmdValid
@@ -155,7 +155,10 @@ class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends 
     internalIBus
   }
 
-  override def createInternalDBus(readStages: Seq[Stage], writeStage: Stage): (Seq[MemBus], MemBus) = {
+  override def createInternalDBus(
+      readStages: Seq[Stage],
+      writeStage: Stage
+  ): (Seq[MemBus], MemBus) = {
     assert(!readStages.contains(writeStage))
 
     internalReadDBuses = readStages.map(readStage => {
@@ -163,8 +166,7 @@ class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends 
         val dbus = master(new MemBus(config.readDbusConfig, idWidth))
       }
       readArea.dbus
-    }
-    )
+    })
 
     writeStage plug new Area {
       internalWriteDBus = master(new MemBus(config.dbusConfig, idWidth))
@@ -181,7 +183,7 @@ class DynamicMemoryBackbone(idWidth: BitCount)(implicit config: Config) extends 
   }
 
   override def getDBusStages: Seq[Stage] = {
-    internalReadDBusStages.filter(_ != null).distinct  // TODO: not sure what this does
+    internalReadDBusStages.filter(_ != null).distinct // TODO: not sure what this does
   }
 
   override def filterDBus(filter: MemBusFilter): Unit = {

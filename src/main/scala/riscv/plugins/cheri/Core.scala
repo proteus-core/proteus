@@ -27,41 +27,45 @@ object createCheriPipeline {
 
     import riscv.{plugins => rvp}
 
-    pipeline.addPlugins(Seq(
-      new rvp.scheduling.static.Scheduler,
-      new rvp.scheduling.static.DataHazardResolver(firstRsReadStage = pipeline.execute),
-      new rvp.TrapHandler(pipeline.writeback),
-      new rvp.TrapStageInvalidator, // TODO: ?
-      new StaticMemoryBackbone,
-      new rvp.Fetcher(pipeline.fetch),
-      new rvp.Decoder(pipeline.decode),
-      new rvp.RegisterFileAccessor(pipeline.decode, pipeline.writeback),
-      new rvp.IntAlu(Set(pipeline.execute)),
-      new rvp.Shifter(Set(pipeline.execute)),
-      new rvp.Lsu(Set(pipeline.memory), Seq(pipeline.memory), pipeline.memory),
-      new rvp.BranchUnit(Set(pipeline.execute)),
-      new rvp.scheduling.static.PcManager(0x80000000L),
-      new rvp.CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
-      new rvp.Timers,
-      new rvp.MachineMode(pipeline.execute, addMepc = false, addMtvec = false),
-      new rvp.Interrupts(pipeline.writeback),
-      new rvp.MulDiv(Set(pipeline.execute))
-    ))
+    pipeline.addPlugins(
+      Seq(
+        new rvp.scheduling.static.Scheduler,
+        new rvp.scheduling.static.DataHazardResolver(firstRsReadStage = pipeline.execute),
+        new rvp.TrapHandler(pipeline.writeback),
+        new rvp.TrapStageInvalidator, // TODO: ?
+        new StaticMemoryBackbone,
+        new rvp.Fetcher(pipeline.fetch),
+        new rvp.Decoder(pipeline.decode),
+        new rvp.RegisterFileAccessor(pipeline.decode, pipeline.writeback),
+        new rvp.IntAlu(Set(pipeline.execute)),
+        new rvp.Shifter(Set(pipeline.execute)),
+        new rvp.Lsu(Set(pipeline.memory), Seq(pipeline.memory), pipeline.memory),
+        new rvp.BranchUnit(Set(pipeline.execute)),
+        new rvp.scheduling.static.PcManager(0x80000000L),
+        new rvp.CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
+        new rvp.Timers,
+        new rvp.MachineMode(pipeline.execute, addMepc = false, addMtvec = false),
+        new rvp.Interrupts(pipeline.writeback),
+        new rvp.MulDiv(Set(pipeline.execute))
+      )
+    )
 
     implicit val context = Context(pipeline)
 
-    pipeline.addPlugins(Seq(
-      new RegisterFile(pipeline.decode, pipeline.writeback),
-      new Access(pipeline.execute),
-      new ScrFile(pipeline.writeback),
-      new Lsu(pipeline.memory),
-      new ExceptionHandler,
-      new Ccsr,
-      new MemoryTagger(0x80000000L, memorySize),
-      new PccManager(pipeline.execute),
-      new Sealing(pipeline.execute),
-      new MachineMode
-    ))
+    pipeline.addPlugins(
+      Seq(
+        new RegisterFile(pipeline.decode, pipeline.writeback),
+        new Access(pipeline.execute),
+        new ScrFile(pipeline.writeback),
+        new Lsu(pipeline.memory),
+        new ExceptionHandler,
+        new Ccsr,
+        new MemoryTagger(0x80000000L, memorySize),
+        new PccManager(pipeline.execute),
+        new Sealing(pipeline.execute),
+        new MachineMode
+      )
+    )
 
     pipeline.build()
     pipeline
@@ -82,7 +86,7 @@ object Core {
 
 object CoreSim {
   def main(args: Array[String]) {
-    SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim {dut =>
+    SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
       val byteDevSim = new StdioByteDev(dut.io.byteDev)

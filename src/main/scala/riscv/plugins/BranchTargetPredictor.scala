@@ -4,9 +4,12 @@ import riscv._
 import spinal.core._
 import spinal.lib.Counter
 
-class BranchTargetPredictor(fetchStage: Stage, jumpStage: Stage,
-                            numEntries: Int = 8, storedPcBitLength: Int = 32)
-  extends BranchTargetPredictorBase(fetchStage, jumpStage) {
+class BranchTargetPredictor(
+    fetchStage: Stage,
+    jumpStage: Stage,
+    numEntries: Int = 8,
+    storedPcBitLength: Int = 32
+) extends BranchTargetPredictorBase(fetchStage, jumpStage) {
   override var predictorComponent: PredictorComponent = null
 
   case class PredictionEntry() extends Bundle {
@@ -29,7 +32,7 @@ class BranchTargetPredictor(fetchStage: Stage, jumpStage: Stage,
         counter.increment()
       }
 
-      when (jumpIo.mispredicted) {
+      when(jumpIo.mispredicted) {
         recordJump(jumpIo.currentPc, jumpIo.target)
       }
 
@@ -39,7 +42,7 @@ class BranchTargetPredictor(fetchStage: Stage, jumpStage: Stage,
       for (i <- 0 until numEntries) {
         val entry = entries(i)
 
-        when (entry.pc === predictIo.currentPc(storedPcBitLength - 1 downto 0)) {
+        when(entry.pc === predictIo.currentPc(storedPcBitLength - 1 downto 0)) {
           predictIo.predictedAddress.payload := entry.target
           predictIo.predictedAddress.valid := True
         }

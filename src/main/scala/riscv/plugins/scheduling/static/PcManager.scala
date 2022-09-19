@@ -28,8 +28,12 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
     jumpObservers += observer
   }
 
-  override def jump(stage: Stage, target: UInt, jumpType: JumpType,
-                    checkAlignment: Boolean): Unit = {
+  override def jump(
+      stage: Stage,
+      target: UInt,
+      jumpType: JumpType,
+      checkAlignment: Boolean
+  ): Unit = {
     jumpStages += stage
 
     def doJump() = {
@@ -42,7 +46,7 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
     if (!checkAlignment) {
       doJump()
     } else {
-      when (target(1 downto 0) =/= 0) {
+      when(target(1 downto 0) =/= 0) {
         val trapHandler = pipeline.service[TrapService]
         trapHandler.trap(stage, TrapCause.InstructionAddressMisaligned(target))
       }.otherwise {
@@ -108,13 +112,13 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
         pcUpdateObservers.foreach(_(stage, currPc, nextPc))
       }
 
-      when (fetchStage.arbitration.isDone) {
+      when(fetchStage.arbitration.isDone) {
         updatePc(fetchStage, false)
       }
 
       fetchStage.input(pipeline.data.PC) := pc
 
-      when (globalTarget.valid) {
+      when(globalTarget.valid) {
         for (stage <- pipeline.stages) {
           stage.arbitration.isValid := False
         }
@@ -122,7 +126,7 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
         updatePc(globalTarget.payload)
       } otherwise {
         for (stage <- jumpStages) {
-          when (stage.arbitration.isDone && stage.arbitration.jumpRequested) {
+          when(stage.arbitration.isDone && stage.arbitration.jumpRequested) {
             for (prevStage <- pipeline.stages.takeWhile(_ != stage)) {
               prevStage.arbitration.isValid := False
             }
@@ -132,7 +136,7 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
         }
       }
 
-      when (pcOverride.valid) {
+      when(pcOverride.valid) {
         updatePc(pcOverride.payload)
       }
     }

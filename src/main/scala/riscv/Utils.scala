@@ -11,7 +11,8 @@ object Utils {
     val dataWidth = data.getBitsWidth
     assert(dataWidth <= width && dataWidth > 0)
 
-    (B((width - 1 - dataWidth downto 0) -> data(dataWidth - 1)) ## data).as(data.clone().setWidth(width))
+    (B((width - 1 - dataWidth downto 0) -> data(dataWidth - 1)) ## data)
+      .as(data.clone().setWidth(width))
   }
 
   def zeroExtend[T <: BitVector](data: T, width: Int): T = {
@@ -28,7 +29,7 @@ object Utils {
 
     val delayCounter = Counter(cycles + 1)
 
-    when (delayCounter.willOverflowIfInc) {
+    when(delayCounter.willOverflowIfInc) {
       logic
     }
 
@@ -75,7 +76,7 @@ class DynBundle[KeyType] {
 
   def createBundle: Bundle with DynBundleAccess[KeyType] = {
     class NewBundle extends Bundle with DynBundleAccess[KeyType] {
-      private val elementsMap = DynBundle.this.elementsMap.map {case (key, data) =>
+      private val elementsMap = DynBundle.this.elementsMap.map { case (key, data) =>
         val clonedData = cloneOf(data)
         clonedData.parent = this
 
@@ -86,8 +87,12 @@ class DynBundle[KeyType] {
         (key, clonedData)
       }
 
-      override val elements: ArrayBuffer[(String, Data)] = elementsMap.map{
-        case (key, data) => (key.toString, data) }.toSeq.to[mutable.ArrayBuffer]
+      override val elements: ArrayBuffer[(String, Data)] = elementsMap
+        .map { case (key, data) =>
+          (key.toString, data)
+        }
+        .toSeq
+        .to[mutable.ArrayBuffer]
 
       override def element(key: KeyType): Data = {
         elementsMap(key)

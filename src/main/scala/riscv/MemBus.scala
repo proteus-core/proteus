@@ -6,9 +6,9 @@ import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.amba4.axi._
 
 case class MemBusConfig(
-  addressWidth: Int,
-  dataWidth: Int,
-  readWrite: Boolean = true
+    addressWidth: Int,
+    dataWidth: Int,
+    readWrite: Boolean = true
 ) {
   def byte2WordAddress(ba: UInt): UInt = ba(dataWidth - 1 downto log2Up(dataWidth / 8))
   def word2ByteAddress(wa: UInt): UInt = wa << log2Up(dataWidth / 8)
@@ -27,7 +27,9 @@ case class MemBusRsp(config: MemBusConfig, idWidth: BitCount) extends Bundle {
   val id = UInt(idWidth)
 }
 
-case class MemBus(val config: MemBusConfig, val idWidth: BitCount) extends Bundle with IMasterSlave {
+case class MemBus(val config: MemBusConfig, val idWidth: BitCount)
+    extends Bundle
+    with IMasterSlave {
   val cmd = Stream(MemBusCmd(config, idWidth))
   val rsp = Stream(MemBusRsp(config, idWidth))
 
@@ -161,21 +163,25 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
 
   bus.rsp.ready := True
 
-  when (bus.cmd.valid && bus.cmd.ready) {
+  when(bus.cmd.valid && bus.cmd.ready) {
     currentCmd.ready := True
     currentCmd.valid := False
   }
 
-  when (bus.rsp.valid) {
+  when(bus.rsp.valid) {
     currentCmd.ready := False
     currentCmd.valid := False
   }
 
-  private def issueCommand(address: UInt, write: Boolean = false,
-                           wdata: UInt = null, wmask: Bits = null) = {
+  private def issueCommand(
+      address: UInt,
+      write: Boolean = false,
+      wdata: UInt = null,
+      wmask: Bits = null
+  ) = {
     assert(!write || bus.config.readWrite)
 
-    when (bus.cmd.ready) {
+    when(bus.cmd.ready) {
       currentCmd.valid := False
       currentCmd.ready := True
     } otherwise {
@@ -208,18 +214,18 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     val dropRsp = False
     val issuedThisCycle = False
 
-    when (!currentCmd.isIssued) {
+    when(!currentCmd.isIssued) {
       issueCommand(address)
       issuedThisCycle := True
     } elsewhen (currentCmd.cmd.address =/= address) {
       dropRsp := True
     }
 
-    when (bus.rsp.valid) {
+    when(bus.rsp.valid) {
       currentCmd.valid := False
       currentCmd.ready := False
 
-      when (issuedThisCycle || (!dropRsp && !currentCmd.isWrite)) {
+      when(issuedThisCycle || (!dropRsp && !currentCmd.isWrite)) {
         valid := True
         rdata := bus.rsp.rdata
       }
@@ -235,18 +241,18 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     val dropRsp = False
     val issuedThisCycle = False
 
-    when (!currentCmd.isIssued) {
+    when(!currentCmd.isIssued) {
       issueCommand(address, write = true, wdata, wmask)
       issuedThisCycle := True
     } elsewhen (currentCmd.cmd.address =/= address) {
       dropRsp := True
     }
 
-    when (bus.cmd.ready) {
+    when(bus.cmd.ready) {
       currentCmd.valid := False
       currentCmd.ready := False
 
-      when (issuedThisCycle || (!dropRsp && currentCmd.isWrite)) {
+      when(issuedThisCycle || (!dropRsp && currentCmd.isWrite)) {
         accepted := True
       }
     }
@@ -257,10 +263,11 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
 
 // TODO: can the following be simplified by using AXI transaction IDs such as for parallel loads?
 class IBusControl(
-   bus: MemBus,
-   ibusLatency: Int,
-   irQueueSize: Int = 4
- )(implicit config: Config) extends Area {
+    bus: MemBus,
+    ibusLatency: Int,
+    irQueueSize: Int = 4
+)(implicit config: Config)
+    extends Area {
   assert(!bus.config.readWrite)
   assert(ibusLatency > 0)
 
@@ -331,17 +338,17 @@ class IBusControl(
   nextCmd.payload.assignDontCare()
 
   // Are we popping a value from cmdFifo?
-  val poppingCmd  = False
+  val poppingCmd = False
 
-  when (restartAddress.valid) {
+  when(restartAddress.valid) {
     nextCmd.push(restartAddress.payload)
   } elsewhen (currentCmd.valid) {
     // We speculatively prefetch the next word when no new address is requested
     nextCmd.push(currentCmd.address + bus.config.dataWidth / 8)
   }
 
-  when (nextCmd.valid) {
-    when (!currentCmd.valid || currentCmd.accepted || bus.cmd.ready) {
+  when(nextCmd.valid) {
+    when(!currentCmd.valid || currentCmd.accepted || bus.cmd.ready) {
       // We start a new command when 1) it is the first command, or 2) the previous command was
       // previously accepted on the bus, or 3) the previous command is accepted during the current
       // cycle.
@@ -353,7 +360,7 @@ class IBusControl(
       restartAccepted := restartAddress.valid
     }
 
-    when (!currentCmd.valid || currentCmd.accepted) {
+    when(!currentCmd.valid || currentCmd.accepted) {
       // When the previous command was already accepted, we immediately put the next one on the bus
       // to prevent a cycle delay.
       bus.cmd.payload.address := nextCmd.payload
@@ -368,7 +375,7 @@ class IBusControl(
     currentCmd.accepted := bus.cmd.ready
   }
 
-  when (restartAccepted) {
+  when(restartAccepted) {
     // The amount of commands to flush when restarting is the amount currently in cmdFifo, minus one
     // if we are popping from cmdFifo in this cycle, and plus one if currentCmd is valid but not yet
     // accepted (as it will be pushed on cmdFifo later).
@@ -381,7 +388,7 @@ class IBusControl(
   val pushRsp = True
 
   // Store a memory response
-  when (bus.rsp.valid) {
+  when(bus.rsp.valid) {
     val rsp = Rsp()
 
     // Pop the address off the cmdFifo
@@ -396,14 +403,14 @@ class IBusControl(
     rspFifo.io.push.payload := rsp
     rspFifo.io.push.valid := pushRsp
 
-    when (restarting) {
+    when(restarting) {
       // We just got a response for a command while restarting, one less to flush.
       restartCmdsToFlush := restartCmdsToFlush - 1
     }
   }
 
   // Push accepted commands on cmdFifo
-  when (bus.cmd.valid && bus.cmd.ready) {
+  when(bus.cmd.valid && bus.cmd.ready) {
     val toPush = (currentCmd.valid && !currentCmd.accepted) ? currentCmd.address | nextCmd.payload
     cmdFifo.io.push.payload.address := toPush
     cmdFifo.io.push.valid := True
@@ -416,7 +423,7 @@ class IBusControl(
     result.valid := False
     result.payload.assignDontCare()
 
-    when (rspFifo.io.pop.valid) {
+    when(rspFifo.io.pop.valid) {
       // If there is a response in rspFifo, return and pop it (toFlow sets ready).
       result := rspFifo.io.pop.toFlow
     } elsewhen (bus.rsp.valid) {
@@ -430,7 +437,7 @@ class IBusControl(
       pushRsp := False
     }
 
-    when (restarting) {
+    when(restarting) {
       // Make sure responses are ignored while restarting. If we don't do this, we can get in a
       // "restart loop" when near forward jumps happen because the restarted address is already
       // in-flight and added again to cmdFifo. When the second response comes in, we have to restart
@@ -449,8 +456,8 @@ class IBusControl(
 
     val rsp = popRsp().setPartialName("nextIBusRsp")
 
-    when (rsp.valid) {
-      when (rsp.payload.address === address) {
+    when(rsp.valid) {
+      when(rsp.payload.address === address) {
         // We have a valid response that matches the requested address, return it.
         valid := True
         ir := rsp.payload.ir
@@ -466,7 +473,7 @@ class IBusControl(
       restartNeeded := True
     }
 
-    when (restartNeeded && !restarting){
+    when(restartNeeded && !restarting) {
       // Request restart from address
       restartAddress.push(address)
 

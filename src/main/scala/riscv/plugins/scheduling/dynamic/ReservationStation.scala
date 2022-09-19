@@ -6,7 +6,8 @@ import spinal.lib.{Flow, Stream}
 
 case class RegisterSource(indexBits: BitCount) extends Bundle {
   val priorInstructionNext: Flow[UInt] = Flow(UInt(indexBits))
-  val priorInstruction: Flow[UInt] = RegNext(priorInstructionNext).init(priorInstructionNext.getZero)
+  val priorInstruction: Flow[UInt] =
+    RegNext(priorInstructionNext).init(priorInstructionNext.getZero)
 
   def build(): Unit = {
     priorInstructionNext := priorInstruction
@@ -32,12 +33,16 @@ case class InstructionDependencies(indexBits: BitCount) extends Bundle {
   }
 }
 
-class ReservationStation(exeStage: Stage,
-                         rob: ReorderBuffer,
-                         pipeline: DynamicPipeline,
-                         retirementRegisters: DynBundle[PipelineData[Data]],
-                         metaRegisters: DynBundle[PipelineData[Data]])
-                        (implicit config: Config) extends Area with CdbListener with Resettable {
+class ReservationStation(
+    exeStage: Stage,
+    rob: ReorderBuffer,
+    pipeline: DynamicPipeline,
+    retirementRegisters: DynBundle[PipelineData[Data]],
+    metaRegisters: DynBundle[PipelineData[Data]]
+)(implicit config: Config)
+    extends Area
+    with CdbListener
+    with Resettable {
   setPartialName(s"RS_${exeStage.stageName}")
 
   private val meta = InstructionDependencies(rob.indexBits)
@@ -56,10 +61,14 @@ class ReservationStation(exeStage: Stage,
   private val dispatchWaiting = RegNext(dispatchWaitingNext).init(False)
 
   private val resultCdbMessage = RegInit(CdbMessage(metaRegisters, rob.indexBits).getZero)
-  private val resultDispatchMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
+  private val resultDispatchMessage = RegInit(
+    RdbMessage(retirementRegisters, rob.indexBits).getZero
+  )
 
   val cdbStream: Stream[CdbMessage] = Stream(HardType(CdbMessage(metaRegisters, rob.indexBits)))
-  val dispatchStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
+  val dispatchStream: Stream[RdbMessage] = Stream(
+    HardType(RdbMessage(retirementRegisters, rob.indexBits))
+  )
 
   private val regs = pipeline.pipelineRegs(exeStage) // TODO: do we need this?
 
@@ -76,7 +85,7 @@ class ReservationStation(exeStage: Stage,
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
     val currentRs1Prior, currentRs2Prior = Flow(UInt(rob.indexBits))
 
-    when (state === State.WAITING_FOR_ARGS) {
+    when(state === State.WAITING_FOR_ARGS) {
       currentRs1Prior := meta.rs1.priorInstruction
       currentRs2Prior := meta.rs2.priorInstruction
     } otherwise {
@@ -84,25 +93,25 @@ class ReservationStation(exeStage: Stage,
       currentRs2Prior := meta.rs2.priorInstructionNext
     }
 
-    when (state === State.WAITING_FOR_ARGS || stateNext === State.WAITING_FOR_ARGS) {
+    when(state === State.WAITING_FOR_ARGS || stateNext === State.WAITING_FOR_ARGS) {
       val r1w = Bool()
       r1w := currentRs1Prior.valid
       val r2w = Bool()
       r2w := currentRs2Prior.valid
 
-      when (currentRs1Prior.valid && cdbMessage.robIndex === currentRs1Prior.payload) {
+      when(currentRs1Prior.valid && cdbMessage.robIndex === currentRs1Prior.payload) {
         meta.rs1.priorInstruction.valid := False
         r1w := False
         regs.setReg(pipeline.data.RS1_DATA, cdbMessage.writeValue)
       }
 
-      when (currentRs2Prior.valid && cdbMessage.robIndex === currentRs2Prior.payload) {
+      when(currentRs2Prior.valid && cdbMessage.robIndex === currentRs2Prior.payload) {
         meta.rs2.priorInstruction.valid := False
         r2w := False
         regs.setReg(pipeline.data.RS2_DATA, cdbMessage.writeValue)
       }
 
-      when (!r1w && !r2w) {
+      when(!r1w && !r2w) {
         // This is the only place where state is written directly (instead of
         // via stateNext). This ensures that we have priority over whatever
         // execute() writes to it which means that the order of calling
@@ -136,19 +145,19 @@ class ReservationStation(exeStage: Stage,
 
     isAvailable := False
 
-    when (state === State.IDLE) {
+    when(state === State.IDLE) {
       isAvailable := !activeFlush
     }
 
     activeFlush := False
 
     // execution was invalidated while running
-    when (activeFlush) {
+    when(activeFlush) {
       reset()
     }
 
     // when waiting for the result, and it is ready, put in on the bus
-    when (state === State.EXECUTING && exeStage.arbitration.isDone && !activeFlush) {
+    when(state === State.EXECUTING && exeStage.arbitration.isDone && !activeFlush) {
       cdbStream.payload.writeValue := exeStage.output(pipeline.data.RD_DATA)
 
       cdbStream.payload.robIndex := robEntryIndex
@@ -158,7 +167,7 @@ class ReservationStation(exeStage: Stage,
         dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
       }
 
-      when (exeStage.output(pipeline.data.RD_DATA_VALID)) {
+      when(exeStage.output(pipeline.data.RD_DATA_VALID)) {
         cdbStream.valid := True
       }
       dispatchStream.valid := True
@@ -171,7 +180,7 @@ class ReservationStation(exeStage: Stage,
       cdbWaitingNext := (!cdbStream.ready && cdbStream.valid)
       dispatchWaitingNext := !dispatchStream.ready
 
-      when ((cdbStream.ready || !cdbStream.valid) && dispatchStream.ready) {
+      when((cdbStream.ready || !cdbStream.valid) && dispatchStream.ready) {
         reset()
       } otherwise {
         stateNext := State.BROADCASTING_RESULT
@@ -180,19 +189,19 @@ class ReservationStation(exeStage: Stage,
 
     // if the result is on the buses and it has been acknowledged, make the RS
     // available again
-    when (state === State.BROADCASTING_RESULT && !activeFlush) {
+    when(state === State.BROADCASTING_RESULT && !activeFlush) {
       cdbStream.valid := cdbWaiting
       dispatchStream.valid := dispatchWaiting
 
-      when (cdbStream.ready && cdbWaiting) {
+      when(cdbStream.ready && cdbWaiting) {
         cdbWaitingNext := False
       }
 
-      when (dispatchStream.ready && dispatchWaiting) {
+      when(dispatchStream.ready && dispatchWaiting) {
         dispatchWaitingNext := False
       }
 
-      when ((cdbStream.ready || !cdbWaiting) && (dispatchStream.ready || !dispatchWaiting)) {
+      when((cdbStream.ready || !cdbWaiting) && (dispatchStream.ready || !dispatchWaiting)) {
         reset()
       }
     }
@@ -206,7 +215,8 @@ class ReservationStation(exeStage: Stage,
       issueStage.output(pipeline.data.RD),
       issueStage.output(pipeline.data.RD_TYPE),
       pipeline.service[LsuService].operationOutput(issueStage),
-      issueStage.output(pipeline.data.PC))
+      issueStage.output(pipeline.data.PC)
+    )
 
     robEntryIndex := robIndex
 
@@ -215,7 +225,12 @@ class ReservationStation(exeStage: Stage,
 
     meta.reset()
 
-    def dependencySetup(metaRs: RegisterSource, reg: PipelineData[UInt], regData: PipelineData[UInt], regType: PipelineData[SpinalEnumCraft[RegisterType.type]]): Unit = {
+    def dependencySetup(
+        metaRs: RegisterSource,
+        reg: PipelineData[UInt],
+        regData: PipelineData[UInt],
+        regType: PipelineData[SpinalEnumCraft[RegisterType.type]]
+    ): Unit = {
       val rsUsed = issueStage.output(regType) === RegisterType.GPR
 
       when(rsUsed) {
@@ -232,7 +247,7 @@ class ReservationStation(exeStage: Stage,
           regs.setReg(regData, issueStage.output(regData))
         }
 
-        when ((rsInRob && !rsValue.valid)) {
+        when((rsInRob && !rsValue.valid)) {
           stateNext := State.WAITING_FOR_ARGS
         }
       }

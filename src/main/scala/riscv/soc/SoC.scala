@@ -17,15 +17,15 @@ object RamType {
 }
 
 class SoC(
-  ramType: RamType,
-  createPipeline: Config => Pipeline,
-  extraDbusReadDelay: Int = 0
+    ramType: RamType,
+    createPipeline: Config => Pipeline,
+    extraDbusReadDelay: Int = 0
 ) extends Component {
   setDefinitionName("Core")
 
   implicit val config = new Config(BaseIsa.RV32I)
 
-  val io = new Bundle{
+  val io = new Bundle {
     // Peripherals
     val charOut = master(Flow(UInt(8 bits)))
     val testDev = master(Flow(UInt(config.xlen bits)))
@@ -92,7 +92,7 @@ class SoC(
     axiCrossbar.lowLatency = true
 
     axiCrossbar.addSlaves(
-      ramAxi           -> (0x80000000L, ramType.size),
+      ramAxi -> (0x80000000L, ramType.size),
       apbBridge.io.axi -> (0x00000000L, 1 GiB)
     )
 
@@ -137,17 +137,17 @@ class SoC(
     val byteDev = new Apb3ByteDev
     io.byteDev <> byteDev.io.bytes
 
-    core.pipeline.serviceOption[InterruptService] foreach {interruptService =>
+    core.pipeline.serviceOption[InterruptService] foreach { interruptService =>
       interruptService.getExternalIrqIo <> byteDev.io.irq
     }
 
     val apbDecoder = Apb3Decoder(
       master = apbBridge.io.apb,
       slaves = List(
-        machineTimers.io.apb        -> (0x02000000L, 4 KiB),
-        charDev.io.apb              -> (0x10000000L, 4 KiB),
-        byteDev.io.apb              -> (0x20000000L, 4 KiB),
-        testDev.io.apb              -> (0x30000000L, 4 KiB)
+        machineTimers.io.apb -> (0x02000000L, 4 KiB),
+        charDev.io.apb -> (0x10000000L, 4 KiB),
+        byteDev.io.apb -> (0x20000000L, 4 KiB),
+        testDev.io.apb -> (0x30000000L, 4 KiB)
       )
     )
   }

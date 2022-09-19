@@ -19,8 +19,8 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
     private val exceptionCause = UInt(5 bits)
     exceptionCause := ExceptionCause.None.code
 
-    when (operation =/= LsuOperationType.NONE) {
-      when (!cap.tag) {
+    when(operation =/= LsuOperationType.NONE) {
+      when(!cap.tag) {
         except(ExceptionCause.TagViolation)
       } elsewhen (cap.isSealed) {
         except(ExceptionCause.SealViolation)
@@ -39,9 +39,12 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
       exceptionCause := cause.code
     }
 
-    def check(cap: Capability, address: UInt,
-              operation: SpinalEnumCraft[LsuOperationType.type],
-              byteWidth: UInt): UInt = {
+    def check(
+        cap: Capability,
+        address: UInt,
+        operation: SpinalEnumCraft[LsuOperationType.type],
+        byteWidth: UInt
+    ): UInt = {
       assert(byteWidth.getBitsWidth <= this.byteWidth.getBitsWidth)
 
       this.cap.assignFrom(cap)
@@ -61,15 +64,17 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
     }
 
     pipeline.service[LsuService] setAddressTranslator new LsuAddressTranslator {
-      override def translate(stage: Stage,
-                             address: UInt,
-                             operation: SpinalEnumCraft[LsuOperationType.type],
-                             width: SpinalEnumCraft[LsuAccessWidth.type]): UInt = {
+      override def translate(
+          stage: Stage,
+          address: UInt,
+          operation: SpinalEnumCraft[LsuOperationType.type],
+          width: SpinalEnumCraft[LsuAccessWidth.type]
+      ): UInt = {
         val result = UInt(config.xlen bits)
         result := address
 
         // When USE_CAP_ADDR is set, checks are done in build
-        when (!stage.value(Data.USE_CAP_ADDR)) {
+        when(!stage.value(Data.USE_CAP_ADDR)) {
           val ddc = pipeline.service[ScrService].getDdc(stage)
           result := ddc.address + address
 
@@ -79,10 +84,10 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
             LsuAccessWidth.W -> U(4)
           )
 
-          when (stage.arbitration.isRunning) {
+          when(stage.arbitration.isRunning) {
             val cause = capCheck.check(ddc, result, operation, byteWidth)
 
-            when (cause =/= ExceptionCause.None.code) {
+            when(cause =/= ExceptionCause.None.code) {
               val handler = pipeline.service[ExceptionHandler]
               handler.except(stage, cause, CapIdx.scr(ScrIndex.DDC))
             }
@@ -94,53 +99,80 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
     }
 
     pipeline.service[DecoderService].configure { config =>
-      config.addDefault(Map(
-        Data.STORE_CAP -> False,
-        Data.LOAD_CAP -> False,
-        Data.USE_CAP_ADDR -> False
-      ))
+      config.addDefault(
+        Map(
+          Data.STORE_CAP -> False,
+          Data.LOAD_CAP -> False,
+          Data.USE_CAP_ADDR -> False
+        )
+      )
 
-      config.addDecoding(Opcodes.SC_CAP, InstructionType.R_CCx, Map(
-        Data.STORE_CAP -> True,
-        Data.USE_CAP_ADDR -> True
-      ))
+      config.addDecoding(
+        Opcodes.SC_CAP,
+        InstructionType.R_CCx,
+        Map(
+          Data.STORE_CAP -> True,
+          Data.USE_CAP_ADDR -> True
+        )
+      )
 
-      config.addDecoding(Opcodes.LC_CAP, InstructionType.R_CxC, Map(
-        Data.LOAD_CAP -> True,
-        Data.USE_CAP_ADDR -> True
-      ))
+      config.addDecoding(
+        Opcodes.LC_CAP,
+        InstructionType.R_CxC,
+        Map(
+          Data.LOAD_CAP -> True,
+          Data.USE_CAP_ADDR -> True
+        )
+      )
 
-      config.addDecoding(Opcodes.SC, InstructionType.S_RCx, Map(
-        Data.STORE_CAP -> True
-      ))
+      config.addDecoding(
+        Opcodes.SC,
+        InstructionType.S_RCx,
+        Map(
+          Data.STORE_CAP -> True
+        )
+      )
 
-      config.addDecoding(Opcodes.LC, InstructionType.I_RxC, Map(
-        Data.LOAD_CAP -> True
-      ))
+      config.addDecoding(
+        Opcodes.LC,
+        InstructionType.I_RxC,
+        Map(
+          Data.LOAD_CAP -> True
+        )
+      )
 
       val lsu = pipeline.service[LsuService]
 
-      def addDataLoadCap(opcode: MaskedLiteral,
-                         width: SpinalEnumElement[LsuAccessWidth.type],
-                         unsigned: Boolean) = {
-        config.addDecoding(opcode, InstructionType.R_CxR, Map(
-          Data.USE_CAP_ADDR -> True
-        ))
+      def addDataLoadCap(
+          opcode: MaskedLiteral,
+          width: SpinalEnumElement[LsuAccessWidth.type],
+          unsigned: Boolean
+      ) = {
+        config.addDecoding(
+          opcode,
+          InstructionType.R_CxR,
+          Map(
+            Data.USE_CAP_ADDR -> True
+          )
+        )
 
         lsu.addLoad(opcode, width, unsigned)
       }
 
-      addDataLoadCap(Opcodes.LB_CAP,  LsuAccessWidth.B, unsigned = false)
-      addDataLoadCap(Opcodes.LH_CAP,  LsuAccessWidth.H, unsigned = false)
-      addDataLoadCap(Opcodes.LW_CAP,  LsuAccessWidth.W, unsigned = false)
+      addDataLoadCap(Opcodes.LB_CAP, LsuAccessWidth.B, unsigned = false)
+      addDataLoadCap(Opcodes.LH_CAP, LsuAccessWidth.H, unsigned = false)
+      addDataLoadCap(Opcodes.LW_CAP, LsuAccessWidth.W, unsigned = false)
       addDataLoadCap(Opcodes.LBU_CAP, LsuAccessWidth.B, unsigned = true)
       addDataLoadCap(Opcodes.LHU_CAP, LsuAccessWidth.H, unsigned = true)
 
-      def addDataStoreCap(opcode: MaskedLiteral,
-                          width: SpinalEnumElement[LsuAccessWidth.type]) = {
-        config.addDecoding(opcode, InstructionType.R_CRx, Map(
-          Data.USE_CAP_ADDR -> True
-        ))
+      def addDataStoreCap(opcode: MaskedLiteral, width: SpinalEnumElement[LsuAccessWidth.type]) = {
+        config.addDecoding(
+          opcode,
+          InstructionType.R_CRx,
+          Map(
+            Data.USE_CAP_ADDR -> True
+          )
+        )
 
         lsu.addStore(opcode, width)
       }
@@ -158,7 +190,7 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
       val lsu = pipeline.service[LsuService]
       assert(stage == lsu.stage)
 
-      when (arbitration.isValid && value(Data.USE_CAP_ADDR)) {
+      when(arbitration.isValid && value(Data.USE_CAP_ADDR)) {
         arbitration.rs1Needed := True
 
         val cs1 = value(context.data.CS1_DATA)
@@ -166,16 +198,18 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
         lsu.setAddress(address)
 
         // FIXME this code is duplicated from LsuAddressTranslator.translate above
-        val byteWidth = lsu.width(stage).mux(
-          LsuAccessWidth.B -> U(1),
-          LsuAccessWidth.H -> U(2),
-          LsuAccessWidth.W -> U(4)
-        )
+        val byteWidth = lsu
+          .width(stage)
+          .mux(
+            LsuAccessWidth.B -> U(1),
+            LsuAccessWidth.H -> U(2),
+            LsuAccessWidth.W -> U(4)
+          )
 
         val cause = capCheck.check(cs1, address, lsu.operation(stage), byteWidth)
 
-        when (!arbitration.isStalled) {
-          when (cause =/= ExceptionCause.None.code) {
+        when(!arbitration.isStalled) {
+          when(cause =/= ExceptionCause.None.code) {
             val handler = pipeline.service[ExceptionHandler]
             handler.except(stage, cause, CapIdx.gpcr(value(pipeline.data.RS1)))
           }
@@ -197,7 +231,7 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
       val capIdx = CapIdx()
       val address = UInt(config.xlen bits)
 
-      when (value(Data.USE_CAP_ADDR)) {
+      when(value(Data.USE_CAP_ADDR)) {
         cap.assignFrom(cs1)
         capIdx := CapIdx.gpcr(value(pipeline.data.RS1))
         address := cs1Address
@@ -213,7 +247,7 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
         val cause = capCheck.check(cap, address, operation, context.clen / 8)
         val ok = True
 
-        when (cause =/= ExceptionCause.None.code) {
+        when(cause =/= ExceptionCause.None.code) {
           val handler = pipeline.service[ExceptionHandler]
           handler.except(stage, cause, capIdx)
           ok := False
@@ -222,12 +256,12 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
         ok
       }
 
-      when (arbitration.isValid && value(Data.STORE_CAP)) {
+      when(arbitration.isValid && value(Data.STORE_CAP)) {
         arbitration.rs1Needed := True
         arbitration.rs2Needed := True
 
-        when (!arbitration.isStalled) {
-          when (checkCapBounds(LsuOperationType.STORE)) {
+        when(!arbitration.isStalled) {
+          when(checkCapBounds(LsuOperationType.STORE)) {
             val src = MemCapability()
             src.assignFrom(value(context.data.CS2_DATA))
             cbus.cmd.payload.wdata := src
@@ -239,11 +273,11 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
         }
       }
 
-      when (arbitration.isValid && value(Data.LOAD_CAP)) {
+      when(arbitration.isValid && value(Data.LOAD_CAP)) {
         arbitration.rs1Needed := True
 
-        when (!arbitration.isStalled) {
-          when (checkCapBounds(LsuOperationType.LOAD)) {
+        when(!arbitration.isStalled) {
+          when(checkCapBounds(LsuOperationType.LOAD)) {
             cbus.cmd.payload.write := False
             cbus.cmd.valid := True
             arbitration.isReady := False
