@@ -8,11 +8,11 @@ SIM_EXE = $(SIM_DIR)/build/sim
 CORE ?= riscv.CoreExtMem
 BUILD_CORE ?= 1
 
-RISCV_PREFIX = riscv64-unknown-elf
+RISCV_PREFIX ?= riscv64-unknown-elf
 CC = $(RISCV_PREFIX)-gcc
 LD = $(RISCV_PREFIX)-gcc
 OBJCOPY = $(RISCV_PREFIX)-objcopy
-ARCHFLAGS = -march=rv32im -mabi=ilp32
+ARCHFLAGS = -march=rv32imzicsr -mabi=ilp32
 CFLAGS = $(ARCHFLAGS)
 
 ifeq ($(BUILD_CORE),1)
