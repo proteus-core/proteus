@@ -27,7 +27,7 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
         branchService.addPendingBranchToBundle(registerBundle)
         branchService.addPendingBranchToBundle(cdbBMetaData)
 
-        branchPredictorService.addPredictedPcToBundle(cdbBMetaData)  // TODO: just forward one bit?
+        branchPredictorService.addPredictedPcToBundle(cdbBMetaData) // TODO: just forward one bit?
 
         prospect.addSecretToBundle(cdbBMetaData)
         prospect.addSecretToBundle(registerBundle)
