@@ -12,7 +12,7 @@ RISCV_PREFIX ?= riscv64-unknown-elf
 CC = $(RISCV_PREFIX)-gcc
 LD = $(RISCV_PREFIX)-gcc
 OBJCOPY = $(RISCV_PREFIX)-objcopy
-ARCHFLAGS = -march=rv32imzicsr -mabi=ilp32
+ARCHFLAGS = -misa-spec=2.2 -march=rv32imzicsr -mabi=ilp32
 CFLAGS = $(ARCHFLAGS)
 
 ifeq ($(BUILD_CORE),1)
