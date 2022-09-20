@@ -277,6 +277,7 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
 
     val loadAreas = loadStages.zipWithIndex.map { case (loadStage, stageIndex) =>
       loadStage plug new Area {
+
         import loadStage._
 
         val operation = value(Data.LSU_OPERATION_TYPE)
@@ -351,11 +352,11 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
 
             output(pipeline.data.RD_DATA) := result
             output(pipeline.data.RD_DATA_VALID) := True
-
             formal.lsuOnLoad(loadStage, busAddress, mask, wValue)
           }
         } otherwise {
           loadActive := False
+          dbusCtrl.invalidate()
         }
       }
     }

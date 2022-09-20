@@ -208,6 +208,11 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     }
   }
 
+  def invalidate(): Unit = {
+    currentCmd.valid := False
+    currentCmd.ready := False
+  }
+
   def read(address: UInt): (Bool, UInt) = {
     val valid = False
     val rdata = U(0, bus.config.dataWidth bits)
