@@ -132,7 +132,7 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
         prevRvfi := currentRvfi
       }
 
-      val rvfi = out(new Rvfi).keep()
+      val rvfi = out(new Rvfi).dontSimplifyIt()
       rvfi := prevRvfi
       rvfi.pc_wdata.allowOverride
       rvfi.pc_wdata := currentRvfi.pc_rdata
