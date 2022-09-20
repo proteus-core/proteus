@@ -116,14 +116,15 @@ class ReservationStation(exeStage: Stage,
       // keep track of incoming branch updates, even if already executing
       when (branchWaiting.valid && cdbMessage.robIndex === branchWaiting.payload) {
         val pending = pipeline.service[BranchService].pendingBranchOfBundle(cdbMessage.metadata)
+        val targetService = pipeline.service[BranchTargetPredictorService]
         when (pending.valid) {
           meta.priorBranch.push(pending.payload.resized) // TODO: resized
-        } otherwise {
+        } elsewhen (targetService.predictedPcOfBundle(cdbStream.metadata) === targetService.predictedPc(exeStage)) { // when the branch was correctly predicted
           meta.priorBranch.setIdle()
           when (!currentRs1Prior.valid && !currentRs2Prior.valid) {
             state := State.EXECUTING
           }
-        }
+        } // otherwise: wait for pipeline reset
       }
     }
 
@@ -225,6 +226,8 @@ class ReservationStation(exeStage: Stage,
           outputIsSecret := meta.rs1.isSecret || meta.rs2.isSecret || prospect.isSecret(exeStage)
           // propagate branch dependencies on the CDB
           pipeline.service[BranchService].pendingBranchOfBundle(cdbStream.payload.metadata) := meta.priorBranch.resized
+          val targetService = pipeline.service[BranchTargetPredictorService]
+          targetService.predictedPcOfBundle(cdbStream.metadata) := targetService.predictedPc(exeStage)
         }
         case None => outputIsSecret := False
       }

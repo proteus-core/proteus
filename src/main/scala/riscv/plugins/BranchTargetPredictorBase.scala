@@ -75,6 +75,10 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
     stage.output(Data.PREDICTED_PC)
   }
 
+  override def addPredictedPcToBundle(bundle: DynBundle[PipelineData[Data]]): Unit = {
+    bundle.addElement(Data.PREDICTED_PC.asInstanceOf[PipelineData[Data]], Data.PREDICTED_PC.dataType)
+  }
+
   override def predictedPcOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt = {
     bundle.elementAs[UInt](Data.PREDICTED_PC.asInstanceOf[PipelineData[Data]])
   }

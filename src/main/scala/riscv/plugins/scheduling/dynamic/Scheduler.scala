@@ -22,9 +22,12 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
 
       pipeline.serviceOption[ProspectService] foreach {prospect =>
         val branchService = pipeline.service[BranchService]
+        val branchPredictorService = pipeline.service[BranchTargetPredictorService]
         branchService.addIsBranchToBundle(registerBundle)
         branchService.addPendingBranchToBundle(registerBundle)
         branchService.addPendingBranchToBundle(cdbBMetaData)
+
+        branchPredictorService.addPredictedPcToBundle(cdbBMetaData)  // TODO: just forward one bit?
 
         prospect.addSecretToBundle(cdbBMetaData)
         prospect.addSecretToBundle(registerBundle)

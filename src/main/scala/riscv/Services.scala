@@ -333,6 +333,7 @@ trait JumpService {
 
 trait BranchTargetPredictorService {
   def predictedPc(stage: Stage): UInt
+  def addPredictedPcToBundle(bundle: DynBundle[PipelineData[Data]]): Unit
   def predictedPcOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt
   def setPredictedPc(stage: Stage, pc: UInt): Unit
 }
