@@ -128,8 +128,10 @@ class ReservationStation(
         val targetService = pipeline.service[BranchTargetPredictorService]
         when(pending.valid) {
           meta.priorBranch.push(pending.payload.resized) // TODO: resized
-        } elsewhen (targetService.predictedPcOfBundle(cdbStream.metadata) === targetService
-          .predictedPc(exeStage)) { // when the branch was correctly predicted
+        } elsewhen (targetService
+          .predictedPcOfBundle(cdbMessage.metadata) === cdbMessage.metadata.elementAs[UInt](
+          pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]
+        )) { // when the branch was correctly predicted
           meta.priorBranch.setIdle()
           when(!currentRs1Prior.valid && !currentRs2Prior.valid) {
             state := State.EXECUTING
