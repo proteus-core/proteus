@@ -122,18 +122,19 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
           ready := externalDBus.cmd.ready
         }
 
-          cmd.ready := ready
+        cmd.ready := ready
 
-          context = context.elsewhen(cmd.valid && ((pendingCount(index) < pendingCount(index).maxValue) || cmd.write)) {  // prevent overflowing the pending counter for loads
-            cmdValid := True
-            cmdAddress := cmd.address
-            cmdId := index
-            cmdWrite := cmd.write
-            cmdWdata := cmd.wdata
-            cmdWmask := cmd.wmask
-            when (ready) {
-              increaseCount(index) := True
-            }
+        context = context.elsewhen(
+          cmd.valid && ((pendingCount(index) < pendingCount(index).maxValue) || cmd.write)
+        ) { // prevent overflowing the pending counter for loads
+          cmdValid := True
+          cmdAddress := cmd.address
+          cmdId := index
+          cmdWrite := cmd.write
+          cmdWdata := cmd.wdata
+          cmdWmask := cmd.wmask
+          when(ready) {
+            increaseCount(index) := True
           }
         }
       }
