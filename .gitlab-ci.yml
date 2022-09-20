@@ -1,4 +1,4 @@
-image: ubuntu:focal
+image: ubuntu:jammy
 
 before_script:
   - apt-get update -yqq
@@ -27,6 +27,6 @@ scalafmt:
 test:
   script:
     # Execute base RV32IM tests on the static pipeline
-    - make -C tests
+    - make ARCHFLAGS="-march=rv32im -mabi=ilp32" -C tests
     # Execute base RV32IM tests on the dynamic pipeline
-    - make CORE=riscv.CoreDynamicExtMem -C tests
+    - make CORE=riscv.CoreDynamicExtMem ARCHFLAGS="-march=rv32im -mabi=ilp32" -C tests

@@ -277,6 +277,7 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
 
     val loadAreas = loadStages.zipWithIndex.map { case (loadStage, stageIndex) =>
       loadStage plug new Area {
+
         import loadStage._
 
         val operation = value(Data.LSU_OPERATION_TYPE)
@@ -351,66 +352,11 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
 
             output(pipeline.data.RD_DATA) := result
             output(pipeline.data.RD_DATA_VALID) := True
-
             formal.lsuOnLoad(loadStage, busAddress, mask, wValue)
           }
         } otherwise {
           loadActive := False
           dbusCtrl.invalidate()
-        }
-
-        when(arbitration.isValid && !misaligned) {
-          when(isActive) {
-            val busAddress = address & U(0xfffffffcL)
-            val valid = Bool()
-            valid := False
-            val wValue = UInt(config.xlen bits).getZero
-            busReady := dbusCtrl.isReady
-            when(busReady) {
-              loadActive := True
-            }
-            when(busReady || loadActive) {
-              val tpl = dbusCtrl.read(busAddress)
-              valid := tpl._1
-              wValue := tpl._2
-            }
-            when(valid) {
-              loadActive := False
-            }
-            arbitration.isReady := valid
-            val result = UInt(config.xlen bits)
-            result := wValue
-
-            switch(value(Data.LSU_ACCESS_WIDTH)) {
-              is(LsuAccessWidth.H) {
-                val offset = (address(1) ## B"0000").asUInt
-                val hValue = wValue(offset, 16 bits)
-
-                when(value(Data.LSU_IS_UNSIGNED)) {
-                  result := Utils.zeroExtend(hValue, config.xlen)
-                } otherwise {
-                  result := Utils.signExtend(hValue, config.xlen)
-                }
-              }
-              is(LsuAccessWidth.B) {
-                val offset = (address(1 downto 0) ## B"000").asUInt
-                val bValue = wValue(offset, 8 bits)
-
-                when(value(Data.LSU_IS_UNSIGNED)) {
-                  result := Utils.zeroExtend(bValue, config.xlen)
-                } otherwise {
-                  result := Utils.signExtend(bValue, config.xlen)
-                }
-              }
-            }
-
-            output(pipeline.data.RD_DATA) := result
-            output(pipeline.data.RD_DATA_VALID) := True
-
-            formal.lsuOnLoad(loadStage, busAddress, mask, wValue)
-          }
-        } otherwise {
-          loadActive := False
         }
       }
     }

@@ -38,10 +38,10 @@ object Utils {
 
   def outsideConditionScope[T](rtl: => T): T = {
     val body = Component.current.dslBody
-    body.push()
+    val ctx = body.push()
     val swapContext = body.swap()
     val ret = rtl
-    body.pop()
+    ctx.restore()
     swapContext.appendBack()
     ret
   }

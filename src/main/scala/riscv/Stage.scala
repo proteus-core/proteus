@@ -128,12 +128,6 @@ class Stage(val stageName: String) extends Component {
     * connection even when output() is called inside a conditional statement.
     */
   private def reworkOutsideConditionScope[T](rtl: => T) = {
-    val body = Component.current.dslBody
-    body.push()
-    val swapContext = body.swap()
-    val ret = rework(rtl)
-    body.pop()
-    swapContext.appendBack()
-    ret
+    Utils.outsideConditionScope(rework(rtl))
   }
 }
