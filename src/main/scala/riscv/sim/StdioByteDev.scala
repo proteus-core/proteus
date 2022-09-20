@@ -14,7 +14,7 @@ class StdioByteDev(io: ByteDevIo) {
   io.rdata.valid #= false
 
   forkSensitive(rdataTrigger) {
-    currentStdinByte.foreach {byte =>
+    currentStdinByte.foreach { byte =>
       io.rdata.valid #= true
       io.rdata.payload #= byte
 

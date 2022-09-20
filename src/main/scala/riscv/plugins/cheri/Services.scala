@@ -34,8 +34,8 @@ case class ScrIo(implicit context: Context) extends Bundle with IMasterSlave {
 }
 
 trait ScrService {
-  /**
-    * Get an IO port for accessing the SCR file.
+
+  /** Get an IO port for accessing the SCR file.
     *
     * This has to be called during the setup phase.
     *
@@ -49,9 +49,8 @@ trait ScrService {
 
   def registerScr[T <: Scr](id: Int, scr: => T): T
 
-  /**
-    * Register a new SCR that extends the given CSR. Extending a CSR means that
-    * reads and write of the CSR will refer to this SCR's offset.
+  /** Register a new SCR that extends the given CSR. Extending a CSR means that reads and write of
+    * the CSR will refer to this SCR's offset.
     */
   def registerScr[T <: Scr](id: Int, offsetCsr: Int, scr: => T): T
   def getScr(stage: Stage, id: Int): Scr

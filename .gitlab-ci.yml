@@ -20,6 +20,10 @@ before_script:
   # Update all submodules (e.g., riscv-tests)
   - git submodule update --init
 
+scalafmt:
+  script:
+    - sbt scalafmtCheck
+
 test:
   script:
     # Execute base RV32IM tests on the static pipeline

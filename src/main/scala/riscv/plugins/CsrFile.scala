@@ -60,7 +60,7 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
   private val registers = mutable.Map[Int, Csr]()
   private var writeInCycle: Bool = null
 
-  private def isReadOnly(csrId: Int) = (csrId & 0xC00) == 0xC00
+  private def isReadOnly(csrId: Int) = (csrId & 0xc00) == 0xc00
 
   override def registerCsr[T <: Csr](id: Int, reg: => T): T = {
     assert(id >= 0 && id < 4096, "Illegal CSR id")
@@ -81,7 +81,7 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
 
       csrIo.rdata := reg.read()
 
-      when (csrIo.write) {
+      when(csrIo.write) {
         reg.write(csrIo.wdata)
       }
     }
@@ -93,26 +93,32 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
     val decoder = pipeline.service[DecoderService]
     val issuer = pipeline.service[IssueService]
 
-    decoder.configure {config =>
-      config.addDefault(Map(
-        Data.CSR_OP -> CsrOp.NONE,
-        Data.CSR_USE_IMM -> False
-      ))
+    decoder.configure { config =>
+      config.addDefault(
+        Map(
+          Data.CSR_OP -> CsrOp.NONE,
+          Data.CSR_USE_IMM -> False
+        )
+      )
 
       val ops = Seq(
-        (Opcodes.CSRRW,  CsrOp.RW, False),
-        (Opcodes.CSRRS,  CsrOp.RS, False),
-        (Opcodes.CSRRC,  CsrOp.RC, False),
+        (Opcodes.CSRRW, CsrOp.RW, False),
+        (Opcodes.CSRRS, CsrOp.RS, False),
+        (Opcodes.CSRRC, CsrOp.RC, False),
         (Opcodes.CSRRWI, CsrOp.RW, True),
         (Opcodes.CSRRSI, CsrOp.RS, True),
         (Opcodes.CSRRCI, CsrOp.RC, True)
       )
 
       for ((opcode, op, useImm) <- ops) {
-        config.addDecoding(opcode, InstructionType.I, Map(
-          Data.CSR_OP -> op,
-          Data.CSR_USE_IMM -> useImm
-        ))
+        config.addDecoding(
+          opcode,
+          InstructionType.I,
+          Map(
+            Data.CSR_OP -> op,
+            Data.CSR_USE_IMM -> useImm
+          )
+        )
         issuer.setDestination(opcode, exeStage)
       }
     }
@@ -135,10 +141,10 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
 
       writeNotify.write := False
 
-      when (io.read) {
-        switch (io.rid) {
+      when(io.read) {
+        switch(io.rid) {
           for ((id, reg) <- registers) {
-            is (id) {
+            is(id) {
               io.rdata := reg.read()
             }
           }
@@ -148,10 +154,10 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
         }
       }
 
-      when (io.write) {
-        switch (io.wid) {
+      when(io.write) {
+        switch(io.wid) {
           for ((id, reg) <- registers) {
-            is (id) {
+            is(id) {
               if (isReadOnly(id)) {
                 io.error := True
               } else {
@@ -183,7 +189,7 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
       val ignoreWrite = False
       val src = UInt(config.xlen bits)
 
-      when (value(Data.CSR_USE_IMM)) {
+      when(value(Data.CSR_USE_IMM)) {
         src := Utils.zeroExtend(value(pipeline.data.RS1), config.xlen)
       } otherwise {
         src := value(pipeline.data.RS1_DATA)
@@ -196,8 +202,8 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
         output(pipeline.data.RD_DATA_VALID) := True
       }
 
-      when (arbitration.isValid && op =/= CsrOp.NONE) {
-        switch (op) {
+      when(arbitration.isValid && op =/= CsrOp.NONE) {
+        switch(op) {
           is(CsrOp.RW) {
             when(!ignoreRead) {
               outputRd(csrIo.read(csrId))
@@ -205,27 +211,27 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
 
             csrIo.write(csrId, src)
           }
-          is (CsrOp.RS) {
+          is(CsrOp.RS) {
             val oldCsrVal = csrIo.read(csrId)
             outputRd(oldCsrVal)
             val newCsrVal = oldCsrVal | src
 
-            when (!ignoreWrite) {
+            when(!ignoreWrite) {
               csrIo.write(csrId, newCsrVal)
             }
           }
-          is (CsrOp.RC) {
+          is(CsrOp.RC) {
             val oldCsrVal = csrIo.read(csrId)
             outputRd(oldCsrVal)
             val newCsrVal = oldCsrVal & ~src
 
-            when (!ignoreWrite) {
+            when(!ignoreWrite) {
               csrIo.write(csrId, newCsrVal)
             }
           }
         }
 
-        when (csrIo.error) {
+        when(csrIo.error) {
           val trapHandler = pipeline.service[TrapService]
           trapHandler.trap(csrStage, TrapCause.IllegalInstruction(value(pipeline.data.IR)))
         }

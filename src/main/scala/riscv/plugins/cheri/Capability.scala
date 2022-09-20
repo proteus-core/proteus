@@ -140,8 +140,7 @@ trait Capability {
   }
 }
 
-class PackedCapabilityFields(hasOffset: Boolean = true)
-                            (implicit context: Context) extends Bundle {
+class PackedCapabilityFields(hasOffset: Boolean = true)(implicit context: Context) extends Bundle {
   private val xlen = context.config.xlen
   val base = UInt(xlen bits)
   val length = UInt(xlen bits)
@@ -157,9 +156,9 @@ object PackedCapabilityFields {
   }
 }
 
-case class PackedCapability(override val hasOffset: Boolean = true)
-                           (implicit context: Context)
-  extends PackedCapabilityFields(hasOffset) with Capability {
+case class PackedCapability(override val hasOffset: Boolean = true)(implicit context: Context)
+    extends PackedCapabilityFields(hasOffset)
+    with Capability {
   override val tag = Bool()
 }
 
@@ -177,8 +176,7 @@ object PackedCapability {
   def Null(implicit context: Context): PackedCapability = Null(true)
 }
 
-case class RegCapability(implicit context: Context)
-  extends PackedCapabilityFields with Capability {
+case class RegCapability(implicit context: Context) extends PackedCapabilityFields with Capability {
   private val padding = Bits(context.clen - PackedCapabilityFields.getBitsWidth() bits)
   override val tag = Bool()
 
@@ -246,6 +244,8 @@ case class MemCapability()(implicit context: Context) extends Bundle with Capabi
     this
   }
 
-  assert(getBitsWidth == context.clen + 1,
-    s"Bit width of MemCapability is ${getBitsWidth} but should be ${context.clen + 1}")
+  assert(
+    getBitsWidth == context.clen + 1,
+    s"Bit width of MemCapability is ${getBitsWidth} but should be ${context.clen + 1}"
+  )
 }

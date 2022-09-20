@@ -24,14 +24,14 @@ class ExceptionHandler extends Plugin[Pipeline] with ExceptionService {
     val trapHandler = pipeline.service[TrapService]
     val csrFile = pipeline.service[CsrService]
 
-    trapHandler.onTrapCommit {(stage, isInterrupt, cause) =>
+    trapHandler.onTrapCommit { (stage, isInterrupt, cause) =>
       val ccsr = slave(new CsrIo)
 
       pipeline plug {
         ccsr <> csrFile.getCsr(0xbc0)
       }
 
-      when (!isInterrupt && cause === TrapCause.CheriException.code) {
+      when(!isInterrupt && cause === TrapCause.CheriException.code) {
         val newCcsr = UInt(config.xlen bits)
         newCcsr := ccsr.read()
         newCcsr(9 downto 5) := stage.value(Data.CEXC_CAUSE)

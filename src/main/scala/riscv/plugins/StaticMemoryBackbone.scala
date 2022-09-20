@@ -69,7 +69,10 @@ class StaticMemoryBackbone(implicit config: Config) extends Plugin with MemorySe
     internalIBus
   }
 
-  override def createInternalDBus(readStages: Seq[Stage], writeStage: Stage): (Seq[MemBus], MemBus) = {
+  override def createInternalDBus(
+      readStages: Seq[Stage],
+      writeStage: Stage
+  ): (Seq[MemBus], MemBus) = {
     assert(readStages.size == 1)
     assert(readStages.head == writeStage)
 
@@ -84,7 +87,7 @@ class StaticMemoryBackbone(implicit config: Config) extends Plugin with MemorySe
   }
 
   override def getDBusStages: Seq[Stage] = {
-    Seq(internalDBusStage).filter(_ != null).distinct  // TODO: not sure what this does
+    Seq(internalDBusStage).filter(_ != null).distinct // TODO: not sure what this does
   }
 
   override def filterDBus(filter: MemBusFilter): Unit = {

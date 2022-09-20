@@ -4,11 +4,16 @@ import riscv._
 import spinal.core._
 import spinal.lib.Stream
 
-class Dispatcher(pipeline: DynamicPipeline,
-                 rob: ReorderBuffer,
-                 loadManagers: Seq[LoadManager],
-                 retirementRegisters: DynBundle[PipelineData[Data]]) extends Area with Resettable {
-  val rdbStream: Stream[RdbMessage] = Stream(HardType(RdbMessage(retirementRegisters, rob.indexBits)))
+class Dispatcher(
+    pipeline: DynamicPipeline,
+    rob: ReorderBuffer,
+    loadManagers: Seq[LoadManager],
+    retirementRegisters: DynBundle[PipelineData[Data]]
+) extends Area
+    with Resettable {
+  val rdbStream: Stream[RdbMessage] = Stream(
+    HardType(RdbMessage(retirementRegisters, rob.indexBits))
+  )
   val storedMessage: RdbMessage = RegInit(RdbMessage(retirementRegisters, rob.indexBits).getZero)
 
   private object State extends SpinalEnum {
@@ -26,10 +31,10 @@ class Dispatcher(pipeline: DynamicPipeline,
 
     val lsu = pipeline.service[LsuService]
 
-    when (lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.LOAD) {
-      var context = when (False) {}
+    when(lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.LOAD) {
+      var context = when(False) {}
       for (lm <- loadManagers) {
-        context = context.elsewhen (lm.isAvailable) {
+        context = context.elsewhen(lm.isAvailable) {
           ret := lm.receiveMessage(rdbMessage)
         }
       }
@@ -37,13 +42,13 @@ class Dispatcher(pipeline: DynamicPipeline,
         ret := False
       }
     } elsewhen (!activeFlush) {
-      when (state === State.BROADCASTING_RESULT) {
+      when(state === State.BROADCASTING_RESULT) {
         ret := False
       } otherwise {
         storedMessage := rdbMessage
         rdbStream.payload := rdbMessage
         rdbStream.valid := True
-        when (!rdbStream.ready) {
+        when(!rdbStream.ready) {
           stateNext := State.BROADCASTING_RESULT
         }
         ret := True
@@ -62,13 +67,13 @@ class Dispatcher(pipeline: DynamicPipeline,
 
     activeFlush := False
 
-    when (activeFlush) {
+    when(activeFlush) {
       stateNext := State.IDLE
     }
 
-    when (state === State.BROADCASTING_RESULT && !activeFlush) {
+    when(state === State.BROADCASTING_RESULT && !activeFlush) {
       rdbStream.valid := True
-      when (rdbStream.ready) {
+      when(rdbStream.ready) {
         stateNext := State.IDLE
       }
     }

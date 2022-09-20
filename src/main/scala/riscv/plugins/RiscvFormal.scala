@@ -28,7 +28,7 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
     val ixl = UInt(2 bits)
 
     // Integer Register Read/Write
-    val rs1_addr,  rs2_addr,  rd_addr = UInt(5 bits)
+    val rs1_addr, rs2_addr, rd_addr = UInt(5 bits)
     val rs1_rdata, rs2_rdata, rd_wdata = UInt(config.xlen bits)
 
     // Program Counter
@@ -53,15 +53,13 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
     stage.output(Data.FORMAL_MISALIGNED) := False
   }
 
-  override def lsuOnLoad(stage: Stage, addr: UInt,
-                         rmask: Bits, rdata: UInt): Unit = {
+  override def lsuOnLoad(stage: Stage, addr: UInt, rmask: Bits, rdata: UInt): Unit = {
     stage.output(Data.FORMAL_MEM_ADDR) := addr
     stage.output(Data.FORMAL_MEM_RMASK) := rmask
     stage.output(Data.FORMAL_MEM_RDATA) := rdata
   }
 
-  override def lsuOnStore(stage: Stage, addr: UInt,
-                          wmask: Bits, wdata: UInt): Unit = {
+  override def lsuOnStore(stage: Stage, addr: UInt, wmask: Bits, wdata: UInt): Unit = {
     stage.output(Data.FORMAL_MEM_ADDR) := addr
     stage.output(Data.FORMAL_MEM_WDATA) := wdata
     stage.output(Data.FORMAL_MEM_WMASK) := wmask
@@ -75,8 +73,10 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
     val stage = pipeline.retirementStage
     val trapService = pipeline.service[TrapService]
 
-    def zeroIfNone(regType: PipelineData[SpinalEnumCraft[RegisterType.type]],
-                   data: PipelineData[UInt]): UInt = {
+    def zeroIfNone(
+        regType: PipelineData[SpinalEnumCraft[RegisterType.type]],
+        data: PipelineData[UInt]
+    ): UInt = {
       (stage.output(regType) === RegisterType.NONE) ? U(0) | stage.output(data)
     }
 
@@ -128,7 +128,7 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
         init
       })
 
-      when (currentRvfi.valid) {
+      when(currentRvfi.valid) {
         prevRvfi := currentRvfi
       }
 
@@ -139,7 +139,7 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
       rvfi.valid.allowOverride
       // Only send out instructions that have not trapped once a next
       // instruction has arrived
-      rvfi.valid := currentRvfi.valid && prevRvfi.valid// && !prevRvfi.hasTrapped
+      rvfi.valid := currentRvfi.valid && prevRvfi.valid // && !prevRvfi.hasTrapped
       rvfi.order.allowOverride
       rvfi.order := Counter(64 bits, rvfi.valid)
     }
@@ -149,21 +149,21 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
 
   private def implementAltops(rvfi: Rvfi) = {
     val altopsTable = Seq[(MaskedLiteral, (UInt, UInt) => UInt, BigInt)](
-      (Opcodes.MUL,    _ + _, 0x2cdf52a55876063eL),
-      (Opcodes.MULH,   _ + _, 0x15d01651f6583fb7L),
+      (Opcodes.MUL, _ + _, 0x2cdf52a55876063eL),
+      (Opcodes.MULH, _ + _, 0x15d01651f6583fb7L),
       (Opcodes.MULHSU, _ - _, 0xea3969edecfbe137L),
-      (Opcodes.MULHU,  _ + _, 0xd13db50d949ce5e8L),
-      (Opcodes.DIV,    _ - _, 0x29bbf66f7f8529ecL),
-      (Opcodes.DIVU,   _ - _, 0x8c629acb10e8fd70L),
-      (Opcodes.REM,    _ - _, 0xf5b7d8538da68fa5L),
-      (Opcodes.REMU,   _ - _, 0xbc4402413138d0e1L)
+      (Opcodes.MULHU, _ + _, 0xd13db50d949ce5e8L),
+      (Opcodes.DIV, _ - _, 0x29bbf66f7f8529ecL),
+      (Opcodes.DIVU, _ - _, 0x8c629acb10e8fd70L),
+      (Opcodes.REM, _ - _, 0xf5b7d8538da68fa5L),
+      (Opcodes.REMU, _ - _, 0xbc4402413138d0e1L)
     )
 
-    switch (rvfi.insn) {
+    switch(rvfi.insn) {
       for ((opcode, altop, fullMask) <- altopsTable) {
-        is (opcode) {
+        is(opcode) {
           val mask = if (config.xlen == 32) fullMask & 0xffffffffL else fullMask
-          when (rvfi.rd_addr =/= 0) {
+          when(rvfi.rd_addr =/= 0) {
             rvfi.rd_wdata := altop(rvfi.rs1_rdata, rvfi.rs2_rdata) ^ mask
           }
         }

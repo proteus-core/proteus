@@ -35,11 +35,13 @@ trait StaticPipeline extends Pipeline {
   override def retirementStage: Stage = stages.last
 
   override protected def init(): Unit = {
-    pipelineRegsMap = stages.init.map(stage => {
-      val regs = new PipelineRegs(stage)
-      regs.setName(s"pipelineRegs_${stage.stageName}")
-      stage -> regs
-    }).toMap
+    pipelineRegsMap = stages.init
+      .map(stage => {
+        val regs = new PipelineRegs(stage)
+        regs.setName(s"pipelineRegs_${stage.stageName}")
+        stage -> regs
+      })
+      .toMap
   }
 
   override def connectStages() {
@@ -75,14 +77,17 @@ trait StaticPipeline extends Pipeline {
 
     for ((data, info) <- pipelineDataInfoMap) {
       if (info.isUsedAsInput && info.firstInputStageId > 0) {
-        assert(info.firstOutputStageId != Int.MaxValue,
+        assert(
+          info.firstOutputStageId != Int.MaxValue,
           s"Pipeline register ${data.name} used as input in stage " +
-            s"${stages(info.firstInputStageId).stageName} but is never output")
+            s"${stages(info.firstInputStageId).stageName} but is never output"
+        )
         assert(
           info.firstOutputStageId <= info.firstInputStageId,
           s"Pipeline register ${data.name} used as input in stage " +
             s"${stages(info.firstInputStageId).stageName} before being first " +
-            s"output in stage ${stages(info.firstOutputStageId).stageName}")
+            s"output in stage ${stages(info.firstOutputStageId).stageName}"
+        )
       }
 
       val firstStageId = Math.min(info.firstInputStageId, info.firstOutputStageId)
@@ -91,7 +96,7 @@ trait StaticPipeline extends Pipeline {
       for (outputStageId <- firstStageId until lastStageId) {
         val outputStage = stages(outputStageId)
         val inputStage = stages(outputStageId + 1)
-        val input = inputStage.input(data)// := outputStage.output(data)
+        val input = inputStage.input(data) // := outputStage.output(data)
         val output = outputStage.output(data)
         val outputStageRegs = pipelineRegs(outputStage)
         val (regInput, regOutput) = outputStageRegs.addReg(data)

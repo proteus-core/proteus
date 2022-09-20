@@ -12,14 +12,21 @@ class Prospect extends Plugin[DynamicPipeline] with ProspectService {
   }
 
   def isSecret(address: UInt): Bool = {
-    address % 8 =/= 0  // TODO: how to determine what is secret?
+    address % 8 =/= 0 // TODO: how to determine what is secret?
   }
 
   override def setup(): Unit = {
     val lsu = pipeline.service[LsuService]
     lsu.setAddressTranslator(new LsuAddressTranslator {
-      override def translate(stage: Stage, address: UInt, operation: SpinalEnumCraft[LsuOperationType.type], width: SpinalEnumCraft[LsuAccessWidth.type]): UInt = {
-        stage.output(PrivateRegs.SECRET_VALUE) := operation === LsuOperationType.LOAD && isSecret(address)
+      override def translate(
+          stage: Stage,
+          address: UInt,
+          operation: SpinalEnumCraft[LsuOperationType.type],
+          width: SpinalEnumCraft[LsuAccessWidth.type]
+      ): UInt = {
+        stage.output(PrivateRegs.SECRET_VALUE) := operation === LsuOperationType.LOAD && isSecret(
+          address
+        )
         address
       }
     })
@@ -52,7 +59,10 @@ class Prospect extends Plugin[DynamicPipeline] with ProspectService {
   }
 
   override def addSecretToBundle(bundle: DynBundle[PipelineData[Data]]): Unit = {
-    bundle.addElement(PrivateRegs.SECRET_VALUE.asInstanceOf[PipelineData[Data]], PrivateRegs.SECRET_VALUE.dataType)
+    bundle.addElement(
+      PrivateRegs.SECRET_VALUE.asInstanceOf[PipelineData[Data]],
+      PrivateRegs.SECRET_VALUE.dataType
+    )
   }
 
   override def setSecretRegister(regId: UInt, secret: Bool): Unit = {

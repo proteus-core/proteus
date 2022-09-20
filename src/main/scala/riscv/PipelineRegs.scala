@@ -9,13 +9,13 @@ class PipelineRegs(stage: Stage) extends Component {
   private val regs = mutable.Map[PipelineData[Data], RegInfo[Data]]()
 
   definitionName = s"PipelineRegs_${stage.stageName}"
-  val shift = in Bool()
+  val shift = in Bool ()
 
   def addReg[T <: Data](data: PipelineData[T]): (T, T) = rework {
     val input = in(data.dataType())
     val output = out(data.dataType())
     val regShift = in(Bool())
-    parent.rework {regShift := False}
+    parent.rework { regShift := False }
     val reg = RegNextWhen(input, shift || regShift).init(input.getZero)
     output := reg
 
@@ -24,8 +24,7 @@ class PipelineRegs(stage: Stage) extends Component {
     reg.setName(s"reg_${data.name}")
     regShift.setName(s"shift_${data.name}")
 
-    regs(data.asInstanceOf[PipelineData[Data]]) =
-      RegInfo(reg, input, output, regShift)
+    regs(data.asInstanceOf[PipelineData[Data]]) = RegInfo(reg, input, output, regShift)
 
     (input, output)
   }

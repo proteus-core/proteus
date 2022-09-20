@@ -24,9 +24,11 @@ class TrapStageInvalidator() extends Plugin[StaticPipeline] {
         // that changes architectural state is MEM which is only one stage
         // before WB (which can trap).
         val laterStages = pipeline.stages.dropWhile(_ != stage).tail
-        val laterStageTrapped = laterStages.map(s => {
-          s.arbitration.isValid && pipeline.service[TrapService].hasTrapped(s)
-        }).orR
+        val laterStageTrapped = laterStages
+          .map(s => {
+            s.arbitration.isValid && pipeline.service[TrapService].hasTrapped(s)
+          })
+          .orR
 
         when(laterStageTrapped) {
           stage.arbitration.isValid := False
@@ -48,7 +50,8 @@ private class StageTrapSignals(implicit config: Config) extends Area {
 }
 
 class TrapHandler(trapStage: Stage)(implicit config: Config)
-  extends Plugin[Pipeline] with TrapService {
+    extends Plugin[Pipeline]
+    with TrapService {
   private object Data {
     object HAS_TRAPPED extends PipelineData(Bool())
     object TRAP_IS_INTERRUPT extends PipelineData(Bool())
@@ -64,12 +67,13 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
     val issuer = pipeline.service[IssueService]
 
     pipeline.service[DecoderService].configure { decoder =>
-      decoder.addDefault(Map(
-        Data.MRET -> False
-      ))
+      decoder.addDefault(
+        Map(
+          Data.MRET -> False
+        )
+      )
 
-      decoder.addDecoding(Opcodes.MRET, InstructionType.I,
-                          Map(Data.MRET -> True))
+      decoder.addDecoding(Opcodes.MRET, InstructionType.I, Map(Data.MRET -> True))
 
       issuer.setDestination(Opcodes.MRET, pipeline.passThroughStage)
     }
@@ -96,14 +100,14 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
         val trapSignals = new TrapSignals
         val isInterrupt = False
 
-        when (signals.interruptSignals.hasTrapped) {
+        when(signals.interruptSignals.hasTrapped) {
           trapSignals := signals.interruptSignals
           isInterrupt := True
         } otherwise {
           trapSignals := signals.exceptionSignals
         }
 
-        when (trapSignals.hasTrapped) {
+        when(trapSignals.hasTrapped) {
           stage.output(Data.HAS_TRAPPED) := True
           stage.output(Data.TRAP_IS_INTERRUPT) := isInterrupt
           stage.output(Data.TRAP_CAUSE) := trapSignals.trapCause
@@ -133,7 +137,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
       val mepc = slave(new CsrIo)
       val mtval = slave(new CsrIo)
 
-      when (arbitration.isValid && value(Data.HAS_TRAPPED)) {
+      when(arbitration.isValid && value(Data.HAS_TRAPPED)) {
         val mstatusCurrent = mstatus.read()
         val mstatusNew = UInt(config.xlen bits)
         mstatusNew := mstatusCurrent
@@ -157,7 +161,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
         }
       }
 
-      when (arbitration.isValid && value(Data.MRET)) {
+      when(arbitration.isValid && value(Data.MRET)) {
         val mstatusCurrent = mstatus.read()
         val mstatusNew = UInt(config.xlen bits)
         mstatusNew := mstatusCurrent

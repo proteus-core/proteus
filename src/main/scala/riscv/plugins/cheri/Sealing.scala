@@ -13,23 +13,37 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
 
   override def setup(): Unit = {
     pipeline.service[DecoderService].configure { config =>
-      config.addDefault(Map(
-        Data.CSEAL -> False,
-        Data.CUNSEAL -> False,
-        Data.CINVOKE -> False
-      ))
+      config.addDefault(
+        Map(
+          Data.CSEAL -> False,
+          Data.CUNSEAL -> False,
+          Data.CINVOKE -> False
+        )
+      )
 
-      config.addDecoding(Opcodes.CSeal, InstructionType.R_CCC, Map(
-        Data.CSEAL -> True
-      ))
+      config.addDecoding(
+        Opcodes.CSeal,
+        InstructionType.R_CCC,
+        Map(
+          Data.CSEAL -> True
+        )
+      )
 
-      config.addDecoding(Opcodes.CUnseal, InstructionType.R_CCC, Map(
-        Data.CUNSEAL -> True
-      ))
+      config.addDecoding(
+        Opcodes.CUnseal,
+        InstructionType.R_CCC,
+        Map(
+          Data.CUNSEAL -> True
+        )
+      )
 
-      config.addDecoding(Opcodes.CInvoke, InstructionType.R_CCC, Map(
-        Data.CINVOKE -> True
-      ))
+      config.addDecoding(
+        Opcodes.CInvoke,
+        InstructionType.R_CCC,
+        Map(
+          Data.CINVOKE -> True
+        )
+      )
       config.setFixedRegisters(Opcodes.CInvoke, rd = Some(31))
     }
   }
@@ -49,12 +63,12 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
         handler.except(stage, cause, capIdx)
       }
 
-      when (arbitration.isValid && value(Data.CSEAL)) {
+      when(arbitration.isValid && value(Data.CSEAL)) {
         arbitration.rs1Needed := True
         arbitration.rs2Needed := True
 
-        when (!arbitration.isStalled) {
-          when (!cs1.tag) {
+        when(!arbitration.isStalled) {
+          when(!cs1.tag) {
             except(ExceptionCause.TagViolation, cs1Idx)
           } elsewhen (!cs2.tag) {
             except(ExceptionCause.TagViolation, cs2Idx)
@@ -82,12 +96,12 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
         }
       }
 
-      when (arbitration.isValid && value(Data.CUNSEAL)) {
+      when(arbitration.isValid && value(Data.CUNSEAL)) {
         arbitration.rs1Needed := True
         arbitration.rs2Needed := True
 
-        when (!arbitration.isStalled) {
-          when (!cs1.tag) {
+        when(!arbitration.isStalled) {
+          when(!cs1.tag) {
             except(ExceptionCause.TagViolation, cs1Idx)
           } elsewhen (!cs2.tag) {
             except(ExceptionCause.TagViolation, cs2Idx)
@@ -115,15 +129,15 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
         }
       }
 
-      when (arbitration.isValid && value(Data.CINVOKE)) {
+      when(arbitration.isValid && value(Data.CINVOKE)) {
         arbitration.rs1Needed := True
         arbitration.rs2Needed := True
 
-        when (!arbitration.isStalled) {
+        when(!arbitration.isStalled) {
           val target = cs1.address
           target.lsb := False
 
-          when (!cs1.tag) {
+          when(!cs1.tag) {
             except(ExceptionCause.TagViolation, cs1Idx)
           } elsewhen (!cs2.tag) {
             except(ExceptionCause.TagViolation, cs2Idx)

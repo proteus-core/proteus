@@ -22,47 +22,57 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
     val issueService = pipeline.service[IssueService]
 
     pipeline.service[DecoderService].configure { decoder =>
-      decoder.addDefault(Map(
-        Data.MUL -> False,
-        Data.MUL_HIGH -> False,
-        Data.DIV -> False,
-        Data.REM -> False,
-        Data.MULDIV_RS1_SIGNED -> False,
-        Data.MULDIV_RS2_SIGNED -> False
-      ))
+      decoder.addDefault(
+        Map(
+          Data.MUL -> False,
+          Data.MUL_HIGH -> False,
+          Data.DIV -> False,
+          Data.REM -> False,
+          Data.MULDIV_RS1_SIGNED -> False,
+          Data.MULDIV_RS2_SIGNED -> False
+        )
+      )
 
       val mulDecodings = Seq(
-        (Opcodes.MUL,    False, True,  True),
-        (Opcodes.MULH,   True,  True,  True),
-        (Opcodes.MULHSU, True,  True,  False),
-        (Opcodes.MULHU,  True,  False, False)
+        (Opcodes.MUL, False, True, True),
+        (Opcodes.MULH, True, True, True),
+        (Opcodes.MULHSU, True, True, False),
+        (Opcodes.MULHU, True, False, False)
       )
 
       for ((opcode, high, rs1Signed, rs2Signed) <- mulDecodings) {
-        decoder.addDecoding(opcode, InstructionType.R, Map(
-          Data.MUL -> True,
-          Data.MUL_HIGH -> high,
-          Data.MULDIV_RS1_SIGNED -> rs1Signed,
-          Data.MULDIV_RS2_SIGNED -> rs2Signed
-        ))
+        decoder.addDecoding(
+          opcode,
+          InstructionType.R,
+          Map(
+            Data.MUL -> True,
+            Data.MUL_HIGH -> high,
+            Data.MULDIV_RS1_SIGNED -> rs1Signed,
+            Data.MULDIV_RS2_SIGNED -> rs2Signed
+          )
+        )
 
         issueService.setDestinations(opcode, exeStages)
       }
 
       val divDecodings = Seq(
-        (Opcodes.DIV,  False, True),
+        (Opcodes.DIV, False, True),
         (Opcodes.DIVU, False, False),
-        (Opcodes.REM,  True,  True),
-        (Opcodes.REMU, True,  False)
+        (Opcodes.REM, True, True),
+        (Opcodes.REMU, True, False)
       )
 
       for ((opcode, rem, signed) <- divDecodings) {
-        decoder.addDecoding(opcode, InstructionType.R, Map(
-          Data.DIV -> True,
-          Data.REM -> rem,
-          Data.MULDIV_RS1_SIGNED -> signed,
-          Data.MULDIV_RS2_SIGNED -> signed
-        ))
+        decoder.addDecoding(
+          opcode,
+          InstructionType.R,
+          Map(
+            Data.DIV -> True,
+            Data.REM -> rem,
+            Data.MULDIV_RS1_SIGNED -> signed,
+            Data.MULDIV_RS2_SIGNED -> signed
+          )
+        )
 
         issueService.setDestinations(opcode, exeStages)
       }
@@ -91,28 +101,28 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
         multiplier := 0
         val isMul = value(Data.MUL)
 
-        when (arbitration.isIdle) {
+        when(arbitration.isIdle) {
           initMul := True
         }
 
-        when (arbitration.isValid && isMul) {
+        when(arbitration.isValid && isMul) {
           arbitration.rs1Needed := True
           arbitration.rs2Needed := True
         }
 
-        when (arbitration.isRunning && isMul) {
+        when(arbitration.isRunning && isMul) {
           arbitration.isReady := False
 
           val rs1 = value(pipeline.data.RS1_DATA)
           val rs2 = value(pipeline.data.RS2_DATA)
 
-          when (value(Data.MULDIV_RS2_SIGNED) && rs2.asSInt < 0) {
+          when(value(Data.MULDIV_RS2_SIGNED) && rs2.asSInt < 0) {
             // If RS2 is signed, RS1 is also signed
             multiplicand :=
               Utils.signExtend(Utils.twosComplement(rs1), config.xlen + 1)
             multiplier := Utils.twosComplement(rs2)
           } otherwise {
-            when (value(Data.MULDIV_RS1_SIGNED)) {
+            when(value(Data.MULDIV_RS1_SIGNED)) {
               multiplicand := Utils.signExtend(rs1, config.xlen + 1)
             } otherwise {
               multiplicand := Utils.zeroExtend(rs1, config.xlen + 1)
@@ -121,7 +131,7 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
             multiplier := rs2
           }
 
-          when (initMul) {
+          when(initMul) {
             productH := 0
             productL := multiplier
             step.clear()
@@ -138,7 +148,7 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
 
             val extendedProductH = UInt(config.xlen + 1 bits)
 
-            when (value(Data.MULDIV_RS1_SIGNED) || value(Data.MULDIV_RS2_SIGNED)) {
+            when(value(Data.MULDIV_RS1_SIGNED) || value(Data.MULDIV_RS2_SIGNED)) {
               extendedProductH := Utils.signExtend(productH, config.xlen + 1)
             } otherwise {
               extendedProductH := Utils.zeroExtend(productH, config.xlen + 1)
@@ -146,7 +156,7 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
 
             val partialSum = UInt(config.xlen + 1 bits)
 
-            when (product.lsb) {
+            when(product.lsb) {
               partialSum := extendedProductH + multiplicand
             } otherwise {
               partialSum := extendedProductH
@@ -168,16 +178,16 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
         val step = Counter(33)
         val isDiv = value(Data.DIV)
 
-        when (arbitration.isIdle) {
+        when(arbitration.isIdle) {
           initDiv := True
         }
 
-        when (arbitration.isValid && isDiv) {
+        when(arbitration.isValid && isDiv) {
           arbitration.rs1Needed := True
           arbitration.rs2Needed := True
         }
 
-        when (arbitration.isRunning && isDiv) {
+        when(arbitration.isRunning && isDiv) {
           arbitration.isReady := False
 
           val rs1 = value(pipeline.data.RS1_DATA)
@@ -188,7 +198,7 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
           val dividend = dividendIsNeg ? Utils.twosComplement(rs1) | rs1
           val divisor = divisorIsNeg ? Utils.twosComplement(rs2) | rs2
 
-          when (divisor === 0) {
+          when(divisor === 0) {
             arbitration.isReady := True
             output(pipeline.data.RD_DATA) :=
               value(Data.REM) ? rs1 | S(-1, config.xlen bits).asUInt
@@ -203,11 +213,11 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
             correctedQuotient := quotient
             correctedRemainder := remainder
 
-            when (dividendIsNeg =/= divisorIsNeg) {
+            when(dividendIsNeg =/= divisorIsNeg) {
               correctedQuotient := Utils.twosComplement(quotient)
             }
 
-            when (dividendIsNeg) {
+            when(dividendIsNeg) {
               correctedRemainder := Utils.twosComplement(remainder)
             }
 
@@ -221,7 +231,7 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
             val newRemainder = remainder(config.xlen - 2 downto 0) @@ quotient.msb
             val quotientLsb = Bool()
 
-            when (newRemainder >= divisor) {
+            when(newRemainder >= divisor) {
               remainder := newRemainder - divisor
               quotientLsb := True
             } otherwise {

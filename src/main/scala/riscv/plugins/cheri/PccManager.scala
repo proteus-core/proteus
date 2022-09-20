@@ -7,7 +7,8 @@ import spinal.core._
 import scala.collection.mutable
 
 class PccManager(branchStage: Stage)(implicit context: Context)
-  extends Plugin[StaticPipeline] with PccService {
+    extends Plugin[StaticPipeline]
+    with PccService {
   private class PccData extends PackedCapability(hasOffset = false)
   private object PccData {
     def apply(): PccData = new PccData
@@ -31,7 +32,7 @@ class PccManager(branchStage: Stage)(implicit context: Context)
 
     val targetPcc = targetPccInfo.value
 
-    when (!targetPcc.tag) {
+    when(!targetPcc.tag) {
       except(ExceptionCause.TagViolation)
     } elsewhen (targetPcc.isSealed) {
       except(ExceptionCause.SealViolation)
@@ -87,13 +88,19 @@ class PccManager(branchStage: Stage)(implicit context: Context)
 
   override def setup(): Unit = {
     pipeline.service[DecoderService].configure { config =>
-      config.addDefault(Map(
-        Data.CJALR -> False
-      ))
+      config.addDefault(
+        Map(
+          Data.CJALR -> False
+        )
+      )
 
-      config.addDecoding(Opcodes.CJALR, InstructionType.R_CxC, Map(
-        Data.CJALR -> True
-      ))
+      config.addDecoding(
+        Opcodes.CJALR,
+        InstructionType.R_CxC,
+        Map(
+          Data.CJALR -> True
+        )
+      )
     }
 
     // PCC is implemented as a pipeline register that travels along with PC. For
@@ -174,14 +181,14 @@ class PccManager(branchStage: Stage)(implicit context: Context)
       }
     }
 
-    pipeline.service[ScrService] registerScr(ScrIndex.MTCC, 0x305, new Area with Scr {
+    pipeline.service[ScrService] registerScr (ScrIndex.MTCC, 0x305, new Area with Scr {
       override val needAsr: Boolean = true
       private val mtcc = Reg(PackedCapability()).init(PackedCapability.Root)
       override def read(): Capability = mtcc
       override def write(value: Capability): Unit = mtcc.assignFrom(value)
     })
 
-    pipeline.service[ScrService] registerScr(ScrIndex.MEPCC, 0x341, new Area with Scr {
+    pipeline.service[ScrService] registerScr (ScrIndex.MEPCC, 0x341, new Area with Scr {
       override val needAsr: Boolean = true
       private val mepcc = Reg(PackedCapability()).init(PackedCapability.Root)
       override def read(): Capability = mepcc
@@ -193,10 +200,10 @@ class PccManager(branchStage: Stage)(implicit context: Context)
     branchStage plug new Area {
       import branchStage._
 
-      when (arbitration.isValid && value(Data.CJALR)) {
+      when(arbitration.isValid && value(Data.CJALR)) {
         arbitration.rs1Needed := True
 
-        when (!arbitration.isStalled) {
+        when(!arbitration.isStalled) {
           val targetPcc = value(context.data.CS1_DATA)
           val capIdx = CapIdx.gpcr(value(pipeline.data.RS1))
           jump(branchStage, targetPcc, capIdx)

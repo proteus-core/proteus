@@ -20,14 +20,14 @@ class Apb3MachineTimers(pipeline: Pipeline)(implicit config: Config) extends Com
   private val mtimecmp = Reg(UInt(64 bits)).init(0)
 
   parent rework {
-    pipeline.serviceOption[InterruptService] foreach {interruptService =>
+    pipeline.serviceOption[InterruptService] foreach { interruptService =>
       interruptService.getMachineTimerIrqIo <> io.mtimer
     }
   }
 
   // It is important that this comes before the call to build() to ensure that
   // the clearing of the mtip bit on a write has precedence over setting it.
-  when (mtime >= mtimecmp) {
+  when(mtime >= mtimecmp) {
     io.mtimer.postInterrupt()
   }
 
