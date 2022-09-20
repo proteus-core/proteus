@@ -1,4 +1,4 @@
-image: ubuntu:focal
+image: ubuntu:jammy
 
 before_script:
   - apt-get update -yqq
