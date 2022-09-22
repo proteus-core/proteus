@@ -23,9 +23,9 @@ class BranchTargetPredictor(
     predictorComponent = pipeline plug new PredictorComponent {
       private val entries = Vec.fill(numEntries)(RegInit(PredictionEntry().getZero))
       private val counter = Counter(numEntries)
-      counter.clear()
 
       def recordJump(pc: UInt, target: UInt): Unit = {
+        // TODO: overwrite old entry if it exists
         val index = counter.value
         entries(index).pc := pc(storedPcBitLength - 1 downto 0)
         entries(index).target := target
