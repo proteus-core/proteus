@@ -11,7 +11,6 @@ class BranchTargetPredictor(
     storedPcBitLength: Int = 32
 ) extends BranchTargetPredictorBase(fetchStage, jumpStage) {
   override var predictorComponent: PredictorComponent = null
-  // private var entries: Vec[PredictionEntry] = null
 
   case class PredictionEntry() extends Bundle {
     val pc: UInt = UInt(storedPcBitLength bits)
