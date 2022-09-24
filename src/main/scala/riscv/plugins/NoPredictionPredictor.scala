@@ -28,8 +28,8 @@ class NoPredictionPredictor(fetchStage: Stage, executeStage: Stage)
     stage.input(Data.PREDICTED_PC) := pc
   }
 
-  def predictionWasCorrect(pc: UInt, nextPc: UInt, predictedPc: UInt): Bool = {
-    nextPc === predictedPc
+  override def predictionForAddress(address: UInt): UInt = {
+    address + 4
   }
 
   override def addPredictedPcToBundle(bundle: DynBundle[PipelineData[Data]]): Unit = {

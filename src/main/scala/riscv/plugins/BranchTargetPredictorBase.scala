@@ -53,9 +53,10 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
     val jumpIo: JumpIo = master(JumpIo())
   }
 
-  class PredictorComponent extends Component {
+  abstract class PredictorComponent extends Component {
     val predictIo: PredictIo = master(PredictIo())
     val jumpIo: JumpIo = slave(JumpIo())
+    def findEntry(pc: UInt): Flow[UInt]
   }
 
   private var fetchArea: FetchArea = null
