@@ -161,7 +161,7 @@ object CoreTestSim {
 
 object CoreExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.static(RamType.ExternalAxi4(10 MiB), 32))
+    SpinalVerilog(SoC.static(RamType.ExternalAxi4(10 MiB), 64))
   }
 }
 
@@ -191,9 +191,11 @@ object createDynamicPipeline {
 
       val intAlu1 = new Stage("EX_ALU1")
       val intAlu2 = new Stage("EX_ALU2")
+      val intAlu3 = new Stage("EX_ALU3")
+      val intAlu4 = new Stage("EX_ALU4")
       val intMul1 = new Stage("EX_MUL1")
       override val passThroughStage: Stage = intAlu1
-      override val rsStages: Seq[Stage] = Seq(intAlu1, intAlu2, intMul1)
+      override val rsStages: Seq[Stage] = Seq(intAlu1, intAlu2, intAlu3, intAlu4, intMul1)
       override val loadStages: Seq[Stage] =
         Seq(new Stage("LOAD1"), new Stage("LOAD2"), new Stage("LOAD3"))
       override val retirementStage = new Stage("RET")
@@ -224,17 +226,22 @@ object createDynamicPipeline {
           readStage = pipeline.issuePipeline.decode,
           writeStage = pipeline.retirementStage
         ),
-        new Lsu(Set(pipeline.intAlu2), pipeline.loadStages, pipeline.retirementStage),
+        new Lsu(
+          Set(pipeline.intAlu1, pipeline.intAlu2, pipeline.intAlu3, pipeline.intAlu4),
+          pipeline.loadStages,
+          pipeline.retirementStage
+        ),
         new BranchTargetPredictor(
           pipeline.issuePipeline.fetch,
           pipeline.retirementStage,
           8,
           conf.xlen
         ),
-        new IntAlu(Set(pipeline.intAlu1, pipeline.intAlu2)),
-        new Shifter(Set(pipeline.intAlu1, pipeline.intAlu2)),
+//        new NoPredictionPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage),
+        new IntAlu(Set(pipeline.intAlu1, pipeline.intAlu2, pipeline.intAlu3, pipeline.intAlu4)),
+        new Shifter(Set(pipeline.intAlu1, pipeline.intAlu2, pipeline.intAlu3, pipeline.intAlu4)),
         new MulDiv(Set(pipeline.intMul1)),
-        new BranchUnit(Set(pipeline.intAlu1, pipeline.intAlu2)),
+        new BranchUnit(Set(pipeline.intAlu1, pipeline.intAlu2, pipeline.intAlu3, pipeline.intAlu4)),
         new CsrFile(pipeline.retirementStage, pipeline.intAlu1),
         new TrapHandler(pipeline.retirementStage),
         new MachineMode(pipeline.intAlu1),
@@ -292,7 +299,7 @@ object CoreDynamicSim {
 
 object CoreDynamicExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 32))
+    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 64))
   }
 }
 

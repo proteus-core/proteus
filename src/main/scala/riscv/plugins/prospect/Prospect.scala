@@ -12,7 +12,22 @@ class Prospect extends Plugin[DynamicPipeline] with ProspectService {
   }
 
   def isSecret(address: UInt): Bool = {
-    address % 8 =/= 0 // TODO: how to determine what is secret?
+    val lower1 = UInt(config.xlen bits)
+    val lower2 = UInt(config.xlen bits)
+    val upper1 = UInt(config.xlen bits)
+    val upper2 = UInt(config.xlen bits)
+
+    lower1 := U"h8001b9e4"
+    upper1 := U"h8001bad8"
+
+    lower2 := U"h8001b930"
+    upper2 := U"h8001b958"
+
+    val in1 = address >= lower1 && address < upper1
+    val in2 = address >= lower2 && address < upper2
+    in1 || in2
+//    False
+//    True
   }
 
   override def setup(): Unit = {
