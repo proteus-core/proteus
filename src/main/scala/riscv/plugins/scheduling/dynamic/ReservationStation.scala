@@ -86,6 +86,9 @@ class ReservationStation(
 
   val activeFlush: Bool = Bool()
 
+  val prospectResolved: Bool = Bool()
+  prospectResolved := False
+
   def reset(): Unit = {
     isAvailable := !activeFlush
     stateNext := State.IDLE
@@ -134,7 +137,10 @@ class ReservationStation(
         )) { // when the branch was correctly predicted
           meta.priorBranch.setIdle()
           when(!currentRs1Prior.valid && !currentRs2Prior.valid) {
-            state := State.EXECUTING
+            when(state === State.WAITING_FOR_ARGS) {
+              state := State.EXECUTING
+            }
+            prospectResolved := True
           }
         } // otherwise: wait for pipeline reset
       }
@@ -373,7 +379,7 @@ class ReservationStation(
         }
 
         // ProSpeCT: condition for waiting: either the operand is pending in ROB, or the operand is secret and there is a pending branch
-        when((rsInRob && !rsValue.valid) || (dependentJump.valid && metaRs.isSecretNext)) {
+        when((rsInRob && !rsValue.valid) || (dependentJump.valid && metaRs.isSecretNext && !prospectResolved)) {
           stateNext := State.WAITING_FOR_ARGS
         }
       }
