@@ -379,7 +379,9 @@ class ReservationStation(
         }
 
         // ProSpeCT: condition for waiting: either the operand is pending in ROB, or the operand is secret and there is a pending branch
-        when((rsInRob && !rsValue.valid) || (dependentJump.valid && metaRs.isSecretNext && !prospectResolved)) {
+        when(
+          (rsInRob && !rsValue.valid) || (dependentJump.valid && metaRs.isSecretNext && !prospectResolved)
+        ) {
           stateNext := State.WAITING_FOR_ARGS
         }
       }
