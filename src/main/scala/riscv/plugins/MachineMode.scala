@@ -126,9 +126,9 @@ private class Mvendorid(implicit config: Config) extends Csr {
 }
 
 private class Marchid(implicit config: Config) extends Csr {
-  // Implement if we ever apply for an open-source machine architecture ID with
-  // the RISC-V foundation.
-  override def read(): UInt = U(0, config.xlen bits)
+  // Proteus received the open-source architecture ID of 32 from the RISC-V foundation.
+  // https://github.com/riscv/riscv-isa-manual/blob/master/marchid.md
+  override def read(): UInt = U(32, config.xlen bits)
 }
 
 private class Mimpid(implicit config: Config) extends Csr {
