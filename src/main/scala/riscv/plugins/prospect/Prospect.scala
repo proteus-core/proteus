@@ -11,26 +11,46 @@ class Prospect extends Plugin[DynamicPipeline] with ProspectService {
     object SECRET_VALUE extends PipelineData(Bool())
   }
 
+  // randomly selected CSR ids
+  private val CSR_PSPLOW = 0x707
+  private val CSR_PSPHIGH = 0x708
+
+  private class csrLow(implicit config: Config) extends Csr {
+
+    val addr = Reg(UInt(config.xlen bits)).init(0)
+    override def read(): UInt = addr
+    override def write(addr: UInt): Unit = addr := addr
+  }
+
+  private class csrHigh(implicit config: Config) extends Csr {
+
+    val addr = Reg(UInt(config.xlen bits)).init(0)
+    override def read(): UInt = addr
+    override def write(addr: UInt): Unit = addr := addr
+  }
+
+  def readOnlyCsr(csrId: Int): CsrIo = {
+    val csrService = pipeline.service[CsrService]
+    val csr = csrService.getCsr(csrId)
+    csr.write := False
+    csr.wdata.assignDontCare()
+    csr
+  }
+
   def isSecret(address: UInt): Bool = {
-    val lower1 = UInt(config.xlen bits)
-    val lower2 = UInt(config.xlen bits)
-    val upper1 = UInt(config.xlen bits)
-    val upper2 = UInt(config.xlen bits)
+    val lowCsr = readOnlyCsr(CSR_PSPLOW)
+    val highCsr = readOnlyCsr(CSR_PSPHIGH)
 
-    lower1 := U"h8001b9e4"
-    upper1 := U"h8001bad8"
-
-    lower2 := U"h8001b930"
-    upper2 := U"h8001b958"
-
-    val in1 = address >= lower1 && address < upper1
-    val in2 = address >= lower2 && address < upper2
-    in1 || in2
-//    False
-//    True
+    address >= lowCsr.read() && address < highCsr.read()
   }
 
   override def setup(): Unit = {
+    pipeline plug new Area {
+      val csrService = pipeline.service[CsrService]
+      csrService.registerCsr(CSR_PSPLOW, new csrLow)
+      csrService.registerCsr(CSR_PSPHIGH, new csrHigh)
+    }
+
     val lsu = pipeline.service[LsuService]
     lsu.setAddressTranslator(new LsuAddressTranslator {
       override def translate(
