@@ -2,6 +2,7 @@ package riscv.plugins.prospect
 
 import riscv._
 import spinal.core._
+import spinal.lib._
 
 class Prospect extends Plugin[DynamicPipeline] with ProspectService {
 
@@ -19,22 +20,28 @@ class Prospect extends Plugin[DynamicPipeline] with ProspectService {
 
     val addr = Reg(UInt(config.xlen bits)).init(0)
     override def read(): UInt = addr
-    override def write(addr: UInt): Unit = addr := addr
+    override def write(addr: UInt): Unit = this.addr := addr
   }
 
   private class csrHigh(implicit config: Config) extends Csr {
 
     val addr = Reg(UInt(config.xlen bits)).init(0)
     override def read(): UInt = addr
-    override def write(addr: UInt): Unit = addr := addr
+    override def write(addr: UInt): Unit = this.addr := addr
   }
 
   def readOnlyCsr(csrId: Int): CsrIo = {
-    val csrService = pipeline.service[CsrService]
-    val csr = csrService.getCsr(csrId)
-    csr.write := False
-    csr.wdata.assignDontCare()
-    csr
+    val csrIn = slave(new CsrIo)
+
+    val pipelineArea = pipeline plug new Area {
+      val csrService = pipeline.service[CsrService]
+      val csr = csrService.getCsr(csrId)
+      csr <> csrIn
+    }
+
+    csrIn.write := False
+    csrIn.wdata.assignDontCare()
+    csrIn
   }
 
   def isSecret(address: UInt): Bool = {
