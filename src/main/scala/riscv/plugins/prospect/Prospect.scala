@@ -15,6 +15,8 @@ class Prospect extends Plugin[DynamicPipeline] with ProspectService {
   // randomly selected CSR ids
   private val CSR_PSPLOW = 0x707
   private val CSR_PSPHIGH = 0x708
+  private val CSR_PSP2LOW = 0x709
+  private val CSR_PSP2HIGH = 0x710
 
   private class csrLow(implicit config: Config) extends Csr {
 
@@ -47,8 +49,10 @@ class Prospect extends Plugin[DynamicPipeline] with ProspectService {
   def isSecret(address: UInt): Bool = {
     val lowCsr = readOnlyCsr(CSR_PSPLOW)
     val highCsr = readOnlyCsr(CSR_PSPHIGH)
+    val lowCsr2 = readOnlyCsr(CSR_PSP2LOW)
+    val highCsr2 = readOnlyCsr(CSR_PSP2HIGH)
 
-    address >= lowCsr.read() && address < highCsr.read()
+    (address >= lowCsr.read() && address < highCsr.read()) || (address >= lowCsr2.read() && address < highCsr2.read())
   }
 
   override def setup(): Unit = {
@@ -56,6 +60,8 @@ class Prospect extends Plugin[DynamicPipeline] with ProspectService {
       val csrService = pipeline.service[CsrService]
       csrService.registerCsr(CSR_PSPLOW, new csrLow)
       csrService.registerCsr(CSR_PSPHIGH, new csrHigh)
+      csrService.registerCsr(CSR_PSP2LOW, new csrLow)
+      csrService.registerCsr(CSR_PSP2HIGH, new csrHigh)
     }
 
     val lsu = pipeline.service[LsuService]
