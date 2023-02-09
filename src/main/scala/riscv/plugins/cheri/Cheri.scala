@@ -5,6 +5,8 @@ import riscv._
 import spinal.core._
 
 object Opcodes {
+  // https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-951.pdf CHERI-RISC-V instructions p. 284
+  // Possibly some instructions are missing
   val CGetPerm = M"111111100000-----000-----1011011"
   val CGetType = M"111111100001-----000-----1011011"
   val CGetBase = M"111111100010-----000-----1011011"
@@ -121,6 +123,7 @@ object InstructionType {
 }
 
 object ScrIndex {
+  // https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-951.pdf Table 5.3 p. 150
   val PCC = 0
   val DDC = 1
 
@@ -147,6 +150,7 @@ object TrapCause {
 sealed abstract class ExceptionCause(val code: Int)
 
 object ExceptionCause {
+  // https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-951.pdf Table 3.3 p. 109
   case object None extends ExceptionCause(0x00)
   case object LengthViolation extends ExceptionCause(0x01)
   case object TagViolation extends ExceptionCause(0x02)
@@ -156,7 +160,7 @@ object ExceptionCause {
   case object ReturnTrap extends ExceptionCause(0x06)
   case object TrustedSystemStackOverflow extends ExceptionCause(0x07)
   case object SoftwareDefinedPermissionViolation extends ExceptionCause(0x08)
-  case object MmuProhibitsStoreCapability extends ExceptionCause(0x09)
+  case object MmuProhibitsStoreCapability extends ExceptionCause(0x09) // Deprecated, only for CHERI-MIPS ?
   case object BoundsCannotBeRepresentedExactly extends ExceptionCause(0x0a)
   case object GlobalViolation extends ExceptionCause(0x10)
   case object PermitExecuteViolation extends ExceptionCause(0x11)
