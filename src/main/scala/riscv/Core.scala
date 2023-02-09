@@ -237,7 +237,6 @@ object createDynamicPipeline {
           8,
           conf.xlen
         ),
-//        new NoPredictionPredictor(pipeline.issuePipeline.fetch, pipeline.retirementStage),
         new IntAlu(Set(pipeline.intAlu1, pipeline.intAlu2, pipeline.intAlu3, pipeline.intAlu4)),
         new Shifter(Set(pipeline.intAlu1, pipeline.intAlu2, pipeline.intAlu3, pipeline.intAlu4)),
         new MulDiv(Set(pipeline.intMul1)),

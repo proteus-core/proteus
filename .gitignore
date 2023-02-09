@@ -14,3 +14,4 @@
 *.vcd
 .kdev4/
 *.kdev4
+.bsp

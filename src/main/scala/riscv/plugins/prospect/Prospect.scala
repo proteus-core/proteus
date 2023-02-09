@@ -52,7 +52,8 @@ class Prospect extends Plugin[DynamicPipeline] with ProspectService {
     val lowCsr2 = readOnlyCsr(CSR_PSP2LOW)
     val highCsr2 = readOnlyCsr(CSR_PSP2HIGH)
 
-    (address >= lowCsr.read() && address < highCsr.read()) || (address >= lowCsr2.read() && address < highCsr2.read())
+    (address >= lowCsr.read() && address < highCsr.read()) || (address >= lowCsr2
+      .read() && address < highCsr2.read())
   }
 
   override def setup(): Unit = {
