@@ -77,6 +77,20 @@ RVTEST_CODE_BEGIN
         EXPECT_EXCEPTION(CAUSE_SEAL_VIOLATION, 1, LC.cap ROOT, (c1))
         EXPECT_EXCEPTION(CAUSE_SEAL_VIOLATION, 1, SC.cap ROOT, (c1))
 
+    TEST_CASE_FREE(16)
+        la t0, scratch
+        CSetAddr c1, ROOT, t0
+        SC.cap ROOT, (c1)
+        li t0, ~(1 << PERM_PERMIT_LOAD_CAPABILITY)
+        CAndPerm c1, c1, t0
+        EXPECT_EXCEPTION(CAUSE_PERMIT_LOAD_CAPABILITY_VIOLATION, 1, LC.cap c2, (c1))
+
+    TEST_CASE_FREE(17)
+        la t0, scratch
+        CSetAddr c1, ROOT, t0
+        li t0, ~(1 << PERM_PERMIT_STORE_CAPABILITY)
+        CAndPerm c1, c1, t0
+        EXPECT_EXCEPTION(CAUSE_PERMIT_STORE_CAPABILITY_VIOLATION, 1, SC.cap ROOT, (c1))
 
     TEST_PASSFAIL
 
