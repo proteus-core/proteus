@@ -68,6 +68,8 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
         arbitration.rs2Needed := True
 
         when(!arbitration.isStalled) {
+          // Exception priority
+          // https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-951.pdf Table 3.4 p. 110
           when(!cs1.tag) {
             except(ExceptionCause.TagViolation, cs1Idx)
           } elsewhen (!cs2.tag) {
@@ -101,6 +103,8 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
         arbitration.rs2Needed := True
 
         when(!arbitration.isStalled) {
+          // Exception priority
+          // https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-951.pdf Table 3.4 p. 110
           when(!cs1.tag) {
             except(ExceptionCause.TagViolation, cs1Idx)
           } elsewhen (!cs2.tag) {
@@ -137,6 +141,8 @@ class Sealing(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] 
           val target = cs1.address
           target.lsb := False
 
+          // Exception priority
+          // https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-951.pdf Table 3.4 p. 110
           when(!cs1.tag) {
             except(ExceptionCause.TagViolation, cs1Idx)
           } elsewhen (!cs2.tag) {

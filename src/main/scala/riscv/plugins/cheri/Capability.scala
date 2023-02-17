@@ -3,6 +3,8 @@ package riscv.plugins.cheri
 import spinal.core._
 
 trait Permissions {
+  // https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-951.pdf Table 3.1 p. 75
+  // Some permissions are missing
   def execute: Bool
   def load: Bool
   def store: Bool
@@ -71,6 +73,7 @@ case class PackedPermissions() extends Bundle with Permissions {
 }
 
 case class ObjectType(implicit context: Context) extends Bundle {
+  // https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-951.pdf Table 3.2 p. 78
   val value = UInt(context.otypeLen bits)
 
   def extendedValue: UInt = {
@@ -198,18 +201,18 @@ object RegCapability {
 }
 
 case class MemPermissions() extends Bundle with Permissions {
-  private val padding1 = B"0"
+  private val padding1 = B"0" // reserved: global
   override val execute = Bool()
   override val load = Bool()
   override val store = Bool()
   override val loadCapability = Bool()
   override val storeCapability = Bool()
-  private val padding2 = B"0"
+  private val padding2 = B"0" // reserved: storeLocalCapability
   override val seal = Bool()
   override val cinvoke = Bool()
   override val unseal = Bool()
   override val accessSystemRegisters = Bool()
-  private val padding3 = B"0000"
+  private val padding3 = B"0000" // reserved: setCID + unused bits
 
   assert(getBitsWidth == 15)
 }

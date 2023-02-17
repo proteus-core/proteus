@@ -20,6 +20,8 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
     exceptionCause := ExceptionCause.None.code
 
     when(operation =/= LsuOperationType.NONE) {
+      // Exception priority
+      // https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-951.pdf Table 3.4 p. 110
       when(!cap.tag) {
         except(ExceptionCause.TagViolation)
       } elsewhen (cap.isSealed) {
@@ -28,6 +30,12 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
         except(ExceptionCause.PermitLoadViolation)
       } elsewhen (operation === LsuOperationType.STORE && !cap.perms.store) {
         except(ExceptionCause.PermitStoreViolation)
+      } elsewhen (operation === LsuOperationType.LOAD && stage.value(Data.LOAD_CAP) && !cap.perms.loadCapability) {
+        // This assumes cap.perms.load is set thanks to a previous check
+        except(ExceptionCause.PermitLoadCapabilityViolation)
+      } elsewhen (operation === LsuOperationType.STORE && stage.value(Data.STORE_CAP) && !cap.perms.storeCapability) {
+        // This assumes cap.perms.store is set thanks to a previous check
+        except(ExceptionCause.PermitStoreCapabilityViolation)
       } elsewhen (address + byteWidth > cap.top) {
         except(ExceptionCause.LengthViolation)
       } elsewhen (address < cap.base) {

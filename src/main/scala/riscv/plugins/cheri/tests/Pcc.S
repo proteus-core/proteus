@@ -39,7 +39,7 @@ RVTEST_CODE_BEGIN
         CClearTag c1, c1
         EXPECT_EXCEPTION(CAUSE_TAG_VIOLATION, 1, CJALR c1)
 
-    # Overflow execution out of capabiliy range (4 bytes)
+    # Overflow execution out of capability range (4 bytes)
     TEST_CASE_START(5)
         la t0, 1f
         CSetBounds c1, ROOT, t0
@@ -49,7 +49,7 @@ RVTEST_CODE_BEGIN
     2:
         EXPECT_EXCEPTION(CAUSE_LENGTH_VIOLATION, CAP_IDX_PCC, 1: j fail)
 
-    # Overflow execution out of capabiliy range (1 byte)
+    # Overflow execution out of capability range (1 byte)
     TEST_CASE_START(6)
         la t0, 1f
         addi t0, t0, 3

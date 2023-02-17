@@ -6,11 +6,13 @@ import spinal.lib._
 
 import scala.collection.mutable
 
+// Special capability registers file
+// https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-951.pdf §5.3.5 p. 149
 class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipeline] with ScrService {
   private class ScrComponent extends Component {
     val io = master(ScrIo())
 
-    // We treat DDC specially to make getDdc easier to implement. This should probably bd done using
+    // We treat DDC specially to make getDdc easier to implement. This should probably be done using
     // registerScr like all other SCRs to make getScr also work for DDC.
     val ddc = out(Reg(RegCapability()).init(RegCapability.Root))
   }
