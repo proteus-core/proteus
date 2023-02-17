@@ -160,7 +160,8 @@ object ExceptionCause {
   case object ReturnTrap extends ExceptionCause(0x06)
   case object TrustedSystemStackOverflow extends ExceptionCause(0x07)
   case object SoftwareDefinedPermissionViolation extends ExceptionCause(0x08)
-  case object MmuProhibitsStoreCapability extends ExceptionCause(0x09) // Deprecated, only for CHERI-MIPS ?
+  case object MmuProhibitsStoreCapability
+      extends ExceptionCause(0x09) // Deprecated, only for CHERI-MIPS ?
   case object BoundsCannotBeRepresentedExactly extends ExceptionCause(0x0a)
   case object GlobalViolation extends ExceptionCause(0x10)
   case object PermitExecuteViolation extends ExceptionCause(0x11)

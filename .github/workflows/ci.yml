@@ -24,6 +24,6 @@ jobs:
       - name: Run Scalafmt
         run: sbt scalafmtCheck
       - name: Static pipeline riscv-tests
-        run: make ARCHFLAGS="-march=rv32im -mabi=ilp32" -C tests
+        run: make RISCV_PREFIX=riscv64-unknown-elf ARCHFLAGS="-march=rv32im -mabi=ilp32" -C tests
       - name: Dynamic pipeline riscv-tests
-        run: make CORE=riscv.CoreDynamicExtMem ARCHFLAGS="-march=rv32im -mabi=ilp32" -C tests
+        run: make RISCV_PREFIX=riscv64-unknown-elf CORE=riscv.CoreDynamicExtMem ARCHFLAGS="-march=rv32im -mabi=ilp32" -C tests
