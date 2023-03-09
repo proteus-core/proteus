@@ -8,8 +8,8 @@ case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])(implicit
     extends Bundle {
   val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] =
     retirementRegisters.createBundle
-  val ready = Bool()
-  val hasValue = Bool()
+  val rdbUpdated = Bool()
+  val cdbUpdated = Bool()
 
   override def clone(): RobEntry = {
     RobEntry(retirementRegisters)
@@ -119,8 +119,8 @@ class ReorderBuffer(
     val issueStage = pipeline.issuePipeline.stages.last
 
     pushInCycle := True
-    pushedEntry.ready := False
-    pushedEntry.hasValue := False
+    pushedEntry.rdbUpdated := False
+    pushedEntry.cdbUpdated := False
     pushedEntry.registerMap.element(pipeline.data.PC.asInstanceOf[PipelineData[Data]]) := issueStage
       .output(pipeline.data.PC)
     pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := issueStage
@@ -165,7 +165,7 @@ class ReorderBuffer(
           ) === RegisterType.GPR
       ) {
         rsMeta.updatingInstructionFound := True
-        rsMeta.updatingInstructionFinished := entry.hasValue
+        rsMeta.updatingInstructionFinished := (entry.cdbUpdated || entry.rdbUpdated)
         rsMeta.updatingInstructionIndex := index
         rsMeta.updatingInstructionValue := entry.registerMap.elementAs[UInt](
           pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]
@@ -187,7 +187,7 @@ class ReorderBuffer(
   }
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
-    robEntries(cdbMessage.robIndex).hasValue := True
+    robEntries(cdbMessage.robIndex).cdbUpdated := True
     robEntries(cdbMessage.robIndex).registerMap
       .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
   }
@@ -232,7 +232,7 @@ class ReorderBuffer(
         .jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
     }
 
-    robEntries(rdbMessage.robIndex).ready := True
+    robEntries(rdbMessage.robIndex).rdbUpdated := True
   }
 
   def build(): Unit = {
@@ -254,16 +254,22 @@ class ReorderBuffer(
     ret.connectOutputDefaults()
     ret.connectLastValues()
 
-    when(!isEmpty && oldestEntry.ready) {
+    when(
+      !isEmpty && oldestEntry.rdbUpdated && (oldestEntry.cdbUpdated || (!oldestEntry.registerMap
+        .elementAs[Bool](pipeline.data.RD_DATA_VALID.asInstanceOf[PipelineData[Data]]) &&
+        pipeline
+          .service[LsuService]
+          .operationOfBundle(oldestEntry.registerMap) =/= LsuOperationType.LOAD))
+    ) {
       ret.arbitration.isValid := True
-    }
 
-    when(!isEmpty && oldestEntry.ready && ret.arbitration.isDone) {
-      // removing the oldest entry
-      updatedOldestIndex := oldestIndex.valueNext
-      oldestIndex.increment()
-      willRetire := True
-      isFullNext := False
+      when(ret.arbitration.isDone) {
+        // removing the oldest entry
+        updatedOldestIndex := oldestIndex.valueNext
+        oldestIndex.increment()
+        willRetire := True
+        isFullNext := False
+      }
     }
 
     when(pushInCycle) {
