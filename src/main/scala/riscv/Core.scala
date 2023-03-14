@@ -197,8 +197,8 @@ object createDynamicPipeline {
       override val passThroughStage: Stage = intAlu1
       override val rsStages: Seq[Stage] = Seq(intAlu1, intAlu2, intAlu3, intAlu4, intMul1)
       val loadStage1 = new Stage("LOAD1")
-      val loadStage2 = new Stage("LOAD1")
-      val loadStage3 = new Stage("LOAD1")
+      val loadStage2 = new Stage("LOAD2")
+      val loadStage3 = new Stage("LOAD3")
       override val loadStages: Seq[Stage] = Seq(loadStage1, loadStage2, loadStage3)
       override val retirementStage = new Stage("RET")
       override val unorderedStages: Seq[Stage] = rsStages ++ loadStages
