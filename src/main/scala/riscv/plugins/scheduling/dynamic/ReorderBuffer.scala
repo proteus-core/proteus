@@ -8,11 +8,27 @@ case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])(implicit
     extends Bundle {
   val registerMap: Bundle with DynBundleAccess[PipelineData[Data]] =
     retirementRegisters.createBundle
-  val ready = Bool()
-  val hasValue = Bool()
+  val rdbUpdated = Bool()
+  val cdbUpdated = Bool()
 
   override def clone(): RobEntry = {
     RobEntry(retirementRegisters)
+  }
+}
+
+case class RsData(indexBits: BitCount)(implicit config: Config) extends Bundle {
+  val updatingInstructionFound = Bool()
+  val updatingInstructionFinished = Bool()
+  val updatingInstructionIndex = UInt(indexBits)
+  val updatingInstructionValue = UInt(config.xlen bits)
+}
+
+case class EntryMetadata(indexBits: BitCount)(implicit config: Config) extends Bundle {
+  val rs1Data = Flow(RsData(indexBits))
+  val rs2Data = Flow(RsData(indexBits))
+
+  override def clone(): EntryMetadata = {
+    EntryMetadata(indexBits)
   }
 }
 
@@ -54,7 +70,7 @@ class ReorderBuffer(
     isFull := False
   }
 
-  def isValidAbsoluteIndex(index: UInt): Bool = {
+  private def isValidAbsoluteIndex(index: UInt): Bool = {
     val ret = Bool()
 
     val oldest = UInt(indexBits)
@@ -74,7 +90,7 @@ class ReorderBuffer(
     ret
   }
 
-  def relativeIndexForAbsolute(absolute: UInt): UInt = {
+  private def relativeIndexForAbsolute(absolute: UInt): UInt = {
     val adjustedIndex = UInt(32 bits)
     when(absolute >= oldestIndex.value) {
       adjustedIndex := (absolute.resized - oldestIndex.value).resized
@@ -85,7 +101,7 @@ class ReorderBuffer(
     adjustedIndex
   }
 
-  def absoluteIndexForRelative(relative: UInt): UInt = {
+  private def absoluteIndexForRelative(relative: UInt): UInt = {
     val absolute = UInt(32 bits)
     val adjusted = UInt(32 bits)
     val oldestResized = UInt(32 bits)
@@ -99,63 +115,81 @@ class ReorderBuffer(
     adjusted
   }
 
-  def pushEntry(
-      rd: UInt,
-      rdType: SpinalEnumCraft[RegisterType.type],
-      lsuOperationType: SpinalEnumCraft[LsuOperationType.type],
-      pc: UInt
-  ): UInt = {
+  def pushEntry(): (UInt, EntryMetadata) = {
+    val issueStage = pipeline.issuePipeline.stages.last
+
     pushInCycle := True
-    pushedEntry.ready := False
-    pushedEntry.hasValue := False
-    pushedEntry.registerMap.element(pipeline.data.PC.asInstanceOf[PipelineData[Data]]) := pc
-    pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := rd
+    pushedEntry.rdbUpdated := False
+    pushedEntry.cdbUpdated := False
+    pushedEntry.registerMap.element(pipeline.data.PC.asInstanceOf[PipelineData[Data]]) := issueStage
+      .output(pipeline.data.PC)
+    pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := issueStage
+      .output(pipeline.data.RD)
     pushedEntry.registerMap.element(
       pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]
-    ) := rdType
-    pipeline.service[LsuService].operationOfBundle(pushedEntry.registerMap) := lsuOperationType
+    ) := issueStage.output(pipeline.data.RD_TYPE)
+    pipeline.service[LsuService].operationOfBundle(pushedEntry.registerMap) := pipeline
+      .service[LsuService]
+      .operationOutput(issueStage)
     pipeline.service[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
-    newestIndex.value
+
+    val rs1 = Flow(UInt(5 bits))
+    val rs2 = Flow(UInt(5 bits))
+
+    rs1.valid := issueStage.output(pipeline.data.RS1_TYPE) === RegisterType.GPR
+    rs1.payload := issueStage.output(pipeline.data.RS1)
+
+    rs2.valid := issueStage.output(pipeline.data.RS2_TYPE) === RegisterType.GPR
+    rs2.payload := issueStage.output(pipeline.data.RS2)
+
+    (newestIndex.value, bookkeeping(rs1, rs2))
   }
 
-  override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
-    robEntries(cdbMessage.robIndex).hasValue := True
-    robEntries(cdbMessage.robIndex).registerMap
-      .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
-  }
+  private def bookkeeping(rs1Id: Flow[UInt], rs2Id: Flow[UInt]): EntryMetadata = {
+    val meta = EntryMetadata(indexBits)
+    meta.rs1Data.payload.assignDontCare()
+    meta.rs2Data.payload.assignDontCare()
 
-  def findRegisterValue(regId: UInt): (Bool, Flow[CdbMessage]) = {
-    val found = Bool()
-    val target = Flow(CdbMessage(metaRegisters, indexBits))
-    target.valid := False
-    target.payload.robIndex := 0
-    target.payload.writeValue := 0
-    found := False
+    meta.rs1Data.valid := rs1Id.valid
+    meta.rs2Data.valid := rs2Id.valid
 
-    // loop through valid values and return the freshest if present
-    for (relative <- 0 until capacity) {
-      val absolute = UInt(indexBits)
-      absolute := absoluteIndexForRelative(relative).resized
-      val entry = robEntries(absolute)
-
-      // last condition: prevent dependencies on x0
+    def rsUpdate(rsId: Flow[UInt], index: UInt, entry: RobEntry, rsMeta: RsData): Unit = {
       when(
-        isValidAbsoluteIndex(absolute)
-          && entry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) === regId
-          && regId =/= 0
+        rsId.valid
+          && rsId.payload =/= 0
+          && entry.registerMap.element(
+            pipeline.data.RD.asInstanceOf[PipelineData[Data]]
+          ) === rsId.payload
           && entry.registerMap.element(
             pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]
           ) === RegisterType.GPR
       ) {
-        found := True
-        target.valid := entry.hasValue
-        target.robIndex := absolute
-        target.writeValue := entry.registerMap.elementAs[UInt](
+        rsMeta.updatingInstructionFound := True
+        rsMeta.updatingInstructionFinished := (entry.cdbUpdated || entry.rdbUpdated)
+        rsMeta.updatingInstructionIndex := index
+        rsMeta.updatingInstructionValue := entry.registerMap.elementAs[UInt](
           pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]
         )
       }
     }
-    (found, target)
+
+    // loop through valid values and return the freshest if present
+    for (relative <- 0 until capacity) {
+      val absolute = absoluteIndexForRelative(relative).resized
+      val entry = robEntries(absolute)
+
+      when(isValidAbsoluteIndex(absolute)) {
+        rsUpdate(rs1Id, absolute, entry, meta.rs1Data.payload)
+        rsUpdate(rs2Id, absolute, entry, meta.rs2Data.payload)
+      }
+    }
+    meta
+  }
+
+  override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
+    robEntries(cdbMessage.robIndex).cdbUpdated := True
+    robEntries(cdbMessage.robIndex).registerMap
+      .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
   }
 
   def hasPendingStoreForEntry(robIndex: UInt, address: UInt): Bool = {
@@ -198,7 +232,7 @@ class ReorderBuffer(
         .jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
     }
 
-    robEntries(rdbMessage.robIndex).ready := True
+    robEntries(rdbMessage.robIndex).rdbUpdated := True
   }
 
   def build(): Unit = {
@@ -220,16 +254,22 @@ class ReorderBuffer(
     ret.connectOutputDefaults()
     ret.connectLastValues()
 
-    when(!isEmpty && oldestEntry.ready) {
+    when(
+      !isEmpty && oldestEntry.rdbUpdated && (oldestEntry.cdbUpdated || (!oldestEntry.registerMap
+        .elementAs[Bool](pipeline.data.RD_DATA_VALID.asInstanceOf[PipelineData[Data]]) &&
+        pipeline
+          .service[LsuService]
+          .operationOfBundle(oldestEntry.registerMap) =/= LsuOperationType.LOAD))
+    ) {
       ret.arbitration.isValid := True
-    }
 
-    when(!isEmpty && oldestEntry.ready && ret.arbitration.isDone) {
-      // removing the oldest entry
-      updatedOldestIndex := oldestIndex.valueNext
-      oldestIndex.increment()
-      willRetire := True
-      isFullNext := False
+      when(ret.arbitration.isDone) {
+        // removing the oldest entry
+        updatedOldestIndex := oldestIndex.valueNext
+        oldestIndex.increment()
+        willRetire := True
+        isFullNext := False
+      }
     }
 
     when(pushInCycle) {

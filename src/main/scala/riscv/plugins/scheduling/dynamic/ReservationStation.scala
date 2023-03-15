@@ -210,13 +210,7 @@ class ReservationStation(
   def execute(): Unit = {
     val issueStage = pipeline.issuePipeline.stages.last
 
-    val robIndex = UInt()
-    robIndex := rob.pushEntry(
-      issueStage.output(pipeline.data.RD),
-      issueStage.output(pipeline.data.RD_TYPE),
-      pipeline.service[LsuService].operationOutput(issueStage),
-      issueStage.output(pipeline.data.PC)
-    )
+    val (robIndex, entryMeta) = rob.pushEntry()
 
     robEntryIndex := robIndex
 
@@ -227,34 +221,29 @@ class ReservationStation(
 
     def dependencySetup(
         metaRs: RegisterSource,
-        reg: PipelineData[UInt],
-        regData: PipelineData[UInt],
-        regType: PipelineData[SpinalEnumCraft[RegisterType.type]]
+        rsData: Flow[RsData],
+        regData: PipelineData[UInt]
     ): Unit = {
-      val rsUsed = issueStage.output(regType) === RegisterType.GPR
-
-      when(rsUsed) {
-        val rsReg = issueStage.output(reg)
-        val (rsInRob, rsValue) = rob.findRegisterValue(rsReg)
-
-        when(rsInRob) {
-          when(rsValue.valid) {
-            regs.setReg(regData, rsValue.payload.writeValue)
+      when(rsData.valid) {
+        when(rsData.payload.updatingInstructionFound) {
+          when(rsData.payload.updatingInstructionFinished) {
+            regs.setReg(regData, rsData.payload.updatingInstructionValue)
           } otherwise {
-            metaRs.priorInstructionNext.push(rsValue.payload.robIndex)
+            metaRs.priorInstructionNext.push(rsData.payload.updatingInstructionIndex)
           }
         } otherwise {
           regs.setReg(regData, issueStage.output(regData))
         }
-
-        when((rsInRob && !rsValue.valid)) {
+        when(
+          rsData.payload.updatingInstructionFound && !rsData.payload.updatingInstructionFinished
+        ) {
           stateNext := State.WAITING_FOR_ARGS
         }
       }
     }
 
-    dependencySetup(meta.rs1, pipeline.data.RS1, pipeline.data.RS1_DATA, pipeline.data.RS1_TYPE)
-    dependencySetup(meta.rs2, pipeline.data.RS2, pipeline.data.RS2_DATA, pipeline.data.RS2_TYPE)
+    dependencySetup(meta.rs1, entryMeta.rs1Data, pipeline.data.RS1_DATA)
+    dependencySetup(meta.rs2, entryMeta.rs2Data, pipeline.data.RS2_DATA)
   }
 
   override def pipelineReset(): Unit = {
