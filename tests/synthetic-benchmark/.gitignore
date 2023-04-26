@@ -1,0 +1,5 @@
+*.bin
+*.elf
+*_stripped.s
+*.ihex
+*.o

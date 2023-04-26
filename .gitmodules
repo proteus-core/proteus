@@ -8,3 +8,6 @@
 [submodule "tests/riscv-test-env"]
 	path = tests/riscv-test-env
 	url = https://github.com/riscv/riscv-test-env.git
+[submodule "tests/newlib"]
+	path = tests/newlib
+	url = https://github.com/proteus-core/newlib.git
