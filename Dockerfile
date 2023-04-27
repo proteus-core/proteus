@@ -23,7 +23,7 @@ RUN python3 -m pip install --user /vcdvcd
 WORKDIR /toolchain
 RUN git clone https://github.com/riscv/riscv-gnu-toolchain .
 RUN apt-get -yqq install autoconf automake autotools-dev curl python3 libmpc-dev libmpfr-dev libgmp-dev gawk build-essential bison flex texinfo gperf libtool patchutils bc zlib1g-dev libexpat-dev ninja-build
-RUN ./configure --prefix=/opt/riscv --with-arch=rv32im --with-abi=ilp32
+RUN ./configure --prefix=/opt/riscv --with-arch=rv32im_zicsr --with-abi=ilp32
 RUN make
 
 ENV PATH="${PATH}:/opt/riscv/bin"
@@ -42,7 +42,7 @@ RUN mv sim/build/sim sim/build/base_nodump
 
 # Install Proteus extended with ProSpeCT
 WORKDIR /prospect
-RUN git clone --recurse-submodules --depth=1 --branch csr_benchmark https://github.com/proteus-core/prospect.git .
+RUN git clone --recurse-submodules --depth=1 https://github.com/proteus-core/prospect.git .
 # create simulator binary and run riscv-tests
 RUN make -C tests CORE=riscv.CoreDynamicExtMem RISCV_PREFIX=riscv32-unknown-elf
 RUN mv sim/build/sim sim/build/prospect

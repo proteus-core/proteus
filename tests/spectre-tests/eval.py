@@ -17,8 +17,8 @@ def evaluate():
 
 	return violation
 
-secure_proteus = sys.argv[2]
 base_proteus = sys.argv[1]
+secure_proteus = sys.argv[2]
 
 test_cases = [
 	"secret-before-branch",
