@@ -18,10 +18,6 @@ setup:
 	# upper_boundary = &secret + 4
 
 	la t0, secret
-	#csrrw zero, 0x709, t0
-	addi t0, t0, 4
-	#csrrw zero, 0x710, t0
-	addi t0, t0, 4
 	csrrw zero, 0x707, t0
 	addi t0, t0, 4
 	csrrw zero, 0x708, t0
@@ -44,11 +40,10 @@ condition:
 	la t6, secret
 	lw t6, (t6)
 	lw zero, (t6)
-	
+
 	# ----- END TRANSIENT BLOCK -----
 
 finish:
 	lui ra,0x10000
 	li sp,4
 	sb sp,0(ra)
-
