@@ -17,7 +17,7 @@ def create_simulation(mode, config):
 
 def run_simulation(binary, mode, config):
     return {
-        'process': subprocess.Popen([binary, f"specBench_{mode}_{config}.bin"]),
+        'process': subprocess.Popen([binary, f"specBench_{mode}_{config}.bin"], stdout=subprocess.PIPE, encoding="utf8"),
         'mode': mode,
         'config': config,
     }
@@ -35,30 +35,30 @@ MODES = [
 
 results = {
     '0': {
-        '10': 0,
-        '25': 0,
-        '50': 0,
         '75': 0,
+        '50': 0,
+        '25': 0,
+        '10': 0,
     },
     '1': {
-        '10': 0,
-        '25': 0,
-        '50': 0,
         '75': 0,
+        '50': 0,
+        '25': 0,
+        '10': 0,
     },
     '2': {
-        '10': 0,
-        '25': 0,
-        '50': 0,
         '75': 0,
+        '50': 0,
+        '25': 0,
+        '10': 0,
     },
 }
 
 CONFIGS = [
-    "10",
-    "25",
-    "50",
     "75",
+    "50",
+    "25",
+    "10",
 ]
 
 for mode in MODES:

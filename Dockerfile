@@ -56,6 +56,6 @@ WORKDIR /prospect/tests/spectre-tests
 RUN ./eval.py /proteus-base/sim/build/base /prospect/sim/build/prospect
 
 WORKDIR /prospect/tests/synthetic-benchmark
-RUN make
+RUN ./eval.py /proteus-base/sim/build/base_nodump /prospect/sim/build/prospect_nodump
 
 CMD /bin/bash
