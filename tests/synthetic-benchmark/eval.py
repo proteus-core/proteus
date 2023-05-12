@@ -5,19 +5,21 @@ import sys
 import subprocess
 import re
 
+def filename(mode, config):
+    return f"specBench_{mode}_{config}"
+
 
 def create_simulation(mode, config):
     print(f"creating with mode {mode} and config {config}")
-    os.system(f"sed \"s/#define mode.*/#define mode {mode}/g\" -i specBench.c")
+    os.system(f"sed \"s/#define mode.*/#define mode {mode}/g\" specBench.c > {filename(mode, config)}.c")
     os.system(
-        f"sed \"s/#define input.*/#define input \\\"{config}\\\"/g\" -i specBench.c")
-    os.system("make specBench.bin")
-    os.system(f"mv specBench.bin specBench_{mode}_{config}.bin")
+        f"sed \"s/#define input.*/#define input \\\"{config}\\\"/g\" -i {filename(mode, config)}.c")
+    os.system(f"make {filename(mode, config)}.bin TARGET={filename(mode, config)}")
 
 
 def run_simulation(binary, mode, config):
     return {
-        'process': subprocess.Popen([binary, f"specBench_{mode}_{config}.bin"], stdout=subprocess.PIPE, encoding="utf8"),
+        'process': subprocess.Popen([binary, f"{filename(mode, config)}.bin"], stdout=subprocess.PIPE, encoding="utf8"),
         'mode': mode,
         'config': config,
     }

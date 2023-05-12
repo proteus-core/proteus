@@ -4,7 +4,7 @@ KREMLIN_INCLUDE_DIR = ./include
 
 EXTRA_CFLAGS = -I$(KREMLIN_INCLUDE_DIR) -I$(KREMLIB_INCLUDE_DIR)
 
-TARGET = specBench
+TARGET ?= specBench
 
 
 all: $(TARGET).bin $(TARGET).ihex $(TARGET).objdump
