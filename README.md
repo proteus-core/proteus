@@ -17,7 +17,12 @@ For detailed instructions on how to install and use Proteus, we refer to our Doc
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/engine/install/) for installing the core and running the benchmarks.
+  + Disk space required for the built container image: 12 GB.
 - [Xilinx Vivado](https://www.xilinx.com/products/design-tools/vivado/vivado-ml.html) for running the hardware cost measurements.
+  + Requires a Xilinx/AMD account.
+  + Select Product to Install: Vivado (ML Standard).
+  + Customizing the installation: Vivado Design Suite and the 7 Series Production Devices are sufficient, everything else can be deselected.
+  + Disk space required: 52 GB.
 
 ## Running the evaluation
 
