@@ -5,21 +5,24 @@ import sys
 import subprocess
 import re
 
+
 def filename(mode, config):
     return f"specBench_{mode}_{config}"
 
 
 def create_simulation(mode, config):
     print(f"creating with mode {mode} and config {config}")
-    os.system(f"sed \"s/#define mode.*/#define mode {mode}/g\" specBench.c > {filename(mode, config)}.c")
+    os.system(
+        f"sed \"s/#define mode.*/#define mode {mode}/g\" specBench.c > {filename(mode, config)}.c")
     os.system(
         f"sed \"s/#define input.*/#define input \\\"{config}\\\"/g\" -i {filename(mode, config)}.c")
-    os.system(f"make {filename(mode, config)}.bin TARGET={filename(mode, config)}")
+    os.system(
+        f"make {filename(mode, config)}.bin TARGET={filename(mode, config)}")
 
 
 def run_simulation(binary, mode, config):
     return {
-        'process': subprocess.Popen([binary, f"{filename(mode, config)}.bin"], stdout=subprocess.PIPE, encoding="utf8"),
+        'process': subprocess.Popen(['stdbuf', '-o0'] + [binary, f"{filename(mode, config)}.bin"], bufsize=1, stdout=subprocess.PIPE, encoding="utf8"),
         'mode': mode,
         'config': config,
     }
@@ -73,23 +76,33 @@ for mode in MODES:
     for config in CONFIGS:
         processes.append(run_simulation(mode[1], mode[0], config))
 
+i = len(MODES) * len(CONFIGS)
 
-print("Waiting for processes...")
 with open("benchmark_logs.txt", 'w') as logfile:
     for proc in processes:
-        proc['process'].wait()
-        logfile.write(f"Benchmark with mode = {proc['mode']} and config = {proc['config']}:\n")
+        print(f"Waiting for {i} process(es)...", flush=True)
+        i -= 1
+        # proc['process'].wait()
+        logfile.write(
+            f"Benchmark with mode = {proc['mode']} and config = {proc['config']}:\n")
         logfile.write(f"{'-' * 80}\n")
-        for line in proc['process'].stdout:
+        for line in iter(proc['process'].stdout.readline, ''):
             logfile.write(line)
             match = re.match(r"total time\s*:\[(\d+)\]", line)
             if match:
                 results[proc['mode']][proc['config']] = int(match.group(1))
+            else:
+                dmatch = re.match(r"^(\d+)$", line)
+                if dmatch:
+                    perc = int(dmatch.group(1))
+                    if perc % 10 == 0:
+                        print(f"{perc}%", flush=True)
 
-print("\t\t", "\t".join(CONFIGS))
+print("\t\t", "\t ".join(CONFIGS))
 
 for mode in MODES:
     print(mode[2] + '\t', end='')
     for config in CONFIGS:
-        print(str(round(results[mode[0]][config] / results['0'][config] * 100)) + '%\t', end='')
+        print(str(round(results[mode[0]][config] /
+              results['0'][config] * 100)) + '%\t', end='')
     print()

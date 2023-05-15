@@ -3,6 +3,9 @@ FROM ubuntu:22.04
 # Set to noninteractive mode
 ARG DEBIAN_FRONTEND=noninteractive
 
+ARG BENCHMARKS
+RUN echo "Running benchmarks: ${BENCHMARKS}"
+
 RUN apt-get update
 RUN apt-get -yqq install git lsb-release sudo vim gnupg openjdk-17-jdk verilator curl make gcc g++ python3-pip
 
@@ -56,6 +59,6 @@ WORKDIR /prospect/tests/spectre-tests
 RUN ./eval.py /proteus-base/sim/build/base /prospect/sim/build/prospect
 
 WORKDIR /prospect/tests/synthetic-benchmark
-RUN ./eval.py /proteus-base/sim/build/base_nodump /prospect/sim/build/prospect_nodump
+RUN if [ "${BENCHMARKS}" = "true" ] ; then ./eval.py /proteus-base/sim/build/base_nodump /prospect/sim/build/prospect_nodump ; else echo Skipping benchmarks... ; fi
 
 CMD /bin/bash
