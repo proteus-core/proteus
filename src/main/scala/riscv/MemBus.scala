@@ -88,7 +88,7 @@ case class MemBus(val config: MemBusConfig, val idWidth: BitCount)
     axi4Bus.sharedCmd.id := cmd.id
     cmd.ready := axi4Bus.sharedCmd.ready
 
-    axi4Bus.writeData.valid := cmd.valid
+    axi4Bus.writeData.valid := cmd.write && cmd.valid
     axi4Bus.writeData.data := cmd.wdata.asBits
     axi4Bus.writeData.strb := cmd.wmask
     axi4Bus.writeData.last := True
