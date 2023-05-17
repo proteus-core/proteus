@@ -26,8 +26,9 @@ RUN apt-get -yqq install sbt
 WORKDIR /toolchain
 RUN git clone https://github.com/riscv/riscv-gnu-toolchain .
 RUN apt-get -yqq install autoconf automake autotools-dev curl python3 libmpc-dev libmpfr-dev libgmp-dev gawk build-essential bison flex texinfo gperf libtool patchutils bc zlib1g-dev libexpat-dev ninja-build
-RUN ./configure --prefix=/opt/riscv --with-arch=rv32im_zicsr --with-abi=ilp32
-RUN make
+RUN ./configure --prefix=/opt/riscv --with-arch=rv32im_zicsr --with-abi=ilp32 && \
+    make && \
+    make clean
 ENV PATH="${PATH}:/opt/riscv/bin"
 
 ################################################################################
