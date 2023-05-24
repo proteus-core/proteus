@@ -60,10 +60,8 @@ If, instead of using Docker, you want to install Proteus locally, you can follow
 ## Building software
 
 To run software on Proteus, it needs to be compiled by a [RISC-V toolchain](https://github.com/riscv-collab/riscv-gnu-toolchain#installation-newlib) with Newlib support (this is automatically installed with [Docker](#installing-proteus)).
-Newlib is an implementation of `libc` for embedded devices. Our implementation and a skeleton project can be found in our [Newlib repository](https://github.com/proteus-core/newlib), which is included in this project as a submodule.
-
-The Newlib repository also contains an example program using the implementation.
-This program is compiled and run on Proteus in our Dockerfile.
+Newlib is an implementation of `libc` for embedded devices. Our board support package and an example project can be found in our [Newlib repository](https://github.com/proteus-core/newlib), which is included in this project as a submodule.
+This example program is compiled and run on Proteus in our Dockerfile.
 
 ### Memory layout
 
