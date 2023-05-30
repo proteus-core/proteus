@@ -44,7 +44,7 @@ docker build -t prospect --build-arg BENCHMARKS=true .
 
 ### Security tests
 
-The security tests (see start of Section 6.2 in the paper) can be found in `/prospect/tests/spectre-tests/` and can be run with `./eval.py /proteus-base/sim/build/base /prospect/sim/build/prospect`, where the two arguments are the simulator binaries for the base and the ProSpeCT-enabled implementation.
+The security tests (see start of Section 6.2 in the paper) can be found in `/prospect/tests/spectre-tests/` and can be run with `cd /prospect/tests/spectre-tests/; ./eval.py /proteus-base/sim/build/base /prospect/sim/build/prospect`, where `/proteus-base/sim/build/base` and `/prospect/sim/build/prospect` are the simulator binaries for the base processor and the ProSpeCT-enabled implementation, respectively.
 
 Expected output:
 
