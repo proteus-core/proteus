@@ -20,7 +20,7 @@ For detailed instructions on how to install and use Proteus, we refer to our Doc
   + Disk space required for the built container image: 12 GB.
 - [Xilinx Vivado](https://www.xilinx.com/products/design-tools/vivado/vivado-ml.html) for running the hardware cost measurements.
   + Requires a Xilinx/AMD account (which you can create for free).
-  + Download the installer `Xilinx_Unified_2023.1_0507_1903_Lin64.bin` and run it with `chmod u+x ./Xilinx_Unified_2023.1_0507_1903_Lin64.bin && ./Xilinx_Unified_2023.1_0507_1903_Lin64.bin`
+  + Download and run the the installer for [Vivado](https://www.xilinx.com/support/download.html).
   + Select Product to Install: Vivado (ML Standard).
   + Customizing the installation: Vivado Design Suite and the 7 Series Production Devices are sufficient, everything else can be deselected.
   + Disk space required: 52 GB.
