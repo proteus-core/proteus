@@ -53,7 +53,7 @@ docker run -i -h "proteus" -t proteus
 ```
 
 If, instead of using Docker, you want to install Proteus locally, you can follow the installation steps from our [Dockerfile](./Dockerfile), adjusting them to your setup as needed:
-- Install OpenJDK and Verilator
+- Install OpenJDK (tested with `openjdk-17-jdk`) and Verilator
 - Install sbt: https://www.scala-sbt.org
 - Install the RISC-V toolchain with Newlib support, selecting the `rv32im_zicsr` architecture: https://github.com/riscv/riscv-gnu-toolchain
 
