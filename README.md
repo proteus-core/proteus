@@ -36,7 +36,7 @@ docker run -i -t prospect
 Building the Docker container takes about 2 hours and requires 7 GB of disk space.
 
 By default, the build process only runs the security tests.
-The performance benchmarks can also be run already during the build by specifying the `BENCHMARKS=true` build argument (this will add 9+ hours to the build process).
+The performance benchmarks can also be run already during the build by adding `--build-arg BENCHMARKS=true` to the build command (this will add 9+ hours to the build process).
 This step is optional and the performance benchmarks can still be run later.
 
 ### Security tests
