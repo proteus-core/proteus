@@ -24,6 +24,11 @@ For detailed instructions on how to install and use Proteus, we refer to our Doc
   + Select Product to Install: Vivado (ML Standard).
   + Customizing the installation: Vivado Design Suite and the 7 Series Production Devices are sufficient, everything else can be deselected.
   + Disk space required: 52 GB.
+  
+**Toubleshooting:**  
+Vivado executable file is located at `<installation_directory>/Vivado/<year>/bin/vivado`. If Vivado hangs or if you get the following error when running Vivado
+`application-specific initialization failed: couldn't load file "librdi_commontasks.so" [...]`, please follow the [instructions on this post](https://support.xilinx.com/s/article/76585).
+
 
 ## Running the evaluation
 
