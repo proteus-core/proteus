@@ -118,5 +118,15 @@ To run the evaluation of the hardware overheads (see Section 6.2, "Hardware cost
 
 #### Interpreting the results
 
-When the implementation finishes, the relevant values for number of LUTs and registers (as reported in the paper) can be found on the "Design Runs" tab at the bottom of the screen.
-If the timing constraint for the critical path is met, this is shown by a black (and positive) number under the WNS field in the same table, failed timings are indicated by an error and a red (negative) WNS number.
+When the implementation finishes, the relevant values for number of LUTs and registers can be found on the "Design Runs" tab at the bottom of the screen, in line "impl_1" and in the columns "LUT" and "FF", respectively.
+If the timing constraint for the critical path is met, this is shown by a black (and positive) number under the WNS (worst negative slack) field in the same table, failed timings are indicated by an error and a red (negative) WNS number.
+
+#### Expected results
+
+The following results are reported in the paper. Keep in mind that because the synthesis process is not deterministic, results may vary slightly.
+
+|                 |    LUT |     FF |
+|-----------------|-------:|-------:|
+| Core.v          | 16,847 | 11,913 |
+| Core-ProSpeCT.v | 19,728 | 12,600 |
+| **Increase**    |   +17% |    +6% |
