@@ -292,7 +292,10 @@ class IBusControl(
   // only 1 cycle.
   // We use a depth of one more than the latency because the FIFO doesn't allow pushes while full
   // even when we are popping at the same time.
-  val cmdFifo = new StreamFifoLowLatency(Cmd(), depth = ibusLatency + 1, latency = 1)
+  // We use a minimum depth of 3 as the CPU starts with prefetching two instructions before starting
+  // to execute them. (This could also be fixed by addressing the FIXME of bus.rsp.ready below.)
+  val cmdFifo =
+    new StreamFifoLowLatency(Cmd(), depth = scala.math.max(3, ibusLatency + 1), latency = 1)
   cmdFifo.io.push.valid := False
   cmdFifo.io.push.payload.assignDontCare()
   cmdFifo.io.pop.ready := False
