@@ -24,9 +24,10 @@ For detailed instructions on how to install and use Proteus, we refer to our Doc
   + Select Product to Install: Vivado (ML Standard).
   + Customizing the installation: Vivado Design Suite and the 7 Series Production Devices are sufficient, everything else can be deselected.
   + Disk space required: 52 GB.
-  
-**Toubleshooting:**  
-Vivado executable file is located at `<installation_directory>/Vivado/<year>/bin/vivado`. If Vivado hangs or if you get the following error when running Vivado
+
+**Troubleshooting:**
+
+The Vivado executable file is located at `<installation_directory>/Vivado/<year>/bin/vivado`. If Vivado hangs, or if you get the following error when running Vivado:
 `application-specific initialization failed: couldn't load file "librdi_commontasks.so" [...]`, please follow the [instructions on this post](https://support.xilinx.com/s/article/76585).
 
 
@@ -79,9 +80,7 @@ baseline  100%    100%    100%    100%
 
 ### Hardware overhead
 
-First, save the synthesis files (`Constraints.xdc` and `Top.v`) from [this folder](https://github.com/proteus-core/proteus/tree/main/synthesis) somewhere on your machine.
-
-Then, find the name of the `prospect` container (`stupefied_poincare` in this example):
+First, find the name of the `prospect` container (`stupefied_poincare` in this example):
 
 ```shell
 $ docker ps -a
@@ -104,16 +103,16 @@ To run the evaluation of the hardware overheads (see Section 6.2, "Hardware cost
 1. Launch Vivado, and start the Create Project wizard.
 2. Choose the project name and location as desired.
 3. Project type: RTL Project.
-4. Add sources: select the copied `Core.v` and the saved `Top.v`. Do **not** check "Copy sources into project" or "Scan and add RTL include files into project".
-5. Add constraints: select the saved `Constraints.xdc`.
+4. Add sources: select the copied `Core.v` and `synthesis/Top.v`. Do **not** check "Copy sources into project" or "Scan and add RTL include files into project".
+5. Add constraints: select `synthesis/Constraints.xdc`.
 6. Default part: select your target FPGA, the `xc7a35ticsg324-1L`.
 7. Finish the wizard.
 8. When the project is open, if `Top.v` is not selected as the top module (shown in bold), right-click on it and "Set as Top".
 
 #### Running the Vivado evaluation
 
-9. Change the timing constraint in `Constraints.xdc` to the value indicated in the paper (`30.1 ns`). As the synthesis process is not completely deterministic, you might need to increase this value slightly if the implementation fails with a failed timing.
-10. Click "Run Implementation".
+9. Change the timing constraint in `Constraints.xdc` to the value indicated in the paper (`30.1 ns`). As the synthesis process is not completely deterministic, you might need to increase this value slightly if the implementation fails with a failed timing. For example, to change the timing constraint to `30.5 ns`, replace `-period 31.000` in `Constraints.xdc` with `-period 30.500`.
+10. Click "Run Implementation" (which will run synthesis first if necessary).
 11. Replace `Core.v` with `Core-ProSpeCT.v` on your disk, change the timing constraint in `Constraints.xdc` to the value of ProSpeCT (`30.7 ns`) and rerun the implementation, again adjusting the constraint slightly if necessary.
 
 #### Interpreting the results
