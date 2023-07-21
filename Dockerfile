@@ -46,7 +46,7 @@ RUN mv sim/build/sim sim/build/base_nodump
 
 # Install Proteus extended with ProSpeCT
 WORKDIR /prospect
-RUN git clone --recurse-submodules --depth=1 https://github.com/proteus-core/prospect.git .
+RUN git clone --recurse-submodules --depth=1 --branch usenix_ae_submission https://github.com/proteus-core/prospect.git .
 # create simulator binary and run riscv-tests
 RUN make -C tests CORE=riscv.CoreDynamicExtMem RISCV_PREFIX=riscv32-unknown-elf
 RUN mv sim/build/sim sim/build/prospect
