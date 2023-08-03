@@ -1,6 +1,6 @@
 # ProSpeCT: Provably Secure Speculation for the Constant-Time Policy
 
-This repository contains the implementation of our defense on the Proteus RISC-V core, along with the tests used for the evaluation [in the paper](https://mici.hu/papers/daniel23prospect.pdf).
+This repository contains the implementation of our defense on the Proteus RISC-V core, along with the tests used for the evaluation [in the paper](https://arxiv.org/abs/2302.12108).
 
 ```
 @inproceedings{daniel23prospect,
