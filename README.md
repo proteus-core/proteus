@@ -1,6 +1,6 @@
 # ProSpeCT: Provably Secure Speculation for the Constant-Time Policy
 
-This repository contains the implementation of our defense on the Proteus RISC-V core, along with the tests used for the evaluation in the paper.
+This repository contains the implementation of our defense on the Proteus RISC-V core, along with the tests used for the evaluation [in the paper](https://mici.hu/papers/daniel23prospect.pdf).
 
 ```
 @inproceedings{daniel23prospect,
@@ -13,6 +13,19 @@ This repository contains the implementation of our defense on the Proteus RISC-V
 ```
 
 For detailed instructions on how to install and use Proteus, we refer to our Dockerfile and the [Proteus repository](https://github.com/proteus-core/proteus).
+
+Repository structure, highlighting the important directories and files:
+
+```
+├── res:        useful files for GTKWave debugging
+├── sim:        files used for running simulations
+├── src:        source code of Proteus and ProSpeCT
+├── synthesis:  files used for synthesis in Vivado
+├── tests:      security tests, benchmarks, RISC-V unit tests
+
+Dockerfile:     Docker script to run the evaluation automatically
+sim.gtkw:       waveform view preset for GTKWave
+```
 
 ## Prerequisites
 

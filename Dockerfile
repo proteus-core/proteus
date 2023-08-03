@@ -19,12 +19,12 @@ RUN apt-get -yqq install sbt
 # install vcdvcd (for eval)
 WORKDIR /vcdvcd
 
-RUN git clone https://github.com/cirosantilli/vcdvcd .
+RUN git clone --depth=1 --branch v2.3.3 https://github.com/cirosantilli/vcdvcd .
 RUN python3 -m pip install --user /vcdvcd
 
 # install gnu toolchain
 WORKDIR /toolchain
-RUN git clone https://github.com/riscv/riscv-gnu-toolchain .
+RUN git clone --depth=1 --branch 2023.07.07 https://github.com/riscv/riscv-gnu-toolchain .
 RUN apt-get -yqq install autoconf automake autotools-dev curl python3 libmpc-dev libmpfr-dev libgmp-dev gawk build-essential bison flex texinfo gperf libtool patchutils bc zlib1g-dev libexpat-dev ninja-build
 RUN ./configure --prefix=/opt/riscv --with-arch=rv32im_zicsr --with-abi=ilp32 && \
     make && \
@@ -46,7 +46,7 @@ RUN mv sim/build/sim sim/build/base_nodump
 
 # Install Proteus extended with ProSpeCT
 WORKDIR /prospect
-RUN git clone --recurse-submodules --depth=1 --branch usenix_ae_submission https://github.com/proteus-core/prospect.git .
+RUN git clone --recurse-submodules --depth=1 --branch usenix_artifact https://github.com/proteus-core/prospect.git .
 # create simulator binary and run riscv-tests
 RUN make -C tests CORE=riscv.CoreDynamicExtMem RISCV_PREFIX=riscv32-unknown-elf
 RUN mv sim/build/sim sim/build/prospect
