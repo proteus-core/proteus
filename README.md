@@ -26,6 +26,7 @@ Both implementations pass the [riscv-tests](https://github.com/riscv/riscv-tests
 - ProSpeCT: Provably Secure Speculation for the Constant-Time Policy: <https://github.com/proteus-core/prospect>.
 - Hardware capabilities (CHERI): `src/main/scala/riscv/plugins/cheri`, described in the [CHERI-TrEE](https://github.com/proteus-core/cheritree) work.
 - CHERI-TrEE: Flexible enclaves on capability machines: <https://github.com/proteus-core/cheritree>.
+- Architectural Mimicry (AMi): <https://github.com/proteus-core/ami>
 
 ## Contributing
 
