@@ -47,7 +47,8 @@ class ReorderBuffer(
     metaRegisters: DynBundle[PipelineData[Data]]
 )(implicit config: Config)
     extends Area
-    with CdbListener {
+    with CdbListener
+    with Resettable {
   def capacity: Int = robCapacity
   def indexBits: BitCount = log2Up(capacity) bits
 
@@ -68,6 +69,10 @@ class ReorderBuffer(
     oldestIndex.clear()
     newestIndex.clear()
     isFull := False
+  }
+
+  private def byte2WordAddress(address: UInt) = {
+    address(config.xlen - 1 downto log2Up(config.xlen / 8))
   }
 
   private def isValidAbsoluteIndex(index: UInt): Bool = {
@@ -196,7 +201,7 @@ class ReorderBuffer(
     val found = Bool()
     found := False
 
-    val wordAddress = config.dbusConfig.byte2WordAddress(address)
+    val wordAddress = byte2WordAddress(address)
 
     for (nth <- 0 until capacity) {
       val entry = robEntries(nth)
@@ -207,7 +212,7 @@ class ReorderBuffer(
       val entryIsStore = lsuService.operationOfBundle(entry.registerMap) === LsuOperationType.STORE
       val entryAddressValid = lsuService.addressValidOfBundle(entry.registerMap)
       val entryAddress = lsuService.addressOfBundle(entry.registerMap)
-      val entryWordAddress = config.dbusConfig.byte2WordAddress(entryAddress)
+      val entryWordAddress = byte2WordAddress(entryAddress)
       val addressesMatch = entryWordAddress === wordAddress
       val isOlder = relativeIndexForAbsolute(index) < relativeIndexForAbsolute(robIndex)
 
@@ -280,5 +285,9 @@ class ReorderBuffer(
         isFullNext := True
       }
     }
+  }
+
+  override def pipelineReset(): Unit = {
+    reset()
   }
 }

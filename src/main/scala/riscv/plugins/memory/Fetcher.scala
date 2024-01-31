@@ -1,11 +1,9 @@
-package riscv.plugins
+package riscv.plugins.memory
 
 import riscv._
-
 import spinal.core._
-import spinal.lib._
 
-class Fetcher(fetchStage: Stage, ibusLatency: Int = 2) extends Plugin[Pipeline] with FetchService {
+class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] with FetchService {
   private var addressTranslator = new FetchAddressTranslator {
     override def translate(stage: Stage, address: UInt): UInt = {
       address
@@ -19,7 +17,7 @@ class Fetcher(fetchStage: Stage, ibusLatency: Int = 2) extends Plugin[Pipeline] 
       import fetchStage._
 
       val ibus = pipeline.service[MemoryService].createInternalIBus(fetchStage)
-      val ibusCtrl = new IBusControl(ibus, ibusLatency)
+      val ibusCtrl = new MemBusControl(ibus)
 
       arbitration.isReady := False
 

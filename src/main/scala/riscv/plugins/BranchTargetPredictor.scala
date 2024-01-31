@@ -75,15 +75,4 @@ class BranchTargetPredictor(
       }
     }
   }
-
-  override def predictionForAddress(address: UInt): UInt = {
-    val entry = predictorComponent.findEntry(address)
-    val result = UInt(config.xlen bits)
-    when(entry.valid) {
-      result := entry.payload
-    } otherwise {
-      result := address + 4
-    }
-    result
-  }
 }

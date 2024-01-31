@@ -27,8 +27,4 @@ class NoPredictionPredictor(fetchStage: Stage, executeStage: Stage)
   override def setPredictedPc(stage: Stage, pc: UInt): Unit = {
     stage.input(Data.PREDICTED_PC) := pc
   }
-
-  override def predictionForAddress(address: UInt): UInt = {
-    address + 4
-  }
 }

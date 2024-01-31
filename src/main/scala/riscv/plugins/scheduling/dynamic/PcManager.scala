@@ -77,9 +77,7 @@ class PcManager() extends Plugin[DynamicPipeline] with JumpService {
         val staticPcManager = pipeline.issuePipeline.service[JumpService]
         staticPcManager.jump(jumpStage.output(pipeline.data.NEXT_PC))
 
-        pipeline.rob.reset()
-
-        for (component <- pipeline.components) {
+        for (component <- pipeline.resettables) {
           component.pipelineReset()
         }
       }

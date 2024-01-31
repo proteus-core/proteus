@@ -20,7 +20,7 @@ class Apb3ByteDev(implicit config: Config) extends Component {
   val io = new Bundle {
     val bytes = master(new ByteDevIo)
     val irq = master(new IrqIo)
-    val apb = slave(Apb3(Apb3Config(addressWidth = 4, dataWidth = config.xlen)))
+    val apb = slave(Apb3(Apb3Config(addressWidth = 4, dataWidth = config.memBusWidth)))
   }
 
   io.irq.init()

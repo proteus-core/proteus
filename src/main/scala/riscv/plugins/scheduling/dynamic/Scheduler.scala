@@ -70,7 +70,8 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
         rs.dispatchStream >> dispatchBus.inputs(index)
       }
 
-      pipeline.components = reservationStations ++ loadManagers :+ dispatcher
+      pipeline.resettables =
+        reservationStations ++ loadManagers :+ dispatcher :+ pipeline.backbone :+ pipeline.rob
 
       // Dispatch
       private val issueStage = pipeline.issuePipeline.stages.last

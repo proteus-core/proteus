@@ -40,18 +40,25 @@ object createStaticPipeline {
       )
     }
 
+    val backbone = new memory.StaticMemoryBackbone
+
+    val prefetcher = new memory.SequentialInstructionPrefetcher()
+
     pipeline.addPlugins(
       Seq(
-        new StaticMemoryBackbone,
-        new Fetcher(pipeline.fetch),
+        backbone,
+        new memory.Fetcher(pipeline.fetch),
         new Decoder(pipeline.decode),
         new RegisterFileAccessor(pipeline.decode, pipeline.writeback),
         new IntAlu(Set(pipeline.execute)),
         new Shifter(Set(pipeline.execute)),
-        new Lsu(Set(pipeline.memory), Seq(pipeline.memory), pipeline.memory),
+        new memory.Lsu(Set(pipeline.memory), Seq(pipeline.memory), pipeline.memory),
         new BranchUnit(Set(pipeline.execute)),
         new PcManager(0x80000000L),
         new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
+        prefetcher,
+        new Cache(sets = 2, ways = 2, backbone.filterIBus, Some(prefetcher)),
+        new Cache(sets = 8, ways = 2, backbone.filterDBus),
         new CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
         new Timers,
         new MachineMode(pipeline.execute),
@@ -201,20 +208,24 @@ object createDynamicPipeline {
       val loadStage3 = new Stage("LOAD3")
       override val loadStages: Seq[Stage] = Seq(loadStage1, loadStage2, loadStage3)
       override val retirementStage = new Stage("RET")
-      override val unorderedStages: Seq[Stage] = rsStages ++ loadStages
-      override val stages = issuePipeline.stages ++ unorderedStages :+ retirementStage
+      override val parallelStages: Seq[Stage] = rsStages ++ loadStages
+      override val stages = issuePipeline.stages ++ parallelStages :+ retirementStage
+      override val backbone =
+        new memory.DynamicMemoryBackbone(
+          loadStages.size + 1
+        ) // +1 for write stage (which also uses an ID currently)
     }
 
     pipeline.issuePipeline.addPlugins(
       Seq(
         new scheduling.static.Scheduler(canStallExternally = true),
         new scheduling.static.PcManager(0x80000000L),
-        new DynamicMemoryBackbone(
-          pipeline.loadStages.size + 1
-        ), // +1 for write stage (which also uses an ID currently)
-        new Fetcher(pipeline.issuePipeline.fetch)
+        pipeline.backbone,
+        new memory.Fetcher(pipeline.issuePipeline.fetch)
       )
     )
+
+    val prefetcher = new memory.SequentialInstructionPrefetcher()
 
     pipeline.addPlugins(
       Seq(
@@ -228,7 +239,7 @@ object createDynamicPipeline {
           readStage = pipeline.issuePipeline.decode,
           writeStage = pipeline.retirementStage
         ),
-        new Lsu(
+        new memory.Lsu(
           Set(pipeline.intAlu1, pipeline.intAlu2, pipeline.intAlu3, pipeline.intAlu4),
           pipeline.loadStages,
           pipeline.retirementStage
@@ -239,6 +250,9 @@ object createDynamicPipeline {
           8,
           conf.xlen
         ),
+        prefetcher,
+        new Cache(sets = 2, ways = 2, pipeline.backbone.filterIBus, Some(prefetcher)),
+        new Cache(sets = 8, ways = 2, pipeline.backbone.filterDBus),
         new IntAlu(Set(pipeline.intAlu1, pipeline.intAlu2, pipeline.intAlu3, pipeline.intAlu4)),
         new Shifter(Set(pipeline.intAlu1, pipeline.intAlu2, pipeline.intAlu3, pipeline.intAlu4)),
         new MulDiv(Set(pipeline.intMul1)),
@@ -299,7 +313,7 @@ object CoreDynamicSim {
 
 object CoreDynamicExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 64))
+    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 32))
   }
 }
 

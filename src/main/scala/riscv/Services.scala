@@ -43,6 +43,8 @@ trait MemoryService {
     * `observer` function is called in the context of the top-level Pipeline component.
     */
   def observeDBus(observer: MemBusObserver): Unit
+
+  def filterIBus(filter: MemBusFilter): Unit
 }
 
 trait FetchAddressTranslator {
@@ -306,10 +308,12 @@ trait JumpService {
 
 trait BranchTargetPredictorService {
   def predictedPc(stage: Stage): UInt
-  def predictionForAddress(
-      address: UInt
-  ): UInt // TODO: should it be Flow[UInt] to signal no prediction instead of forcing + 4?
   def setPredictedPc(stage: Stage, pc: UInt): Unit
+}
+
+trait PrefetchService {
+  def updatePrefetcherState(address: UInt, insignificantBits: Int): Unit
+  def getPrefetchTarget: UInt
 }
 
 trait TrapService {

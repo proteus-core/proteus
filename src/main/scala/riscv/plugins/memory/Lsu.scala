@@ -1,8 +1,7 @@
-package riscv.plugins
+package riscv.plugins.memory
 
 import riscv._
 import spinal.core._
-import spinal.lib._
 
 class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
     extends Plugin[Pipeline]
@@ -228,20 +227,20 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
 
     def checkAccessWidth(accessWidth: SpinalEnumCraft[LsuAccessWidth.type], address: UInt) = {
       val misaligned = Bool()
-      val baseMask = Bits(config.xlen / 8 bits)
+      val baseMask = Bits(config.memBusWidth / 8 bits)
 
       switch(accessWidth) {
         is(LsuAccessWidth.B) {
           misaligned := False
-          baseMask := B"0001"
+          baseMask := B"0001".resized
         }
         is(LsuAccessWidth.H) {
           misaligned := (address & 1) =/= 0
-          baseMask := B"0011"
+          baseMask := B"0011".resized
         }
         is(LsuAccessWidth.W) {
           misaligned := (address & 3) =/= 0
-          baseMask := B"1111"
+          baseMask := B"1111".resized
         }
       }
       (misaligned, baseMask)
@@ -381,7 +380,9 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
 
       val (misaligned, baseMask) = checkAccessWidth(accessWidth, address)
 
-      val mask = baseMask |<< address(1 downto 0)
+      val addressOffset = log2Up(config.memBusWidth / 8) - 1
+
+      val mask = baseMask |<< address(addressOffset downto 0)
 
       when(isActive && misaligned) {
         if (pipeline.hasService[TrapService]) {
@@ -428,7 +429,7 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
             }
           }
 
-          val accepted = dbusCtrl.write(busAddress, data, mask)
+          val accepted = dbusCtrl.write(busAddress, data.resized, mask)
           arbitration.isReady := accepted
 
           formal.lsuOnStore(storeStage, busAddress, mask, data)

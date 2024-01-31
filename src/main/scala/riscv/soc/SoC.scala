@@ -34,7 +34,7 @@ class SoC(
     val axi = ramType match {
       case RamType.ExternalAxi4(size) =>
         val axiConfig = Axi4SharedOnChipRam.getAxiConfig(
-          dataWidth = config.xlen,
+          dataWidth = config.memBusWidth,
           byteCount = size,
           idWidth = 4
         )
@@ -71,7 +71,7 @@ class SoC(
       case RamType.OnChipRam(size, initHexFile) =>
         val ram = Axi4SharedOnChipRam(
           byteCount = size,
-          dataWidth = config.xlen,
+          dataWidth = config.memBusWidth,
           idWidth = 4
         )
 
@@ -81,7 +81,7 @@ class SoC(
 
     val apbBridge = Axi4SharedToApb3Bridge(
       addressWidth = config.dbusConfig.addressWidth,
-      dataWidth = config.dbusConfig.dataWidth,
+      dataWidth = config.memBusWidth,
       idWidth = 4
     )
 

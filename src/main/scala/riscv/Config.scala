@@ -22,20 +22,25 @@ object BaseIsa {
 
 class Config(val baseIsa: BaseIsa, val debug: Boolean = true) {
   def xlen = baseIsa.xlen
-  def numRegs = baseIsa.xlen
+  def numRegs = baseIsa.numRegs
+
+  def memBusWidth: Int = 128
 
   def ibusConfig = MemBusConfig(
     addressWidth = baseIsa.xlen,
-    dataWidth = baseIsa.xlen,
+    idWidth = 2,
+    dataWidth = memBusWidth,
     readWrite = false
   )
   def readDbusConfig = MemBusConfig(
     addressWidth = baseIsa.xlen,
-    dataWidth = baseIsa.xlen,
+    idWidth = 2,
+    dataWidth = memBusWidth,
     readWrite = false
   )
   def dbusConfig = MemBusConfig(
     addressWidth = baseIsa.xlen,
-    dataWidth = baseIsa.xlen
+    idWidth = 2,
+    dataWidth = memBusWidth
   )
 }
