@@ -21,12 +21,17 @@ The processor is implemented on an SoC, which features integration with AXI4 and
 Proteus can be configured either in a classic 5-staged static pipelined mode or as a superscalar out-of-order processor with a configurable number of reorder buffer entries and execution units.
 Both implementations pass the [riscv-tests](https://github.com/riscv/riscv-tests), and the correctness of the static pipeline has been verified using [riscv-formal](https://github.com/SymbioticEDA/riscv-formal).
 
-## Current extensions on Proteus
+## Releases and extensions
 
-- ProSpeCT: Provably Secure Speculation for the Constant-Time Policy: <https://github.com/proteus-core/prospect>.
-- Hardware capabilities (CHERI): `src/main/scala/riscv/plugins/cheri`, described in the [CHERI-TrEE](https://github.com/proteus-core/cheritree) work.
-- CHERI-TrEE: Flexible enclaves on capability machines: <https://github.com/proteus-core/cheritree>.
-- Architectural Mimicry (AMi): <https://github.com/proteus-core/ami>
+Proteus uses [calendar versioning](https://calver.org/) with a suffix of `-I` and `-O` to differentiate between the in-order and the out-of-order pipeline implementation.
+The following table describes the released versions and extensions forking them.
+
+| Version | Extension(s) |
+|:-----------|:----------------|
+| [`24.01`](https://github.com/proteus-core/proteus/releases/tag/v24.01) | - |
+| [`23.03`](https://github.com/proteus-core/proteus/releases/tag/v23.03) | [Architectural Mimicry: Innovative Instructions to Efficiently Address Control-Flow Leakage in Data-Oblivious Programs](https://github.com/proteus-core/ami) (both `23.03-I` and `23.03-O`) |
+| [`23.02`](https://github.com/proteus-core/proteus/releases/tag/v23.02) | [ProSpeCT: Provably Secure Speculation for the Constant-Time Policy](https://github.com/proteus-core/prospect) (only for `23.02-O`) |
+| [`21.08-I`](https://github.com/proteus-core/proteus/releases/tag/v21.08) | Hardware capabilities (CHERI): `src/main/scala/riscv/plugins/cheri`, providing the basis for the following publication: [CHERI-TrEE: Flexible enclaves on capability machines](https://github.com/proteus-core/cheritree). |
 
 ## Contributing
 
