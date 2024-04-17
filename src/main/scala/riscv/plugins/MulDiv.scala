@@ -157,11 +157,13 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
             val partialSum = UInt(config.xlen + 1 bits)
 
             when(product.lsb) {
-              when(value(Data.MUL_HIGH) && rs1.asSInt < 0 && rs2.asSInt < 0 &&
-                value(Data.MULDIV_RS2_SIGNED) && value(Data.MULDIV_RS1_SIGNED)) {
+              when(
+                value(Data.MUL_HIGH) && rs1.asSInt < 0 && rs2.asSInt < 0 &&
+                  value(Data.MULDIV_RS2_SIGNED) && value(Data.MULDIV_RS1_SIGNED)
+              ) {
                 partialSum := extendedProductH + multiplicand(31 downto 0)
-              } elsewhen(step.value === 31 && rs1.asSInt<0
-                && value(Data.MULDIV_RS2_SIGNED) && value(Data.MULDIV_RS1_SIGNED)){
+              } elsewhen (step.value === 31 && rs1.asSInt < 0
+                && value(Data.MULDIV_RS2_SIGNED) && value(Data.MULDIV_RS1_SIGNED)) {
                 partialSum := extendedProductH + multiplicand(31 downto 0)
               } otherwise {
                 partialSum := extendedProductH + multiplicand
