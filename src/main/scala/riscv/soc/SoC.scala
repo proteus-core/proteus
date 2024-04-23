@@ -19,7 +19,7 @@ object RamType {
 class SoC(
     ramType: RamType,
     createPipeline: Config => Pipeline,
-    extraDbusReadDelay: Int = 0
+    extraMemBusDelay: Int = 0
 ) extends Component {
   setDefinitionName("Core")
 
@@ -104,23 +104,29 @@ class SoC(
       dbusAxi -> List(ramAxi, apbBridge.io.axi)
     )
 
-    // This pipelining is used to cut combinatorial loops caused by lowLatency=true. It is based on
-    // advice from the Spinal developers: "m2sPipe is a full bandwidth master to slave cut,
-    // s2mPipe is a full bandwidth slave to master cut".
-    // TODO I should really read-up on this pipelining stuff...
-    axiCrossbar.addPipelining(ibusAxi)((ibus, crossbar) => {
-      ibus.readCmd.m2sPipe() >> crossbar.readCmd
-      ibus.readRsp << crossbar.readRsp.s2mPipe()
-    })
-
-    if (extraDbusReadDelay > 0) {
+    if (extraMemBusDelay > 0) {
       axiCrossbar.addPipelining(dbusAxi)((dbus, crossbar) => {
         import Utils._
 
         dbus.sharedCmd >> crossbar.sharedCmd
         dbus.writeData >> crossbar.writeData
-        dbus.readRsp << crossbar.readRsp.stage(extraDbusReadDelay)
+        dbus.readRsp << crossbar.readRsp.stage(extraMemBusDelay)
         dbus.writeRsp << crossbar.writeRsp
+      })
+      axiCrossbar.addPipelining(ibusAxi)((ibus, crossbar) => {
+        import Utils._
+
+        ibus.readCmd.m2sPipe() >> crossbar.readCmd
+        ibus.readRsp << crossbar.readRsp.s2mPipe().stage(extraMemBusDelay)
+      })
+    } else {
+      // This pipelining is used to cut combinatorial loops caused by lowLatency=true. It is based on
+      // advice from the Spinal developers: "m2sPipe is a full bandwidth master to slave cut,
+      // s2mPipe is a full bandwidth slave to master cut".
+      // TODO I should really read-up on this pipelining stuff...
+      axiCrossbar.addPipelining(ibusAxi)((ibus, crossbar) => {
+        ibus.readCmd.m2sPipe() >> crossbar.readCmd
+        ibus.readRsp << crossbar.readRsp.s2mPipe()
       })
     }
 

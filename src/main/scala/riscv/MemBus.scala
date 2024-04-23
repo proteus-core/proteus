@@ -222,7 +222,8 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     when(!currentCmd.isIssued) {
       issueCommand(address)
       issuedThisCycle := True
-    } elsewhen (currentCmd.cmd.address =/= address) {
+    } elsewhen ((currentCmd.cmd.address >> log2Up(config.memBusWidth / 8))
+      =/= (address >> log2Up(config.memBusWidth / 8))) {
       dropRsp := True
     }
 
