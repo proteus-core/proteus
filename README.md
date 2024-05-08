@@ -2,6 +2,16 @@
 
 For a quick introduction to Proteus, and to cite this work, please check [our extended abstract](https://mici.hu/papers/bognar23proteus.pdf) presented at the RISC-V Summit Europe '23.
 
+```bibtex
+@inproceedings{bognar23proteus,
+  author    = {Bognar, Marton and Noorman, Job and Piessens, Frank},
+  title     = {Proteus: An Extensible RISC-V Core for Hardware Extensions},
+  booktitle = {{RISC-V} Summit Europe '23},
+  month     = jun,
+  year      = 2023
+}
+```
+
 ## Get started with Proteus
 
 - [Installation](#installing-proteus)

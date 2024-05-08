@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use Proteus, please cite it as below."
+authors:
+- family-names: "Bognar"
+  given-names: "Marton"
+  orcid: "https://orcid.org/0000-0002-8641-7549"
+- family-names: "Noorman"
+  given-names: "Job"
+- family-names: "Piessens"
+  given-names: "Frank"
+  orcid: "https://orcid.org/0000-0001-5438-153X"
+title: "Proteus: An Extensible RISC-V Core for Hardware Extensions"
+url: "https://github.com/proteus-core/proteus"
+preferred-citation:
+  type: conference-paper
+  authors:
+  - family-names: "Bognar"
+    given-names: "Marton"
+    orcid: "https://orcid.org/0000-0002-8641-7549"
+  - family-names: "Noorman"
+    given-names: "Job"
+  - family-names: "Piessens"
+    given-names: "Frank"
+    orcid: "https://orcid.org/0000-0001-5438-153X"
+  month: 6
+  title: "Proteus: An Extensible RISC-V Core for Hardware Extensions"
+  year: 2023
+  conference:
+    name: "RISC-V Summit Europe '23"
