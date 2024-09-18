@@ -113,31 +113,23 @@ private:
         ensureEnoughMemory(address);
 
         auto bitMask = Word{0};
-        unsigned extra = 0;
-        for (unsigned i = 0; i < MEMBUS_WORDS; ++i) {
-            if (mask & (1 << (4 * i + 0))) {
-                extra = i;
-                bitMask |= 0x000000ff;
-            }
-            if (mask & (1 << (4 * i + 1))) {
-                extra = i;
-                bitMask |= 0x0000ff00;
-            }
-            if (mask & (1 << (4 * i + 2))) {
-                extra = i;
-                bitMask |= 0x00ff0000;
-            }
-            if (mask & (1 << (4 * i + 3))) {
-                extra = i;
-                bitMask |= 0xff000000;
-            }
-        }
-
         auto baseAddress = (address >> MEMBUS_OFFSET) << (MEMBUS_OFFSET - 2);
 
-        auto& memoryValue = memory_[baseAddress + extra];
-        memoryValue &= ~bitMask;
-        memoryValue |= value[0] & bitMask;
+        for (unsigned i = 0; i < MEMBUS_WORDS; ++i) {
+            bitMask = 0;
+
+            for (int byte = 0; byte < 4; ++byte) {
+                if (mask & (1 << (4 * i + byte))) {
+                    bitMask |= 0xff << (8 * byte);
+                }
+            }
+
+            if (bitMask != 0) {
+                auto& memoryValue = memory_[baseAddress + i];
+                memoryValue &= ~bitMask;
+                memoryValue |= value[i] & bitMask;
+            }
+        }
     }
 
     void ensureEnoughMemory(Address address)

@@ -429,7 +429,10 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
             }
           }
 
-          val accepted = dbusCtrl.write(busAddress, data.resized, mask)
+          // Position the data within the cache line
+          val cacheLine = data << (busAddress(addressOffset downto 0) << 3)
+
+          val accepted = dbusCtrl.write(busAddress, cacheLine.resized, mask)
           arbitration.isReady := accepted
 
           formal.lsuOnStore(storeStage, busAddress, mask, data)
