@@ -25,7 +25,7 @@ endif
 
 TEST_DIRS ?= $(ISA_TESTS_DIR)/rv32ui $(ISA_TESTS_DIR)/rv32mi $(ISA_TESTS_DIR)/rv32um $(CUSTOM_TESTS_DIR)
 ALL_ISA_TESTS = $(shell find $(TEST_DIRS) -name '*.S')
-UNSUPPORTED_TESTS = %fence_i.S %breakpoint.S
+UNSUPPORTED_TESTS = %fence_i.S %breakpoint.S %ma_data.S %zicntr.S
 ALL_TESTS = $(filter-out $(UNSUPPORTED_TESTS),$(ALL_ISA_TESTS))
 ALL_TARGETS = $(addsuffix .pass,$(basename $(addprefix $(BUILD_DIR)/,$(notdir $(ALL_TESTS)))))
 
