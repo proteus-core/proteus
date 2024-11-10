@@ -191,6 +191,8 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
 
       when(value(Data.CSR_USE_IMM)) {
         src := Utils.zeroExtend(value(pipeline.data.RS1), config.xlen)
+        arbitration.rs1Needed := True
+        ignoreWrite := value(pipeline.data.RS1) === 0
       } otherwise {
         src := value(pipeline.data.RS1_DATA)
         arbitration.rs1Needed := True
