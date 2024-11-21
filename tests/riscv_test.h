@@ -1,7 +1,7 @@
 #ifndef RISCV_TEST_H
 #define RISCV_TEST_H
 
-#include "riscv-test-env/encoding.h"
+#include "riscv-tests/env/encoding.h"
 
 #define RVTEST_RV64U                                                    \
     .macro init;                                                        \
