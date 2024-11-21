@@ -82,8 +82,8 @@ object SoC {
     new SoC(ramType, config => createStaticPipeline()(config), extraDbusReadDelay)
   }
 
-  def dynamic(ramType: RamType, extraDbusReadDelay: Int = 0): SoC = {
-    new SoC(ramType, config => createDynamicPipeline()(config), extraDbusReadDelay)
+  def dynamic(ramType: RamType, extraMemBusDelay: Int = 0): SoC = {
+    new SoC(ramType, config => createDynamicPipeline()(config), extraMemBusDelay)
   }
 }
 

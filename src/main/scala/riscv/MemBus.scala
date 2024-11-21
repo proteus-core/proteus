@@ -81,16 +81,40 @@ case class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
     val axi4Config = MemBus.getAxi4Config(config)
     val axi4Bus = Axi4Shared(axi4Config)
 
-    axi4Bus.sharedCmd.valid := cmd.valid
+    val addressReadyBuffer = RegInit(False)
+    val writeReadyBuffer = RegInit(False)
+
+    axi4Bus.sharedCmd.valid := cmd.valid && !addressReadyBuffer
     axi4Bus.sharedCmd.addr := cmd.address
     axi4Bus.sharedCmd.write := cmd.write
     axi4Bus.sharedCmd.id := cmd.id
-    cmd.ready := axi4Bus.sharedCmd.ready
+    cmd.ready := (!cmd.write && axi4Bus.sharedCmd.ready) ||
+      (axi4Bus.sharedCmd.ready && axi4Bus.writeData.ready) ||
+      (addressReadyBuffer && axi4Bus.writeData.ready) ||
+      (axi4Bus.sharedCmd.ready && writeReadyBuffer)
 
-    axi4Bus.writeData.valid := cmd.write && cmd.valid
+    axi4Bus.writeData.valid := cmd.write && cmd.valid && !writeReadyBuffer
     axi4Bus.writeData.data := cmd.wdata.asBits
     axi4Bus.writeData.strb := cmd.wmask
     axi4Bus.writeData.last := True
+
+    when(axi4Bus.writeData.ready && !axi4Bus.sharedCmd.ready && axi4Bus.writeData.valid) {
+      writeReadyBuffer := True
+    }
+
+    when(
+      !axi4Bus.writeData.ready &&
+        axi4Bus.sharedCmd.ready &&
+        axi4Bus.sharedCmd.write &&
+        axi4Bus.sharedCmd.valid
+    ) {
+      addressReadyBuffer := True
+    }
+
+    when(cmd.ready) {
+      writeReadyBuffer := False
+      addressReadyBuffer := False
+    }
 
     // TODO: Set useResp to true and verify response?
     axi4Bus.writeRsp.ready := True // FIXME is this ok?
@@ -222,7 +246,8 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     when(!currentCmd.isIssued) {
       issueCommand(address)
       issuedThisCycle := True
-    } elsewhen (currentCmd.cmd.address =/= address) {
+    } elsewhen ((currentCmd.cmd.address >> log2Up(config.memBusWidth / 8))
+      =/= (address >> log2Up(config.memBusWidth / 8))) {
       dropRsp := True
     }
 
