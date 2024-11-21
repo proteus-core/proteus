@@ -186,7 +186,7 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
       val csrId = value(pipeline.data.IR)(31 downto 20)
       val op = value(Data.CSR_OP)
       val ignoreRead = value(pipeline.data.RD) === 0
-      val ignoreWrite = False
+      val ignoreWrite = value(pipeline.data.RS1) === 0
       val src = UInt(config.xlen bits)
 
       when(value(Data.CSR_USE_IMM)) {
@@ -194,7 +194,6 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
       } otherwise {
         src := value(pipeline.data.RS1_DATA)
         arbitration.rs1Needed := True
-        ignoreWrite := value(pipeline.data.RS1) === 0
       }
 
       def outputRd(value: UInt) = {
