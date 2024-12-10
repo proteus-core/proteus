@@ -1,11 +1,12 @@
-image: ubuntu:jammy
+image: ubuntu:noble
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
 
 before_script:
-  - apt-get update -yqq
-  # Prevent interactive prompt when installing tzdata
-  - DEBIAN_FRONTEND=noninteractive apt-get install tzdata -yqq
+  - apt-get update
   # Install build dependencies
-  - apt-get install build-essential verilator gcc-riscv64-unknown-elf openjdk-11-jdk -yqq
+  - apt-get -yqq install git lsb-release sudo vim gnupg openjdk-17-jdk verilator gcc-riscv64-unknown-elf curl make gcc g++
   # Install dependencies needed for adding the sbt repo
   - apt-get install apt-transport-https gnupg curl -yqq
   # Add keyserver for SBT
@@ -14,11 +15,6 @@ before_script:
   # Install SBT
   - apt-get update -yqq
   - apt-get install sbt -yqq
-  # Log the dependency versions
-  - verilator --version
-  - sbt sbtVersion
-  # Update all submodules (e.g., riscv-tests)
-  - git submodule update --init
 
 scalafmt:
   script:
@@ -27,6 +23,6 @@ scalafmt:
 test:
   script:
     # Execute base RV32IM tests on the static pipeline
-    - make RISCV_PREFIX=riscv64-unknown-elf ARCHFLAGS="-march=rv32im -mabi=ilp32" -C tests
+    - make RISCV_PREFIX=riscv64-unknown-elf -C tests
     # Execute base RV32IM tests on the dynamic pipeline
-    - make RISCV_PREFIX=riscv64-unknown-elf CORE=riscv.CoreDynamicExtMem ARCHFLAGS="-march=rv32im -mabi=ilp32" -C tests
+    - make RISCV_PREFIX=riscv64-unknown-elf CORE=riscv.CoreDynamicExtMem -C tests

@@ -3,7 +3,7 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
@@ -16,11 +16,14 @@ jobs:
           sudo apt-get -yqq install git lsb-release sudo vim gnupg openjdk-17-jdk verilator gcc-riscv64-unknown-elf curl make gcc g++
       - name: Install sbt
         run: |
-          curl -fL https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz | gzip -d > cs && chmod +x cs && ./cs setup --yes
-          export PATH="$PATH:~/.local/share/coursier/bin"
+          sudo apt-get install apt-transport-https gnupg curl -yqq
+          echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | sudo tee /etc/apt/sources.list.d/sbt.list
+          sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
+          sudo apt-get update -yqq
+          sudo apt-get install sbt -yqq
       - name: Run Scalafmt
         run: sbt scalafmtCheck
       - name: Static pipeline riscv-tests
-        run: make RISCV_PREFIX=riscv64-unknown-elf ARCHFLAGS="-march=rv32im -mabi=ilp32" -C tests
+        run: make RISCV_PREFIX=riscv64-unknown-elf -C tests
       - name: Dynamic pipeline riscv-tests
-        run: make RISCV_PREFIX=riscv64-unknown-elf CORE=riscv.CoreDynamicExtMem ARCHFLAGS="-march=rv32im -mabi=ilp32" -C tests
+        run: make RISCV_PREFIX=riscv64-unknown-elf CORE=riscv.CoreDynamicExtMem -C tests
