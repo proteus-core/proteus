@@ -47,6 +47,9 @@ class Cache(
 
       private val pendingPrefetch = RegInit(Flow(UInt(idWidth bits)).setIdle())
 
+      private val storeInCycle = Bool()
+      storeInCycle := False
+
       private def oldestWay(set: UInt): UInt = {
         val result = UInt(log2Up(ways) bits)
         result := 0
@@ -114,7 +117,13 @@ class Cache(
 
         outstandingLoads(external.rsp.id).pending := False
         outstandingLoads(external.rsp.id).storeInvalidated := False
-        when(!outstandingLoads(external.rsp.id).storeInvalidated) {
+        // make sure we don't insert values that have been overwritten with a store
+        // either before or in the current cycle
+        when(
+          !outstandingLoads(external.rsp.id).storeInvalidated &&
+            !(storeInCycle &&
+              getSignificantBits(address) === getSignificantBits(internal.cmd.address))
+        ) {
           val way = oldestWay(setIndex)
           cache(setIndex)(way).valid := True
           cache(setIndex)(way).tag := tag
@@ -299,6 +308,7 @@ class Cache(
 
         if (internal.config.readWrite) {
           when(internal.cmd.write) {
+            storeInCycle := True
             // write command: invalidates line and forwards to external bus
             for (i <- 0 until ways) {
               when(cache(indexBits)(i).tag === tagBits) {
