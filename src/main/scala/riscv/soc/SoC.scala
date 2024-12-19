@@ -19,7 +19,8 @@ object RamType {
 class SoC(
     ramType: RamType,
     createPipeline: Config => Pipeline,
-    extraMemBusDelay: Int = 0
+    extraMemBusDelay: Int = 0,
+    applyDelayToIBus: Boolean = false
 ) extends Component {
   setDefinitionName("Core")
 
@@ -113,6 +114,9 @@ class SoC(
         dbus.readRsp << crossbar.readRsp.stage(extraMemBusDelay)
         dbus.writeRsp << crossbar.writeRsp
       })
+    }
+
+    if (extraMemBusDelay > 0 && applyDelayToIBus) {
       axiCrossbar.addPipelining(ibusAxi)((ibus, crossbar) => {
         import Utils._
 

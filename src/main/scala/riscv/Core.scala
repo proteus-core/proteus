@@ -78,12 +78,20 @@ object createStaticPipeline {
 }
 
 object SoC {
-  def static(ramType: RamType, extraDbusReadDelay: Int = 0): SoC = {
-    new SoC(ramType, config => createStaticPipeline()(config), extraDbusReadDelay)
+  def static(
+      ramType: RamType,
+      extraDbusReadDelay: Int = 0,
+      applyDelayToIBus: Boolean = false
+  ): SoC = {
+    new SoC(ramType, config => createStaticPipeline()(config), extraDbusReadDelay, applyDelayToIBus)
   }
 
-  def dynamic(ramType: RamType, extraMemBusDelay: Int = 0): SoC = {
-    new SoC(ramType, config => createDynamicPipeline()(config), extraMemBusDelay)
+  def dynamic(
+      ramType: RamType,
+      extraMemBusDelay: Int = 0,
+      applyDelayToIBus: Boolean = false
+  ): SoC = {
+    new SoC(ramType, config => createDynamicPipeline()(config), extraMemBusDelay, applyDelayToIBus)
   }
 }
 
@@ -168,7 +176,7 @@ object CoreTestSim {
 
 object CoreExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.static(RamType.ExternalAxi4(10 MiB), 32))
+    SpinalVerilog(SoC.static(RamType.ExternalAxi4(10 MiB), 32, applyDelayToIBus = false))
   }
 }
 
@@ -313,7 +321,7 @@ object CoreDynamicSim {
 
 object CoreDynamicExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 32))
+    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 32, applyDelayToIBus = false))
   }
 }
 
