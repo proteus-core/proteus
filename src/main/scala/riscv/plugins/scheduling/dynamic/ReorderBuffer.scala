@@ -58,7 +58,10 @@ class ReorderBuffer(
   private val isFullNext = Bool()
   private val isFull = RegNext(isFullNext).init(False)
   private val willRetire = False
-  val isAvailable = !isFull || willRetire
+
+  private val fenceDetectedNext = Bool()
+  private val fenceDetected = RegNext(fenceDetectedNext).init(False)
+  val isAvailable = (!isFull || willRetire) && !fenceDetectedNext
 
   val pushInCycle = Bool()
   pushInCycle := False
@@ -69,6 +72,7 @@ class ReorderBuffer(
     oldestIndex.clear()
     newestIndex.clear()
     isFull := False
+    fenceDetected := False
   }
 
   private def byte2WordAddress(address: UInt) = {
@@ -137,6 +141,10 @@ class ReorderBuffer(
       .service[LsuService]
       .operationOutput(issueStage)
     pipeline.service[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
+
+    when(pipeline.service[FenceService].isFence(issueStage)) {
+      fenceDetected := True
+    }
 
     val rs1 = Flow(UInt(5 bits))
     val rs2 = Flow(UInt(5 bits))
@@ -242,6 +250,7 @@ class ReorderBuffer(
 
   def build(): Unit = {
     isFullNext := isFull
+    fenceDetectedNext := fenceDetected
     val oldestEntry = robEntries(oldestIndex.value)
     val updatedOldestIndex = UInt(indexBits)
     updatedOldestIndex := oldestIndex.value
@@ -250,6 +259,10 @@ class ReorderBuffer(
     val ret = pipeline.retirementStage
     ret.arbitration.isValid := False
     ret.arbitration.isStalled := False
+
+    when(pipeline.service[FenceService].isFence(ret)) {
+      fenceDetectedNext := False
+    }
 
     for (register <- retirementRegisters.keys) {
       ret.input(register) := oldestEntry.registerMap.element(register)

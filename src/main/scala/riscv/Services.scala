@@ -442,3 +442,7 @@ trait FormalService {
 trait Resettable {
   def pipelineReset(): Unit
 }
+
+trait FenceService {
+  def isFence(stage: Stage): Bool
+}
