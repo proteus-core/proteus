@@ -65,7 +65,8 @@ object createStaticPipeline {
         new TrapHandler(pipeline.writeback),
         new TrapStageInvalidator,
         new Interrupts(pipeline.writeback),
-        new MulDiv(Set(pipeline.execute))
+        new MulDiv(Set(pipeline.execute)),
+        new Marker
       ) ++ extraPlugins
     )
 
@@ -270,7 +271,8 @@ object createDynamicPipeline {
         new MachineMode(pipeline.intAlu1),
         new Interrupts(pipeline.retirementStage),
         new Timers,
-        new Fence
+        new Fence,
+        new Marker
       ) ++ extraPlugins
     )
 
