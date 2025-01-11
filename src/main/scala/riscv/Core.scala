@@ -98,13 +98,13 @@ object SoC {
 
 object Core {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.static(RamType.OnChipRam(10 MiB, args.headOption)))
+    SpinalVerilog(SoC.static(RamType.OnChipRam(1 GiB, args.headOption)))
   }
 }
 
 object CoreSim {
   def main(args: Array[String]) {
-    SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim { dut =>
+    SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(1 GiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
       val byteDevSim = new riscv.sim.StdioByteDev(dut.io.byteDev)
@@ -148,7 +148,7 @@ object CoreTestSim {
   def main(args: Array[String]) {
     var mainResult = 0
 
-    SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim { dut =>
+    SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(1 GiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
       var done = false
@@ -177,7 +177,7 @@ object CoreTestSim {
 
 object CoreExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.static(RamType.ExternalAxi4(10 MiB), 32, applyDelayToIBus = false))
+    SpinalVerilog(SoC.static(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
   }
 }
 
@@ -286,13 +286,13 @@ object createDynamicPipeline {
 
 object CoreDynamic {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.dynamic(RamType.OnChipRam(10 MiB, args.headOption)))
+    SpinalVerilog(SoC.dynamic(RamType.OnChipRam(1 GiB, args.headOption)))
   }
 }
 
 object CoreDynamicSim {
   def main(args: Array[String]) {
-    SimConfig.withWave.compile(SoC.dynamic(RamType.OnChipRam(10 MiB, Some(args(0))))).doSim { dut =>
+    SimConfig.withWave.compile(SoC.dynamic(RamType.OnChipRam(1 GiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
       var done = false
@@ -324,7 +324,7 @@ object CoreDynamicSim {
 
 object CoreDynamicExtMem {
   def main(args: Array[String]) {
-    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(10 MiB), 32, applyDelayToIBus = false))
+    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
   }
 }
 
