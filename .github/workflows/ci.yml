@@ -13,7 +13,7 @@ jobs:
       - name: Install native dependencies
         run: |
           sudo apt-get update
-          sudo apt-get -yqq install git lsb-release sudo vim gnupg openjdk-17-jdk verilator gcc-riscv64-unknown-elf curl make gcc g++
+          sudo apt-get -yqq install git lsb-release sudo vim gnupg openjdk-17-jdk verilator gcc-riscv64-unknown-elf curl make gcc g++ libz-dev
       - name: Install sbt
         run: |
           sudo apt-get install apt-transport-https gnupg curl -yqq

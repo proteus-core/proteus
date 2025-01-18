@@ -6,7 +6,7 @@ variables:
 before_script:
   - apt-get update
   # Install build dependencies
-  - apt-get -yqq install git lsb-release sudo vim gnupg openjdk-17-jdk verilator gcc-riscv64-unknown-elf curl make gcc g++
+  - apt-get -yqq install git lsb-release sudo vim gnupg openjdk-17-jdk verilator gcc-riscv64-unknown-elf curl make gcc g++ libz-dev
   # Install dependencies needed for adding the sbt repo
   - apt-get install apt-transport-https gnupg curl -yqq
   # Add keyserver for SBT

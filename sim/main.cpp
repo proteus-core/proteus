@@ -1,7 +1,7 @@
 #include "VCore.h"
 
 #include <verilated.h>
-#include <verilated_vcd_c.h>
+#include <verilated_fst_c.h>
 
 #include <bit>
 
@@ -24,6 +24,9 @@ const std::uint64_t MAX_CYCLES = 1000000000ULL;
 
 const unsigned int MEMBUS_WORDS = 4;
 const unsigned int MEMBUS_OFFSET = 2 + std::bit_width(MEMBUS_WORDS) - 1;
+
+const bool log_stores = false;
+const bool trace_dump = false;
 
 class Memory
 {
@@ -128,6 +131,9 @@ private:
                 auto& memoryValue = memory_[baseAddress + i];
                 memoryValue &= ~bitMask;
                 memoryValue |= value[i] & bitMask;
+                if (log_stores) {
+                    std::cerr << std::hex << "Store at " << baseAddress << " with value " << value[i] << std::endl;
+                }
             }
         }
     }
@@ -305,9 +311,9 @@ int main(int argc, char** argv)
     auto byteDev = ByteDev{*top};
 
     Verilated::traceEverOn(true);
-    auto tracer = std::unique_ptr<VerilatedVcdC>{new VerilatedVcdC};
+    auto tracer = std::unique_ptr<VerilatedFstC>{new VerilatedFstC};
     top->trace(tracer.get(), 99);
-    tracer->open("sim.vcd");
+    tracer->open("sim.fst");
 
     vluint64_t mainTime = 0;
     vluint64_t cycle = 0;
@@ -364,7 +370,9 @@ int main(int argc, char** argv)
             }
         }
 
-        tracer->dump(mainTime);
+        if (trace_dump) {
+            tracer->dump(mainTime);
+        }
 
         mainTime++;
     }
