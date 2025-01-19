@@ -3,7 +3,7 @@ package riscv.plugins
 import riscv._
 import spinal.core._
 
-class Fence extends Plugin[DynamicPipeline] with FenceService {
+class Fence(fenceStages: Set[Stage]) extends Plugin[Pipeline] with FenceService {
 
   object Data {
     object FENCE extends PipelineData(Bool())
@@ -11,7 +11,7 @@ class Fence extends Plugin[DynamicPipeline] with FenceService {
 
   override def setup(): Unit = {
     val issuer = pipeline.service[IssueService]
-    issuer.setDestinations(Opcodes.FENCE, pipeline.rsStages.toSet)
+    issuer.setDestinations(Opcodes.FENCE, fenceStages)
 
     pipeline.service[DecoderService].configure { config =>
       config.addDefault(
