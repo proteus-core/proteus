@@ -206,17 +206,12 @@ object createDynamicPipeline {
         override val passThroughStage: Stage = decode // dummy
       }
 
-      val intAlu1 = new Stage("EX_ALU1")
-      val intAlu2 = new Stage("EX_ALU2")
-      val intAlu3 = new Stage("EX_ALU3")
-      val intAlu4 = new Stage("EX_ALU4")
-      val intMul1 = new Stage("EX_MUL1")
-      override val passThroughStage: Stage = intAlu1
-      override val rsStages: Seq[Stage] = Seq(intAlu1, intAlu2, intAlu3, intAlu4, intMul1)
-      val loadStage1 = new Stage("LOAD1")
-      val loadStage2 = new Stage("LOAD2")
-      val loadStage3 = new Stage("LOAD3")
-      override val loadStages: Seq[Stage] = Seq(loadStage1, loadStage2, loadStage3)
+      val intAlus = (0 until config.parallelAlus).map(n => new Stage("EX_ALU" + n))
+      val intMuls = (0 until config.parallelMulDivs).map(n => new Stage("EX_MUL" + n))
+      val loadStages = (0 until config.parallelLoads).map(n => new Stage("LOAD" + n))
+
+      override val passThroughStage: Stage = intAlus.last
+      override val rsStages: Seq[Stage] = intAlus ++ intMuls
       override val retirementStage = new Stage("RET")
       override val parallelStages: Seq[Stage] = rsStages ++ loadStages
       override val stages = issuePipeline.stages ++ parallelStages :+ retirementStage
@@ -250,7 +245,7 @@ object createDynamicPipeline {
           writeStage = pipeline.retirementStage
         ),
         new memory.Lsu(
-          Set(pipeline.intAlu1, pipeline.intAlu2, pipeline.intAlu3, pipeline.intAlu4),
+          pipeline.intAlus.toSet,
           pipeline.loadStages,
           pipeline.retirementStage
         ),
@@ -263,13 +258,13 @@ object createDynamicPipeline {
         prefetcher,
         new Cache(sets = 2, ways = 2, pipeline.backbone.filterIBus, Some(prefetcher)),
         new Cache(sets = 8, ways = 2, pipeline.backbone.filterDBus),
-        new IntAlu(Set(pipeline.intAlu1, pipeline.intAlu2, pipeline.intAlu3, pipeline.intAlu4)),
-        new Shifter(Set(pipeline.intAlu1, pipeline.intAlu2, pipeline.intAlu3, pipeline.intAlu4)),
-        new MulDiv(Set(pipeline.intMul1)),
-        new BranchUnit(Set(pipeline.intAlu1, pipeline.intAlu2, pipeline.intAlu3, pipeline.intAlu4)),
-        new CsrFile(pipeline.retirementStage, pipeline.intAlu1),
+        new IntAlu(pipeline.intAlus.toSet),
+        new Shifter(pipeline.intAlus.toSet),
+        new MulDiv(pipeline.intMuls.toSet),
+        new BranchUnit(pipeline.intAlus.toSet),
+        new CsrFile(pipeline.retirementStage, pipeline.intAlus.last),
         new TrapHandler(pipeline.retirementStage),
-        new MachineMode(pipeline.intAlu1),
+        new MachineMode(pipeline.intAlus.last),
         new Interrupts(pipeline.retirementStage),
         new Timers,
         new Fence(pipeline.rsStages.toSet),

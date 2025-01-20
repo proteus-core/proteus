@@ -39,15 +39,12 @@ class LoadManager(
   def receiveMessage(rdbMessage: RdbMessage): Bool = {
     val ret = Bool()
     ret := False
-    when(isAvailable) {
+    val address = pipeline.service[LsuService].addressOfBundle(rdbMessage.registerMap)
+    val hasPendingStore = rob.hasPendingStoreForEntry(rdbMessage.robIndex, address)
+    when(isAvailable && !hasPendingStore) {
       ret := True
       storedMessage := rdbMessage
-      val address = pipeline.service[LsuService].addressOfBundle(rdbMessage.registerMap)
-      when(!rob.hasPendingStoreForEntry(rdbMessage.robIndex, address)) {
-        stateNext := State.EXECUTING
-      } otherwise {
-        stateNext := State.WAITING_FOR_STORE
-      }
+      stateNext := State.EXECUTING
     }
     ret
   }

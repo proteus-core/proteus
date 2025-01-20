@@ -26,6 +26,14 @@ class Config(val baseIsa: BaseIsa, val debug: Boolean = true) {
 
   def memBusWidth: Int = 128
 
+  def robEntries: Int = 32
+
+  def parallelAlus: Int = 8
+
+  def parallelMulDivs: Int = 2
+
+  def parallelLoads: Int = 3
+
   def ibusConfig = MemBusConfig(
     addressWidth = baseIsa.xlen,
     idWidth = 2,
