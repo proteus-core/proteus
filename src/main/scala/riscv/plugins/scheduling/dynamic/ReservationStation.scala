@@ -170,6 +170,8 @@ class ReservationStation(
       when(exeStage.output(pipeline.data.RD_DATA_VALID)) {
         cdbStream.valid := True
       }
+
+      dispatchStream.payload.willCdbUpdate := cdbStream.valid
       dispatchStream.valid := True
 
       // Override the assignment of resultCdbMessage to make sure data can be sent in later cycles

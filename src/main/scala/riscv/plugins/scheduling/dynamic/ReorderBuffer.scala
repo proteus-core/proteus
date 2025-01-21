@@ -10,6 +10,7 @@ case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])(implicit
     retirementRegisters.createBundle
   val rdbUpdated = Bool()
   val cdbUpdated = Bool()
+  val willCdbUpdate = Bool()
 
   override def clone(): RobEntry = {
     RobEntry(retirementRegisters)
@@ -238,6 +239,7 @@ class ReorderBuffer(
 
   def onRdbMessage(rdbMessage: RdbMessage): Unit = {
     robEntries(rdbMessage.robIndex).registerMap := rdbMessage.registerMap
+    robEntries(rdbMessage.robIndex).willCdbUpdate := rdbMessage.willCdbUpdate
 
     when(pipeline.service[CsrService].isCsrInstruction(rdbMessage.registerMap)) {
       pipeline
@@ -273,11 +275,7 @@ class ReorderBuffer(
     ret.connectLastValues()
 
     when(
-      !isEmpty && oldestEntry.rdbUpdated && (oldestEntry.cdbUpdated || (!oldestEntry.registerMap
-        .elementAs[Bool](pipeline.data.RD_DATA_VALID.asInstanceOf[PipelineData[Data]]) &&
-        pipeline
-          .service[LsuService]
-          .operationOfBundle(oldestEntry.registerMap) =/= LsuOperationType.LOAD))
+      !isEmpty && oldestEntry.rdbUpdated && (oldestEntry.cdbUpdated || !oldestEntry.willCdbUpdate)
     ) {
       ret.arbitration.isValid := True
 
