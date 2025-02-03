@@ -5,19 +5,30 @@ import spinal.core._
 
 class SequentialInstructionPrefetcher(implicit config: Config) extends Plugin with PrefetchService {
 
-  private var nextTarget: UInt = null
+  private var currentAddress: UInt = null
+  private val insignificantBits = log2Up(config.xlen / 8) + log2Up(config.memBusWidth / config.xlen)
+  private var hasNewTarget: Bool = null
 
   override def setup(): Unit = {
     pipeline plug new Area {
-      nextTarget = RegInit(UInt(config.xlen bits).getZero)
+      currentAddress = RegInit(UInt(config.xlen bits).getZero)
+      hasNewTarget = Reg(Bool()).init(False)
     }
   }
 
-  override def updatePrefetcherState(address: UInt, insignificantBits: Int): Unit = {
-    nextTarget := ((address >> insignificantBits) + 1) << insignificantBits
+  override def notifyLoadRequest(address: UInt): Unit = {
+    when(currentAddress >> insignificantBits =/= address >> insignificantBits) {
+      currentAddress := address
+      hasNewTarget := True
+    }
   }
 
-  override def getPrefetchTarget: UInt = {
-    nextTarget
+  override def getNextPrefetchTarget: UInt = {
+    hasNewTarget := False
+    ((currentAddress >> insignificantBits) + 1) << insignificantBits
+  }
+
+  override def hasPrefetchTarget: Bool = {
+    hasNewTarget
   }
 }
