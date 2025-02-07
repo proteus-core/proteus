@@ -89,6 +89,7 @@ class LoadManager(
     when(state === State.EXECUTING && loadStage.arbitration.isDone && !activeFlush) {
       rdbStream.valid := True
       rdbStream.payload.robIndex := storedMessage.robIndex
+      rdbStream.payload.willCdbUpdate := True
       for (register <- retirementRegisters.keys) {
         rdbStream.payload.registerMap.element(register) := loadStage.output(register)
       }
