@@ -103,6 +103,14 @@ The most common way of running programs is to create a standalone Proteus simula
 make -C sim CORE=riscv.CoreExtMem
 ```
 
+To create a trace file of the simulation, you need to pass the additional flags `EXTRA_CFLAGS=-DTRACE_DUMP_ENABLED`:
+
+```shell
+make -C sim CORE=riscv.CoreExtMem EXTRA_CFLAGS=-DTRACE_DUMP_ENABLED
+```
+
+Other debug options can also be enabled (search for `EXTRA_CFLAGS` in the Makefile for a full list).
+
 This creates an executable at `sim/build/sim` which can be called with a flat binary file as input:
 
 ```
@@ -117,7 +125,7 @@ riscv32-unknown-elf-objcopy -O binary program.elf program.bin
 
 ### Examining simulation output
 
-Running a simulation the above way creates a VCD file called `sim.vcd` in the directory the simulation is run from.
+Running a simulation with trace with the option `EXTRA_CFLAGS=-DTRACE_DUMP_ENABLED` creates a trace file called `sim.fst` in the directory the simulation is run from.
 
 We provide a bare-bones `sim.gtkw` GTKWave savefile to examine this VCD file.
 You might need to update the three hardcoded paths in `sim.gtkw` before using it.
