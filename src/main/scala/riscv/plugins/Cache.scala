@@ -8,7 +8,8 @@ class Cache(
     sets: Int,
     ways: Int,
     busFilter: ((Stage, MemBus, MemBus) => Unit) => Unit,
-    prefetcher: Option[PrefetchService] = None
+    prefetcher: Option[PrefetchService] = None,
+    cacheable: (UInt => Bool) = (_ => True)
 )(implicit config: Config)
     extends Plugin[Pipeline] {
   private val byteIndexBits = log2Up(config.xlen / 8)
@@ -121,6 +122,7 @@ class Cache(
         // either before or in the current cycle
         when(
           !outstandingLoads(external.rsp.id).storeInvalidated &&
+            cacheable(address) &&
             !(storeInCycle &&
               getSignificantBits(address) === getSignificantBits(internal.cmd.address))
         ) {
@@ -234,7 +236,12 @@ class Cache(
       }
 
       prefetcher foreach { pref =>
-        when(!sendingBufferedCmd && !sendingImmediateCmd && !pendingPrefetch.valid) {
+        when(
+          !sendingBufferedCmd &&
+            !sendingImmediateCmd &&
+            !pendingPrefetch.valid &&
+            cacheable(pref.getPrefetchTarget)
+        ) {
           val prefetchAddress = pref.getPrefetchTarget
 
           val targetWay = wayForAddress(prefetchAddress)
