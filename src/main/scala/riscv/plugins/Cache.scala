@@ -8,7 +8,8 @@ class Cache(
     sets: Int,
     ways: Int,
     busFilter: ((Stage, MemBus, MemBus) => Unit) => Unit,
-    prefetcher: Option[PrefetchService] = None
+    prefetcher: Option[PrefetchService] = None,
+    maxPrefetches: Int = 2
 )(implicit config: Config)
     extends Plugin[Pipeline] {
   private val byteIndexBits = log2Up(config.xlen / 8)
@@ -45,10 +46,21 @@ class Cache(
       private val cacheHits = RegInit(UInt(config.xlen bits).getZero)
       private val cacheMisses = RegInit(UInt(config.xlen bits).getZero)
 
-      private val pendingPrefetch = RegInit(Flow(UInt(idWidth bits)).setIdle())
-
       private val storeInCycle = Bool()
       storeInCycle := False
+
+      private val outstandingPrefetches = RegInit(UInt(log2Up(maxPrefetches + 1) bits).getZero)
+      private val incrementOutstandingPrefetches = Bool()
+      private val decrementOutstandingPrefetches = Bool()
+      incrementOutstandingPrefetches := False
+      decrementOutstandingPrefetches := False
+
+      // this logic is to avoid problems when incrementing and decrementing in the same cycle
+      when(incrementOutstandingPrefetches && !decrementOutstandingPrefetches) {
+        outstandingPrefetches := outstandingPrefetches + 1
+      } elsewhen (!incrementOutstandingPrefetches && decrementOutstandingPrefetches) {
+        outstandingPrefetches := outstandingPrefetches - 1
+      }
 
       private def oldestWay(set: UInt): UInt = {
         val result = UInt(log2Up(ways) bits)
@@ -101,6 +113,7 @@ class Cache(
         val address: UInt = UInt(config.xlen bits)
         val storeInvalidated: Bool = Bool()
         val pending: Bool = Bool()
+        val forwardRsp: Bool = Bool()
       }
 
       private val outstandingLoads = Vec.fill(maxId + 1)(RegInit(OutstandingTracker().getZero))
@@ -144,12 +157,18 @@ class Cache(
             when(internal.rsp.ready) {
               insertRspInCache(address)
             }
-          case Some(_) =>
-            when(pendingPrefetch.valid && pendingPrefetch.payload === external.rsp.id) {
+          case Some(pref) =>
+            when(!outstandingLoads(external.rsp.id).forwardRsp) {
               // handle prefetch response without forwarding
-              pendingPrefetch.setIdle()
+              // inform prefetcher of prefetch response from memory
+              pref.notifyPrefetchResponseFromMemory(address, external.rsp.payload.rdata)
+              // subscract 1 from outstandingPrefetches
+              decrementOutstandingPrefetches := True
               insertRspInCache(address)
             } otherwise {
+              // handle load response with forwarding
+              // inform prefetcher of load response from memory
+              pref.notifyLoadResponseFromMemory(address, external.rsp.payload.rdata)
               forwardRspToInternal()
               when(internal.rsp.ready) {
                 insertRspInCache(address)
@@ -201,10 +220,12 @@ class Cache(
             when(!internal.cmd.write) {
               outstandingLoads(internal.cmd.id).address := internal.cmd.address
               outstandingLoads(internal.cmd.id).pending := True
+              outstandingLoads(internal.cmd.id).forwardRsp := True
             }
           } else {
             outstandingLoads(internal.cmd.id).address := internal.cmd.address
             outstandingLoads(internal.cmd.id).pending := True
+            outstandingLoads(internal.cmd.id).forwardRsp := True
           }
           when(!external.cmd.ready) {
             sendingBufferedCmd := True
@@ -234,40 +255,65 @@ class Cache(
       }
 
       prefetcher foreach { pref =>
-        when(!sendingBufferedCmd && !sendingImmediateCmd && !pendingPrefetch.valid) {
-          val prefetchAddress = pref.getPrefetchTarget
-
-          val targetWay = wayForAddress(prefetchAddress)
-
+        when(
+          !sendingBufferedCmd && !sendingImmediateCmd && outstandingPrefetches < maxPrefetches && pref.hasPrefetchTarget
+        ) {
+          // find out if there is an unused id
           val emptySlot = Flow(UInt(idWidth bits)).setIdle()
-          // send a prefetch command on the unused external bus if there's an unused ID and no pending prefetch
           for (i <- 0 until outstandingLoads.length) {
             when(!outstandingLoads(i).pending) {
               emptySlot.push(i)
             }
           }
+          when(emptySlot.valid) {
+            // at this point the cache is ready to send a prefetch command to the memory
+            // getNextPrefetchTarget should not be called before the cache is ready to send the command
+            // otherwise the prefetch may get lost
+            val prefetchAddress = pref.getNextPrefetchTarget
 
-          when(emptySlot.valid && !targetWay.valid) {
-            pendingPrefetch := emptySlot
+            val targetWay = wayForAddress(prefetchAddress)
+            val setIndex = getSetIndex(prefetchAddress)
+            val tagBits = getTagBits(prefetchAddress)
 
-            external.cmd.valid := True
-            external.cmd.address := prefetchAddress
-            external.cmd.id := emptySlot.payload
-            cmdBuffer := external.cmd
+            val alreadyPending = False
 
-            outstandingLoads(emptySlot.payload).address := prefetchAddress
-            outstandingLoads(emptySlot.payload).pending := True
+            // find out if a load request for the given address is already pending
+            for (i <- 0 until outstandingLoads.length) {
+              val load = outstandingLoads(i)
+              when(
+                getSignificantBits(load.address) === U(
+                  tagBits ## setIndex
+                ) && load.pending && !load.storeInvalidated
+              ) {
+                alreadyPending := True
+              }
+            }
+            when(!targetWay.valid && !alreadyPending) {
+              // add 1 to outstandingPrefetches
+              incrementOutstandingPrefetches := True
 
-            when(!external.cmd.ready) {
-              sendingBufferedCmd := True
+              external.cmd.valid := True
+              external.cmd.address := prefetchAddress
+              external.cmd.id := emptySlot.payload
+              cmdBuffer := external.cmd
+
+              outstandingLoads(emptySlot.payload).address := prefetchAddress
+              outstandingLoads(emptySlot.payload).pending := True
+              // it's a prefetch so don't forward the response
+              outstandingLoads(emptySlot.payload).forwardRsp := False
+
+              when(!external.cmd.ready) {
+                sendingBufferedCmd := True
+              }
             }
           }
         }
       }
 
       private def getResult(address: UInt): Unit = {
+        // inform prefetcher of load request
         prefetcher foreach { pref =>
-          pref.updatePrefetcherState(internal.cmd.address, byteIndexBits + wordIndexBits)
+          pref.notifyLoadRequest(address)
         }
 
         when(!outstandingLoads(internal.cmd.id).pending) {
