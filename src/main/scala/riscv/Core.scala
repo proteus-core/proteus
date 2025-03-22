@@ -57,7 +57,7 @@ object createStaticPipeline {
         new PcManager(0x80000000L),
         new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
         prefetcher,
-        new Cache(sets = 2, ways = 2, backbone.filterIBus, Some(prefetcher)),
+        new Cache(sets = 2, ways = 2, backbone.filterIBus, Some(prefetcher), maxPrefetches = 2),
         new Cache(sets = 8, ways = 2, backbone.filterDBus, cacheable = (_ >= 0x80000000L)),
         new CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
         new Timers,
@@ -256,7 +256,13 @@ object createDynamicPipeline {
           conf.xlen
         ),
         prefetcher,
-        new Cache(sets = 2, ways = 2, pipeline.backbone.filterIBus, Some(prefetcher)),
+        new Cache(
+          sets = 2,
+          ways = 2,
+          pipeline.backbone.filterIBus,
+          Some(prefetcher),
+          maxPrefetches = 2
+        ),
         new Cache(
           sets = 8,
           ways = 2,
