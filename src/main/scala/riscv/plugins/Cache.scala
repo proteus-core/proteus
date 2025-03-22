@@ -9,7 +9,7 @@ class Cache(
     ways: Int,
     busFilter: ((Stage, MemBus, MemBus) => Unit) => Unit,
     prefetcher: Option[PrefetchService] = None,
-    maxPrefetches: Int = 2
+    maxPrefetches: Int = 1
 )(implicit config: Config)
     extends Plugin[Pipeline] {
   private val byteIndexBits = log2Up(config.xlen / 8)
@@ -45,6 +45,7 @@ class Cache(
 
       private val cacheHits = RegInit(UInt(config.xlen bits).getZero)
       private val cacheMisses = RegInit(UInt(config.xlen bits).getZero)
+      private val forwardedLoads = RegInit(UInt(config.xlen bits).getZero)
 
       private val externalId = RegInit(UInt(external.config.idWidth bits).getZero)
 
@@ -98,6 +99,7 @@ class Cache(
       // rsp sending buffer
       private val sendingRsp = Bool()
       sendingRsp := False
+      private val alreadySendingRsp = Reg(Bool()).init(False)
       private val rspBuffer = Reg(MemBusRsp(internal.config))
       private val returningCache = Reg(Bool()).init(False)
 
@@ -115,9 +117,8 @@ class Cache(
         val address: UInt = UInt(config.xlen bits)
         val storeInvalidated: Bool = Bool()
         val pending: Bool = Bool()
-        val forwardRsp: Bool = Bool()
         val isPrefetch: Bool = Bool()
-        val internalId: UInt = UInt(internal.config.idWidth bits)
+        val internalIds: UInt = UInt(Math.pow(2, internal.config.idWidth).toInt bits)
       }
 
       private val outstandingLoads = Vec.fill(maxId + 1)(RegInit(OutstandingTracker().getZero))
@@ -127,7 +128,13 @@ class Cache(
         internal.rsp.valid := True
 
         internal.rsp.rdata := external.rsp.rdata
-        internal.rsp.id := outstandingLoads(external.rsp.id).internalId
+        // the index of 1's in internalIds indicate to which internal ids the response should be forwarded
+        val internalId = OHToUInt(OHMasking.first(outstandingLoads(external.rsp.id).internalIds))
+        internal.rsp.id := internalId
+        when(internal.rsp.ready) {
+          // set the bit to 0 once it has been forwarded
+          outstandingLoads(external.rsp.id).internalIds(internalId) := False
+        }
       }
 
       private def insertRspInCache(address: UInt): Unit = {
@@ -157,13 +164,8 @@ class Cache(
       when(external.rsp.valid) {
         val address = outstandingLoads(external.rsp.id).address
 
-        prefetcher match {
-          case None =>
-            forwardRspToInternal()
-            when(internal.rsp.ready) {
-              insertRspInCache(address)
-            }
-          case Some(pref) =>
+        when(!alreadySendingRsp) {
+          prefetcher foreach { pref =>
             when(outstandingLoads(external.rsp.id).isPrefetch) {
               // inform prefetcher of prefetch response from memory
               pref.notifyPrefetchResponseFromMemory(address, external.rsp.rdata)
@@ -173,16 +175,24 @@ class Cache(
               // inform prefetcher of load response from memory
               pref.notifyLoadResponseFromMemory(address, external.rsp.rdata)
             }
-            when(!outstandingLoads(external.rsp.id).forwardRsp) {
-              // store result in cache without forwarding
-              insertRspInCache(address)
-            } otherwise {
-              // forward result and store in cache
-              forwardRspToInternal()
-              when(internal.rsp.ready) {
-                insertRspInCache(address)
-              }
-            }
+          }
+        }
+
+        when(outstandingLoads(external.rsp.id).internalIds === 0) {
+          // store result in cache without forwarding
+          insertRspInCache(address)
+        } otherwise {
+          // forward result and store in cache
+          forwardRspToInternal()
+          when(
+            // when there is only one id left to forward, put result in cache and inform external bus we are done
+            internal.rsp.ready && CountOne(outstandingLoads(external.rsp.id).internalIds) === 1
+          ) {
+            insertRspInCache(address)
+            alreadySendingRsp := False
+          } otherwise {
+            alreadySendingRsp := True
+          }
         }
       }
 
@@ -235,17 +245,17 @@ class Cache(
             when(!internal.cmd.write) {
               outstandingLoads(externalId).address := internal.cmd.address
               outstandingLoads(externalId).pending := True
-              outstandingLoads(externalId).forwardRsp := True
               outstandingLoads(externalId).isPrefetch := False
-              outstandingLoads(externalId).internalId := internal.cmd.id
+              outstandingLoads(externalId).internalIds := U(0).resized
+              outstandingLoads(externalId).internalIds(internal.cmd.id) := True
               externalId := externalId + 1
             }
           } else {
             outstandingLoads(externalId).address := internal.cmd.address
             outstandingLoads(externalId).pending := True
-            outstandingLoads(externalId).forwardRsp := True
             outstandingLoads(externalId).isPrefetch := False
-            outstandingLoads(externalId).internalId := internal.cmd.id
+            outstandingLoads(externalId).internalIds := U(0).resized
+            outstandingLoads(externalId).internalIds(internal.cmd.id) := True
             externalId := externalId + 1
           }
           when(!external.cmd.ready) {
@@ -315,9 +325,7 @@ class Cache(
 
               outstandingLoads(externalId).address := prefetchAddress
               outstandingLoads(externalId).pending := True
-              outstandingLoads(externalId).internalId.assignDontCare()
-              // it's a prefetch so don't forward the response
-              outstandingLoads(externalId).forwardRsp := False
+              outstandingLoads(externalId).internalIds := U(0).resized
               outstandingLoads(externalId).isPrefetch := True
 
               when(!external.cmd.ready) {
@@ -353,11 +361,16 @@ class Cache(
               ) && load.pending && !load.storeInvalidated
             ) {
               alreadyPending := True
-              // if the load is already pending from a prefetch: mark it to be forwarded + increase cache misses
-              when(load.isPrefetch && !load.forwardRsp) {
-                load.forwardRsp := True
-                load.internalId := internal.cmd.id
+              // if the load is already pending but result not yet received: mark it to be forwarded + increase cache misses
+              when(
+                !(external.rsp.valid && getSignificantBits(load.address) === getSignificantBits(
+                  outstandingLoads(external.rsp.id).address
+                ))
+              ) {
+                load.internalIds(internal.cmd.id) := True
                 cacheMisses := cacheMisses + 1
+                forwardedLoads := forwardedLoads + 1
+                internal.cmd.ready := True
               }
             }
           }
