@@ -25,8 +25,17 @@ const std::uint64_t MAX_CYCLES = 1000000000ULL;
 const unsigned int MEMBUS_WORDS = 4;
 const unsigned int MEMBUS_OFFSET = 2 + std::bit_width(MEMBUS_WORDS) - 1;
 
+#ifdef LOG_STORES_ENABLED
+const bool log_stores = true;
+#else
 const bool log_stores = false;
+#endif
+
+#ifdef TRACE_DUMP_ENABLED
+const bool trace_dump = true;
+#else
 const bool trace_dump = false;
+#endif
 
 class Memory
 {

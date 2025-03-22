@@ -51,6 +51,9 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
       private val sameCycleReturn = Bool()
       sameCycleReturn := False
 
+      private val movingToCmdBuffer = Flow(UInt(config.dbusConfig.idWidth bits))
+      movingToCmdBuffer.setIdle()
+
       private val nextId = Counter(config.dbusConfig.idWidth bits)
       private val busId2StageIndex = Vec.fill(
         UInt(config.dbusConfig.idWidth bits).maxValue.intValue() + 1
@@ -66,6 +69,11 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
       // when getting a response, if it's invalid, throw it away
       // when counter is full (all entries are waiting), don't accept any cmd
 
+      // this makes sure that once we assert a command, it stays on the bus until it's acknowledged
+      // even if the pipeline is flushed or a command with a lower index comes in
+      private val cmdBuffer = Reg(Flow(MemBusCmd(config.dbusConfig)))
+      private val currentlySendingIndex = Reg(Flow(UInt(config.dbusConfig.idWidth bits)))
+
       private val fullDBusCmds = internalReadDBuses.zipWithIndex.map {
         case (internalReadDBus, index) =>
           val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig))
@@ -80,8 +88,15 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
           val busValid = Bool()
           busValid := False
 
+          // forwarding the ready signal for the command:
+          // 1. if the command is being moved to the buffer
+          // 2. if the command was sent immediately, not from the buffer
           when(
-            currentlyInserting.payload.stageIndex === index && currentlyInserting.valid && !activeFlush
+            !activeFlush && internalReadDBus.cmd.valid &&
+              (
+                (movingToCmdBuffer.valid && movingToCmdBuffer.payload === index) ||
+                  (!cmdBuffer.valid && currentlyInserting.payload.stageIndex === index && currentlyInserting.valid)
+              )
           ) {
             internalReadDBus.cmd.ready := True
           }
@@ -94,8 +109,11 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
               sameCycleReturn := True
               busId2StageIndex(unifiedInternalDBus.rsp.id).rspReceived := True
               busId2StageIndex(unifiedInternalDBus.rsp.id).cmdSent := False // free up slot
-              busValid := True
+              // do not forward if the command was sent from the buffer and it's already invalidated
+              busValid := !activeFlush && !(cmdBuffer.valid && busId2StageIndex(nextId).invalidated)
             }
+            // TODO: cmdSend could become problematic or it will always waste a cycle (first false for a cycle, then
+            // new load can start)
             when(
               busId2StageIndex(unifiedInternalDBus.rsp.id).cmdSent && busId2StageIndex(
                 unifiedInternalDBus.rsp.id
@@ -103,9 +121,7 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
             ) {
               busId2StageIndex(unifiedInternalDBus.rsp.id).rspReceived := True
               busId2StageIndex(unifiedInternalDBus.rsp.id).cmdSent := False // free up slot
-              when(!busId2StageIndex(unifiedInternalDBus.rsp.id).invalidated) {
-                busValid := True
-              }
+              busValid := !busId2StageIndex(unifiedInternalDBus.rsp.id).invalidated && !activeFlush
             }
           }
 
@@ -122,13 +138,30 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
         ).rsp.ready
       }
 
-      private var context = when(False) {}
-
       // TODO: is it possible to do the following with an arbiter instead of this manual mess?
 
       private val cmds = fullDBusCmds :+ internalWriteDBus.cmd
 
       internalWriteDBus.cmd.ready := unifiedInternalDBus.cmd.ready && unifiedInternalDBus.cmd.write
+
+      private var context = when(cmdBuffer.valid) {
+        unifiedInternalDBus.cmd.payload := cmdBuffer.payload
+        unifiedInternalDBus.cmd.valid := True
+        when(unifiedInternalDBus.cmd.ready) {
+          currentlySendingIndex.setIdle()
+          cmdBuffer.setIdle()
+          when(!cmdBuffer.write) {
+            busId2StageIndex(nextId).stageIndex := currentlySendingIndex.payload
+            when(!sameCycleReturn) {
+              busId2StageIndex(nextId).cmdSent := True
+            }
+            busId2StageIndex(nextId).rspReceived := False
+            currentlyInserting.valid := True
+            currentlyInserting.payload.stageIndex := currentlySendingIndex.payload
+          }
+          nextId.increment()
+        }
+      }
 
       cmds.zipWithIndex.foreach { case (cmd, index) =>
         context =
@@ -139,18 +172,26 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
             unifiedInternalDBus.cmd.write := cmd.write
             unifiedInternalDBus.cmd.wdata := cmd.wdata
             unifiedInternalDBus.cmd.wmask := cmd.wmask
+            when(!cmd.write) {
+              busId2StageIndex(nextId).invalidated := activeFlush
+            }
             when(unifiedInternalDBus.cmd.ready) {
+              currentlySendingIndex.setIdle()
+              cmdBuffer.setIdle()
               when(!cmd.write) {
-                nextId.increment()
                 busId2StageIndex(nextId).stageIndex := U(index).resized
                 when(!sameCycleReturn) {
                   busId2StageIndex(nextId).cmdSent := True
                 }
                 busId2StageIndex(nextId).rspReceived := False
-                busId2StageIndex(nextId).invalidated := activeFlush
                 currentlyInserting.valid := True
                 currentlyInserting.payload.stageIndex := index
               }
+              nextId.increment()
+            } otherwise {
+              movingToCmdBuffer.push(index)
+              cmdBuffer.push(unifiedInternalDBus.cmd)
+              currentlySendingIndex.push(index)
             }
           }
       }

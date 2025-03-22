@@ -9,7 +9,8 @@ class Cache(
     ways: Int,
     busFilter: ((Stage, MemBus, MemBus) => Unit) => Unit,
     prefetcher: Option[PrefetchService] = None,
-    maxPrefetches: Int = 1
+    maxPrefetches: Int = 1,
+    cacheable: (UInt => Bool) = (_ => True)
 )(implicit config: Config)
     extends Plugin[Pipeline] {
   private val byteIndexBits = log2Up(config.xlen / 8)
@@ -147,6 +148,7 @@ class Cache(
         // either before or in the current cycle
         when(
           !outstandingLoads(external.rsp.id).storeInvalidated &&
+            cacheable(address) &&
             !(storeInCycle &&
               getSignificantBits(address) === getSignificantBits(internal.cmd.address))
         ) {
@@ -295,41 +297,43 @@ class Cache(
             // otherwise the prefetch may get lost
             val prefetchAddress = pref.getNextPrefetchTarget
 
-            val targetWay = wayForAddress(prefetchAddress)
-            val setIndex = getSetIndex(prefetchAddress)
-            val tagBits = getTagBits(prefetchAddress)
+            when(cacheable(prefetchAddress)) {
+              val targetWay = wayForAddress(prefetchAddress)
+              val setIndex = getSetIndex(prefetchAddress)
+              val tagBits = getTagBits(prefetchAddress)
 
-            val alreadyPending = False
+              val alreadyPending = False
 
-            // find out if a load request for the given address is already pending
-            for (i <- 0 until outstandingLoads.length) {
-              val load = outstandingLoads(i)
-              when(
-                getSignificantBits(load.address) === U(
-                  tagBits ## setIndex
-                ) && load.pending && !load.storeInvalidated
-              ) {
-                alreadyPending := True
+              // find out if a load request for the given address is already pending
+              for (i <- 0 until outstandingLoads.length) {
+                val load = outstandingLoads(i)
+                when(
+                  getSignificantBits(load.address) === U(
+                    tagBits ## setIndex
+                  ) && load.pending && !load.storeInvalidated
+                ) {
+                  alreadyPending := True
+                }
               }
-            }
-            when(!targetWay.valid && !alreadyPending) {
-              // add 1 to outstandingPrefetches
-              incrementOutstandingPrefetches := True
+              when(!targetWay.valid && !alreadyPending) {
+                // add 1 to outstandingPrefetches
+                incrementOutstandingPrefetches := True
 
-              externalId := externalId + 1
+                externalId := externalId + 1
 
-              external.cmd.valid := True
-              external.cmd.address := prefetchAddress
-              external.cmd.id := externalId
-              cmdBuffer := external.cmd.payload
+                external.cmd.valid := True
+                external.cmd.address := prefetchAddress
+                external.cmd.id := externalId
+                cmdBuffer := external.cmd.payload
 
-              outstandingLoads(externalId).address := prefetchAddress
-              outstandingLoads(externalId).pending := True
-              outstandingLoads(externalId).internalIds := U(0).resized
-              outstandingLoads(externalId).isPrefetch := True
+                outstandingLoads(externalId).address := prefetchAddress
+                outstandingLoads(externalId).pending := True
+                outstandingLoads(externalId).internalIds := U(0).resized
+                outstandingLoads(externalId).isPrefetch := True
 
-              when(!external.cmd.ready) {
-                sendingBufferedCmd := True
+                when(!external.cmd.ready) {
+                  sendingBufferedCmd := True
+                }
               }
             }
           }

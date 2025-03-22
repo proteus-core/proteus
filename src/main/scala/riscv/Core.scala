@@ -58,7 +58,7 @@ object createStaticPipeline {
         new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
         prefetcher,
         new Cache(sets = 2, ways = 2, backbone.filterIBus, Some(prefetcher)),
-        new Cache(sets = 8, ways = 2, backbone.filterDBus),
+        new Cache(sets = 8, ways = 2, backbone.filterDBus, cacheable = (_ >= 0x80000000L)),
         new CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
         new Timers,
         new MachineMode(pipeline.execute),
@@ -257,7 +257,12 @@ object createDynamicPipeline {
         ),
         prefetcher,
         new Cache(sets = 2, ways = 2, pipeline.backbone.filterIBus, Some(prefetcher)),
-        new Cache(sets = 8, ways = 2, pipeline.backbone.filterDBus),
+        new Cache(
+          sets = 8,
+          ways = 2,
+          busFilter = pipeline.backbone.filterDBus,
+          cacheable = (_ >= 0x80000000L)
+        ),
         new IntAlu(pipeline.intAlus.toSet),
         new Shifter(pipeline.intAlus.toSet),
         new MulDiv(pipeline.intMuls.toSet),
