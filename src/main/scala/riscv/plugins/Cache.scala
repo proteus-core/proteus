@@ -119,7 +119,7 @@ class Cache(
         val storeInvalidated: Bool = Bool()
         val pending: Bool = Bool()
         val isPrefetch: Bool = Bool()
-        val internalIds: UInt = UInt(Math.pow(2, internal.config.idWidth).toInt bits)
+        val internalIds: Bits = Bits(1 << internal.config.idWidth bits)
       }
 
       private val outstandingLoads = Vec.fill(maxId + 1)(RegInit(OutstandingTracker().getZero))
@@ -248,7 +248,7 @@ class Cache(
               outstandingLoads(externalId).address := internal.cmd.address
               outstandingLoads(externalId).pending := True
               outstandingLoads(externalId).isPrefetch := False
-              outstandingLoads(externalId).internalIds := U(0).resized
+              outstandingLoads(externalId).internalIds := B(0).resized
               outstandingLoads(externalId).internalIds(internal.cmd.id) := True
               externalId := externalId + 1
             }
@@ -256,7 +256,7 @@ class Cache(
             outstandingLoads(externalId).address := internal.cmd.address
             outstandingLoads(externalId).pending := True
             outstandingLoads(externalId).isPrefetch := False
-            outstandingLoads(externalId).internalIds := U(0).resized
+            outstandingLoads(externalId).internalIds := B(0).resized
             outstandingLoads(externalId).internalIds(internal.cmd.id) := True
             externalId := externalId + 1
           }
@@ -328,7 +328,7 @@ class Cache(
 
                 outstandingLoads(externalId).address := prefetchAddress
                 outstandingLoads(externalId).pending := True
-                outstandingLoads(externalId).internalIds := U(0).resized
+                outstandingLoads(externalId).internalIds := B(0).resized
                 outstandingLoads(externalId).isPrefetch := True
 
                 when(!external.cmd.ready) {

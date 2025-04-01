@@ -315,15 +315,15 @@ trait PrefetchService {
 
   /** Inform the prefetcher of a load request
     */
-  def notifyLoadRequest(address: UInt): Unit = {}
+  def notifyLoadRequest(address: UInt): Unit
 
   /** Inform the prefetcher of a load response returning from memory
     */
-  def notifyLoadResponseFromMemory(address: UInt, data: UInt): Unit = {}
+  def notifyLoadResponseFromMemory(address: UInt, data: UInt): Unit
 
   /** Inform the prefetcher of a prefetch response returning from memory
     */
-  def notifyPrefetchResponseFromMemory(address: UInt, data: UInt): Unit = {}
+  def notifyPrefetchResponseFromMemory(address: UInt, data: UInt): Unit
 
   /** Check if the prefetcher has a prefetch target ready
     */
