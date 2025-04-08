@@ -151,6 +151,7 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
           currentlySendingIndex.setIdle()
           cmdBuffer.setIdle()
           when(!cmdBuffer.write) {
+            nextId.increment()
             busId2StageIndex(nextId).stageIndex := currentlySendingIndex.payload
             when(!sameCycleReturn) {
               busId2StageIndex(nextId).cmdSent := True
@@ -159,7 +160,6 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
             currentlyInserting.valid := True
             currentlyInserting.payload.stageIndex := currentlySendingIndex.payload
           }
-          nextId.increment()
         }
       }
 
@@ -179,6 +179,7 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
               currentlySendingIndex.setIdle()
               cmdBuffer.setIdle()
               when(!cmd.write) {
+                nextId.increment()
                 busId2StageIndex(nextId).stageIndex := U(index).resized
                 when(!sameCycleReturn) {
                   busId2StageIndex(nextId).cmdSent := True
@@ -187,7 +188,6 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
                 currentlyInserting.valid := True
                 currentlyInserting.payload.stageIndex := index
               }
-              nextId.increment()
             } otherwise {
               movingToCmdBuffer.push(index)
               cmdBuffer.push(unifiedInternalDBus.cmd)

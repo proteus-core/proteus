@@ -312,8 +312,26 @@ trait BranchTargetPredictorService {
 }
 
 trait PrefetchService {
-  def updatePrefetcherState(address: UInt, insignificantBits: Int): Unit
-  def getPrefetchTarget: UInt
+
+  /** Inform the prefetcher of a load request
+    */
+  def notifyLoadRequest(address: UInt): Unit
+
+  /** Inform the prefetcher of a load response returning from memory
+    */
+  def notifyLoadResponseFromMemory(address: UInt, data: UInt): Unit
+
+  /** Inform the prefetcher of a prefetch response returning from memory
+    */
+  def notifyPrefetchResponseFromMemory(address: UInt, data: UInt): Unit
+
+  /** Check if the prefetcher has a prefetch target ready
+    */
+  def hasPrefetchTarget: Bool
+
+  /** Get the next prefetch target from the prefetcher
+    */
+  def getNextPrefetchTarget: UInt
 }
 
 trait TrapService {
