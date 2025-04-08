@@ -6,9 +6,7 @@ import spinal.lib._
 
 import scala.collection.mutable
 
-class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
-    extends MemoryBackbone
-    with Resettable {
+class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with Resettable {
 
   private var activeFlush: Bool = null
 
@@ -54,12 +52,12 @@ class DynamicMemoryBackbone(stageCount: Int)(implicit config: Config)
       private val movingToCmdBuffer = Flow(UInt(config.dbusConfig.idWidth bits))
       movingToCmdBuffer.setIdle()
 
-      private val nextId = Counter(config.dbusConfig.idWidth bits)
-      private val busId2StageIndex = Vec.fill(
-        UInt(config.dbusConfig.idWidth bits).maxValue.intValue() + 1
-      )(RegInit(IdMeta().getZero))
+      private val idBufferSize = UInt(config.dbusConfig.idWidth bits).maxValue.intValue()
 
-      for (i <- 0 until stageCount) {
+      private val nextId = Counter(0, idBufferSize)
+      private val busId2StageIndex = Vec.fill(idBufferSize + 1)(RegInit(IdMeta().getZero))
+
+      for (i <- 0 until idBufferSize + 1) {
         when(activeFlush) {
           busId2StageIndex(i).invalidated := True
         }

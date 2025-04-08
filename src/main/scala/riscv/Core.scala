@@ -215,10 +215,7 @@ object createDynamicPipeline {
       override val retirementStage = new Stage("RET")
       override val parallelStages: Seq[Stage] = rsStages ++ loadStages
       override val stages = issuePipeline.stages ++ parallelStages :+ retirementStage
-      override val backbone =
-        new memory.DynamicMemoryBackbone(
-          loadStages.size + 1
-        ) // +1 for write stage (which also uses an ID currently)
+      override val backbone = new memory.DynamicMemoryBackbone
     }
 
     pipeline.issuePipeline.addPlugins(

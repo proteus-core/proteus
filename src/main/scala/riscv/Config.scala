@@ -1,5 +1,7 @@
 package riscv
 
+import spinal.core.log2Up
+
 sealed trait BaseIsa {
   val xlen: Int
   val numRegs: Int
@@ -42,13 +44,13 @@ class Config(val baseIsa: BaseIsa, val debug: Boolean = true) {
   )
   def readDbusConfig = MemBusConfig(
     addressWidth = baseIsa.xlen,
-    idWidth = 2,
+    idWidth = log2Up(parallelLoads + 1),
     dataWidth = memBusWidth,
     readWrite = false
   )
   def dbusConfig = MemBusConfig(
     addressWidth = baseIsa.xlen,
-    idWidth = 2,
+    idWidth = log2Up(parallelLoads + 1),
     dataWidth = memBusWidth
   )
 }
