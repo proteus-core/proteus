@@ -20,6 +20,11 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
       val cdbBMetaData = new DynBundle[PipelineData[spinal.core.Data]]
       val registerBundle = new DynBundle[PipelineData[spinal.core.Data]]
 
+      pipeline.serviceOption[SpeculationService] foreach { spec =>
+        spec.addIsSpeculativeCF(cdbBMetaData)
+        spec.addSpeculationDependency(cdbBMetaData)
+      }
+
       private val ret = pipeline.retirementStage
       private val ls = pipeline.loadStages.head // TODO !!!
       for (

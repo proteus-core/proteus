@@ -20,6 +20,14 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
     val alu = pipeline.service[IntAluService]
     val issuer = pipeline.service[IssueService]
 
+    // if the speculation tracking is active, mark branches initially as speculative
+    def speculationMap: Map[PipelineData[_ <: Data], Bool] = {
+      pipeline.serviceOption[SpeculationService] match {
+        case Some(spec) => spec.speculativeCFMap()
+        case None => Map()
+      }
+    }
+
     pipeline.service[DecoderService].configure { config =>
       config.addDefault(
         Map(
@@ -36,7 +44,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
         Map(
           Data.BU_IS_BRANCH -> True,
           Data.BU_WRITE_RET_ADDR_TO_RD -> True
-        )
+        ) ++ speculationMap
       )
 
       issuer.setDestinations(Opcodes.JAL, branchStages)
@@ -50,14 +58,14 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
           Data.BU_IS_BRANCH -> True,
           Data.BU_WRITE_RET_ADDR_TO_RD -> True,
           Data.BU_IGNORE_TARGET_LSB -> True
-        )
+        ) ++ speculationMap
       )
 
       issuer.setDestinations(Opcodes.JALR, branchStages)
 
       alu.addOperation(Opcodes.JALR, alu.AluOp.ADD, alu.Src1Select.RS1, alu.Src2Select.IMM)
 
-      val branchConditions = Map(
+      val branchConditions: Map[MaskedLiteral, Data] = Map(
         Opcodes.BEQ -> BranchCondition.EQ,
         Opcodes.BNE -> BranchCondition.NE,
         Opcodes.BLT -> BranchCondition.LT,
@@ -73,7 +81,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
           Map(
             Data.BU_IS_BRANCH -> True,
             Data.BU_CONDITION -> condition
-          )
+          ) ++ speculationMap
         )
 
         issuer.setDestinations(opcode, branchStages)
@@ -127,6 +135,19 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
           when(condition =/= BranchCondition.NONE) {
             arbitration.rs1Needed := True
             arbitration.rs2Needed := True
+          }
+
+          pipeline.serviceOption[SpeculationService] foreach { spec =>
+            {
+              // mark correct speculations as non-speculative (incorrect predictions will remain speculative)
+              when(
+                output(pipeline.data.NEXT_PC) === pipeline
+                  .service[BranchTargetPredictorService]
+                  .predictedPc(stage)
+              ) {
+                spec.isSpeculativeCFOutput(stage) := False
+              }
+            }
           }
 
           when(branchTaken && !arbitration.isStalled) {

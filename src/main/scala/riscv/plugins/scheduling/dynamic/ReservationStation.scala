@@ -2,7 +2,7 @@ package riscv.plugins.scheduling.dynamic
 
 import riscv._
 import spinal.core._
-import spinal.lib.{Flow, Stream}
+import spinal.lib._
 
 case class RegisterSource(indexBits: BitCount) extends Bundle {
   val priorInstructionNext: Flow[UInt] = Flow(UInt(indexBits))
@@ -18,13 +18,21 @@ case class RegisterSource(indexBits: BitCount) extends Bundle {
   }
 }
 
-case class InstructionDependencies(indexBits: BitCount) extends Bundle {
+case class InstructionDependencies(indexBits: BitCount, speculationTracking: Boolean)
+    extends Bundle {
   val rs1: RegisterSource = RegisterSource(indexBits)
   val rs2: RegisterSource = RegisterSource(indexBits)
+
+  val priorBranchNext: Flow[UInt] = if (speculationTracking) Flow(UInt(indexBits)) else null
+  val priorBranch: Flow[UInt] =
+    if (speculationTracking) RegNext(priorBranchNext).init(priorBranchNext.getZero) else null
 
   def build(): Unit = {
     rs1.build()
     rs2.build()
+    if (speculationTracking) {
+      priorBranchNext := priorBranch
+    }
   }
 
   def reset(): Unit = {
@@ -45,7 +53,9 @@ class ReservationStation(
     with Resettable {
   setPartialName(s"RS_${exeStage.stageName}")
 
-  private val meta = InstructionDependencies(rob.indexBits)
+  private val speculationTracking = pipeline.hasService[SpeculationService]
+
+  private val meta = InstructionDependencies(rob.indexBits, speculationTracking)
 
   private val robEntryIndex = Reg(UInt(rob.indexBits)).init(0)
 
@@ -84,13 +94,34 @@ class ReservationStation(
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
     val currentRs1Prior, currentRs2Prior = Flow(UInt(rob.indexBits))
+    val branchWaiting: Flow[UInt] = if (speculationTracking) Flow(UInt(rob.indexBits)) else null
 
     when(state === State.WAITING_FOR_ARGS) {
       currentRs1Prior := meta.rs1.priorInstruction
       currentRs2Prior := meta.rs2.priorInstruction
+      if (speculationTracking) {
+        branchWaiting := meta.priorBranch
+      }
     } otherwise {
       currentRs1Prior := meta.rs1.priorInstructionNext
       currentRs2Prior := meta.rs2.priorInstructionNext
+      if (speculationTracking) {
+        branchWaiting := meta.priorBranchNext
+      }
+    }
+
+    pipeline.serviceOption[SpeculationService] foreach { spec =>
+      {
+        // keep track of incoming branch updates, even if already executing
+        when(branchWaiting.valid && cdbMessage.robIndex === branchWaiting.payload) {
+          val pending = spec.speculationDependency(cdbMessage.metadata)
+          when(pending.valid) {
+            meta.priorBranch.push(pending.payload)
+          } elsewhen (!spec.isSpeculativeCF(cdbMessage.metadata)) {
+            meta.priorBranch.setIdle()
+          }
+        }
+      }
     }
 
     when(state === State.WAITING_FOR_ARGS || stateNext === State.WAITING_FOR_ARGS) {
@@ -167,8 +198,24 @@ class ReservationStation(
         dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
       }
 
-      when(exeStage.output(pipeline.data.RD_DATA_VALID)) {
-        cdbStream.valid := True
+      pipeline.serviceOption[SpeculationService] foreach { spec =>
+        {
+          spec.speculationDependency(cdbStream.payload.metadata) := meta.priorBranch
+          spec.isSpeculativeCF(cdbStream.metadata) := spec.isSpeculativeCFOutput(exeStage)
+        }
+      }
+
+      pipeline.serviceOption[SpeculationService] match {
+        case Some(spec) =>
+          when(
+            exeStage.output(pipeline.data.RD_DATA_VALID) || spec.isSpeculativeCFInput(exeStage)
+          ) {
+            cdbStream.valid := True
+          }
+        case None =>
+          when(exeStage.output(pipeline.data.RD_DATA_VALID)) {
+            cdbStream.valid := True
+          }
       }
 
       dispatchStream.payload.willCdbUpdate := cdbStream.valid || pipeline
@@ -222,6 +269,12 @@ class ReservationStation(
     regs.shift := True
 
     meta.reset()
+
+    if (speculationTracking) {
+      val dependentJump = Flow(UInt(rob.indexBits))
+      dependentJump := rob.lastSpeculativeCFInstruction
+      meta.priorBranchNext := dependentJump
+    }
 
     def dependencySetup(
         metaRs: RegisterSource,

@@ -141,6 +141,13 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
       } otherwise {
         fetchStage.output(Data.PREDICTED_PC) := fetchStage.value(pipeline.data.NEXT_PC)
       }
+
+      // mark branch prediction as speculative
+      pipeline.serviceOption[SpeculationService] foreach { spec =>
+        {
+          spec.isSpeculativeCFOutput(fetchStage) := predictIo.predictedAddress.valid
+        }
+      }
     }
   }
 
