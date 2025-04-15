@@ -461,6 +461,16 @@ trait Resettable {
   def pipelineReset(): Unit
 }
 
+trait SpeculationService {
+  def isSpeculativeCFOutput(stage: Stage): Bool
+  def isSpeculativeCFInput(stage: Stage): Bool
+  def isSpeculativeCF(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+  def addIsSpeculativeCF(bundle: DynBundle[PipelineData[Data]]): Unit
+  def addSpeculationDependency(bundle: DynBundle[PipelineData[Data]]): Unit
+  def speculationDependency(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Flow[UInt]
+  def speculativeCFMap(): Map[PipelineData[_ <: Data], Bool]
+}
+
 trait FenceService {
   def isFence(stage: Stage): Bool
 }

@@ -276,7 +276,8 @@ object createDynamicPipeline {
         new Interrupts(pipeline.retirementStage),
         new Timers,
         new Fence(pipeline.rsStages.toSet),
-        new Marker
+        new Marker,
+        new SpeculationTracking
       ) ++ extraPlugins
     )
 

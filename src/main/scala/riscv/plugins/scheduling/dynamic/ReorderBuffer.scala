@@ -64,6 +64,8 @@ class ReorderBuffer(
   private val fenceDetected = RegNext(fenceDetectedNext).init(False)
   val isAvailable = (!isFull || willRetire) && !fenceDetectedNext
 
+  val lastSpeculativeCFInstruction = Reg(Flow(UInt(indexBits)))
+
   val pushInCycle = Bool()
   pushInCycle := False
   val pushedEntry = RobEntry(retirementRegisters)
@@ -73,6 +75,7 @@ class ReorderBuffer(
     oldestIndex.clear()
     newestIndex.clear()
     isFull := False
+    lastSpeculativeCFInstruction.setIdle()
     fenceDetected := False
   }
 
@@ -147,6 +150,12 @@ class ReorderBuffer(
       fenceDetected := True
     }
 
+    pipeline.serviceOption[SpeculationService] foreach { spec =>
+      when(spec.isSpeculativeCFOutput(issueStage)) {
+        lastSpeculativeCFInstruction.push(newestIndex)
+      }
+    }
+
     val rs1 = Flow(UInt(5 bits))
     val rs2 = Flow(UInt(5 bits))
 
@@ -204,6 +213,16 @@ class ReorderBuffer(
     robEntries(cdbMessage.robIndex).cdbUpdated := True
     robEntries(cdbMessage.robIndex).registerMap
       .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
+    pipeline.serviceOption[SpeculationService] foreach { spec =>
+      // if this instruction's CF change was correctly predicted, disregard it as the most recent speculative instruction
+      when(
+        lastSpeculativeCFInstruction.valid &&
+          lastSpeculativeCFInstruction.payload === cdbMessage.robIndex &&
+          !spec.isSpeculativeCF(pushedEntry.registerMap)
+      ) {
+        lastSpeculativeCFInstruction := spec.speculationDependency(cdbMessage.metadata).resized
+      }
+    }
   }
 
   def hasPendingStoreForEntry(robIndex: UInt, address: UInt): Bool = {
