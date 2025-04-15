@@ -62,9 +62,11 @@ trait DynamicPipeline extends Pipeline {
       service[BranchTargetPredictorService].predictedPc(stage)
       service[JumpService].jumpRequested(stage)
       service[FenceService].isFence(stage)
+      service[LsuService].stlSpeculation(stage)
 
       serviceOption[SpeculationService] foreach { spec =>
         spec.isSpeculativeCFOutput(stage)
+        spec.isSpeculativeMDOutput(stage)
       }
     }
 

@@ -22,7 +22,7 @@ object BaseIsa {
   }
 }
 
-class Config(val baseIsa: BaseIsa, val debug: Boolean = true) {
+class Config(val baseIsa: BaseIsa, val debug: Boolean = true, val stlSpec: Boolean = true) {
   def xlen = baseIsa.xlen
   def numRegs = baseIsa.numRegs
 
@@ -35,6 +35,10 @@ class Config(val baseIsa: BaseIsa, val debug: Boolean = true) {
   def parallelMulDivs: Int = 2
 
   def parallelLoads: Int = 3
+
+  def addressBasedPsf: Boolean = true
+
+  def addressBasedSsb: Boolean = true
 
   def ibusConfig = MemBusConfig(
     addressWidth = baseIsa.xlen,

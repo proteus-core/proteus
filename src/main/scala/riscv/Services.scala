@@ -209,6 +209,16 @@ trait LsuService {
   def addressOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt
 
   def operationOutput(stage: Stage): SpinalEnumCraft[LsuOperationType.type]
+
+  def stlSpeculation(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+
+  def stlSpeculation(stage: Stage): Bool
+
+  def addStlSpeculation(bundle: DynBundle[PipelineData[Data]]): Unit
+
+  def psfAddress(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt
+
+  def addPsfAddress(bundle: DynBundle[PipelineData[Data]]): Unit
 }
 
 trait ScheduleService {
@@ -469,6 +479,10 @@ trait SpeculationService {
   def addSpeculationDependency(bundle: DynBundle[PipelineData[Data]]): Unit
   def speculationDependency(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Flow[UInt]
   def speculativeCFMap(): Map[PipelineData[_ <: Data], Bool]
+  def addIsSpeculativeMD(bundle: DynBundle[PipelineData[Data]]): Unit
+  def isSpeculativeMD(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+  def isSpeculativeMDInput(stage: Stage): Bool
+  def isSpeculativeMDOutput(stage: Stage): Bool
 }
 
 trait FenceService {

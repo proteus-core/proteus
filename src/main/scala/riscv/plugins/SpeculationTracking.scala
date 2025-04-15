@@ -10,14 +10,17 @@ class SpeculationTracking(implicit config: Config)
 
   object SpeculationTracking {
     object CF_SPECULATIVE extends PipelineData(Bool())
+    object MD_SPECULATIVE extends PipelineData(Bool())
     object SPECULATIVE_DEP extends PipelineData(Flow(UInt(log2Up(config.robEntries) bits)))
+    object MD_PSF_ADDRESS extends PipelineData(UInt(config.xlen bits))
   }
 
   override def setup(): Unit = {
     pipeline.service[DecoderService].configure { config =>
       config.addDefault(
         Map(
-          SpeculationTracking.CF_SPECULATIVE -> False
+          SpeculationTracking.CF_SPECULATIVE -> False,
+          SpeculationTracking.MD_SPECULATIVE -> False
         )
       )
     }
@@ -43,6 +46,25 @@ class SpeculationTracking(implicit config: Config)
     bundle.addElement(
       SpeculationTracking.CF_SPECULATIVE.asInstanceOf[PipelineData[Data]],
       SpeculationTracking.CF_SPECULATIVE.dataType
+    )
+  }
+
+  override def isSpeculativeMDOutput(stage: Stage): Bool = {
+    stage.output(SpeculationTracking.MD_SPECULATIVE)
+  }
+
+  override def isSpeculativeMDInput(stage: Stage): Bool = {
+    stage.input(SpeculationTracking.MD_SPECULATIVE)
+  }
+
+  override def isSpeculativeMD(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
+    bundle.elementAs[Bool](SpeculationTracking.MD_SPECULATIVE.asInstanceOf[PipelineData[Data]])
+  }
+
+  override def addIsSpeculativeMD(bundle: DynBundle[PipelineData[Data]]): Unit = {
+    bundle.addElement(
+      SpeculationTracking.MD_SPECULATIVE.asInstanceOf[PipelineData[Data]],
+      SpeculationTracking.MD_SPECULATIVE.dataType
     )
   }
 

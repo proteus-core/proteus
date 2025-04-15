@@ -22,6 +22,7 @@ case class RsData(indexBits: BitCount)(implicit config: Config) extends Bundle {
   val updatingInstructionFinished = Bool()
   val updatingInstructionIndex = UInt(indexBits)
   val updatingInstructionValue = UInt(config.xlen bits)
+  val updatingInstructionLoadSpeculation = Bool()
 }
 
 case class EntryMetadata(indexBits: BitCount)(implicit config: Config) extends Bundle {
@@ -60,6 +61,8 @@ class ReorderBuffer(
   private val isFull = RegNext(isFullNext).init(False)
   private val willRetire = False
 
+  private val flushCounter = Reg(UInt(config.xlen bits)).init(0)
+
   private val fenceDetectedNext = Bool()
   private val fenceDetected = RegNext(fenceDetectedNext).init(False)
   val isAvailable = (!isFull || willRetire) && !fenceDetectedNext
@@ -70,6 +73,15 @@ class ReorderBuffer(
   pushInCycle := False
   val pushedEntry = RobEntry(retirementRegisters)
   pushedEntry := RobEntry(retirementRegisters).getZero
+
+  val previousStoreBuffer = RegInit(UInt(config.xlen bits).getZero)
+  val previousStoreAddress =
+    if (config.addressBasedPsf) RegInit(UInt(config.xlen bits).getZero) else null
+
+  val ssbMispredictions = RegInit(UInt(config.xlen bits).getZero)
+  val ssbPredictions = RegInit(UInt(config.xlen bits).getZero)
+  val psfMispredictions = RegInit(UInt(config.xlen bits).getZero)
+  val psfPredictions = RegInit(UInt(config.xlen bits).getZero)
 
   def reset(): Unit = {
     oldestIndex.clear()
@@ -150,10 +162,13 @@ class ReorderBuffer(
       fenceDetected := True
     }
 
+    pipeline.service[LsuService].stlSpeculation(pushedEntry.registerMap) := False
+
     pipeline.serviceOption[SpeculationService] foreach { spec =>
       when(spec.isSpeculativeCFOutput(issueStage)) {
         lastSpeculativeCFInstruction.push(newestIndex)
       }
+      spec.isSpeculativeMD(pushedEntry.registerMap) := False
     }
 
     val rs1 = Flow(UInt(5 bits))
@@ -193,6 +208,9 @@ class ReorderBuffer(
         rsMeta.updatingInstructionValue := entry.registerMap.elementAs[UInt](
           pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]
         )
+        pipeline.serviceOption[SpeculationService] foreach { spec =>
+          rsMeta.updatingInstructionLoadSpeculation := spec.isSpeculativeMD(entry.registerMap)
+        }
       }
     }
 
@@ -210,24 +228,41 @@ class ReorderBuffer(
   }
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
-    robEntries(cdbMessage.robIndex).cdbUpdated := True
-    robEntries(cdbMessage.robIndex).registerMap
-      .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
-    pipeline.serviceOption[SpeculationService] foreach { spec =>
-      // if this instruction's CF change was correctly predicted, disregard it as the most recent speculative instruction
-      when(
-        lastSpeculativeCFInstruction.valid &&
-          lastSpeculativeCFInstruction.payload === cdbMessage.robIndex &&
-          !spec.isSpeculativeCF(pushedEntry.registerMap)
-      ) {
-        lastSpeculativeCFInstruction := spec.speculationDependency(cdbMessage.metadata).resized
+    // prevent CDB updates from PSF-predicted loads for now
+    when(!robEntries(cdbMessage.robIndex).cdbUpdated) {
+      robEntries(cdbMessage.robIndex).cdbUpdated := True
+      robEntries(cdbMessage.robIndex).registerMap
+        .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
+
+      val lsu = pipeline.service[LsuService]
+      lsu.psfAddress(robEntries(cdbMessage.robIndex).registerMap) := lsu.psfAddress(
+        cdbMessage.metadata
+      )
+
+      pipeline.serviceOption[SpeculationService] foreach { spec =>
+        // mark PSF speculation
+        spec.isSpeculativeMD(robEntries(cdbMessage.robIndex).registerMap) := spec.isSpeculativeMD(
+          cdbMessage.metadata
+        )
+
+        // if this instruction's CF change was correctly predicted, disregard it as the most recent speculative instruction
+        when(
+          lastSpeculativeCFInstruction.valid &&
+            lastSpeculativeCFInstruction.payload === cdbMessage.robIndex &&
+            !spec.isSpeculativeCF(cdbMessage.metadata)
+        ) {
+          lastSpeculativeCFInstruction := spec.speculationDependency(cdbMessage.metadata).resized
+        }
       }
     }
   }
 
-  def hasPendingStoreForEntry(robIndex: UInt, address: UInt): Bool = {
-    val found = Bool()
-    found := False
+  def hasPendingStoreForEntry(robIndex: UInt, address: UInt): (Bool, Bool) = {
+    val foundMatch = Bool()
+    foundMatch := False
+
+    val foundUnknown = Bool()
+    foundUnknown := False
 
     val wordAddress = byte2WordAddress(address)
 
@@ -248,8 +283,62 @@ class ReorderBuffer(
         isValidAbsoluteIndex(nth)
           && isOlder
           && entryIsStore
-          && ((entryAddressValid && addressesMatch) || !entryAddressValid)
       ) {
+        when(entryAddressValid && addressesMatch) {
+          foundMatch := True
+        }
+        when(!entryAddressValid) {
+          foundUnknown := True
+        }
+      }
+    }
+
+    if (config.stlSpec) {
+      when(foundUnknown && !foundMatch) {
+        ssbPredictions := ssbPredictions + 1
+      }
+    }
+    (foundMatch, foundUnknown)
+  }
+
+  private def hasSpeculatingLoad: Bool = {
+    val found = Bool()
+    found := False
+
+    val lsuService = pipeline.service[LsuService]
+    val oldestEntry = robEntries(oldestIndex.value)
+    val storeValue =
+      oldestEntry.registerMap.element(pipeline.data.RS2_DATA.asInstanceOf[PipelineData[Data]])
+
+    val wordAddress = byte2WordAddress(lsuService.addressOfBundle(oldestEntry.registerMap))
+
+    for (nth <- 0 until capacity) {
+      val entry = robEntries(nth)
+      val index = UInt(indexBits)
+      index := nth
+
+      val entryIsLoad = lsuService.operationOfBundle(entry.registerMap) === LsuOperationType.LOAD
+      val entryAddressValid = lsuService.addressValidOfBundle(entry.registerMap)
+      val entryAddress = lsuService.addressOfBundle(entry.registerMap)
+      val entryWordAddress = byte2WordAddress(entryAddress)
+      val addressesMatch = entryWordAddress === wordAddress
+      val loadValue =
+        entry.registerMap.element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
+      val valueValid = entry.cdbUpdated
+
+      val speculative = pipeline.service[LsuService].stlSpeculation(entry.registerMap)
+
+      val entriesMatch: Bool = if (config.addressBasedSsb) {
+        isValidAbsoluteIndex(
+          nth
+        ) && entryIsLoad && (entryAddressValid && addressesMatch && speculative)
+      } else {
+        isValidAbsoluteIndex(
+          nth
+        ) && entryIsLoad && (entryAddressValid && addressesMatch && speculative) && (!valueValid || storeValue =/= loadValue)
+      }
+
+      when(entriesMatch) {
         found := True
       }
     }
@@ -264,6 +353,48 @@ class ReorderBuffer(
       pipeline
         .service[JumpService]
         .jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
+    }
+
+    val lsu = pipeline.service[LsuService]
+
+    if (config.stlSpec) {
+      when(
+        lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.STORE
+      ) {
+        previousStoreBuffer := rdbMessage.registerMap.elementAs[UInt](
+          pipeline.data.RS2_DATA.asInstanceOf[PipelineData[Data]]
+        )
+        if (config.addressBasedPsf) {
+          previousStoreAddress := lsu.addressOfBundle(rdbMessage.registerMap)
+        }
+      }
+
+      // detect wrongly forwarded PSF
+      when(
+        lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.LOAD && robEntries(
+          rdbMessage.robIndex
+        ).cdbUpdated
+      ) {
+        val psfMismatch: Bool = if (config.addressBasedPsf) {
+          lsu.psfAddress(robEntries(rdbMessage.robIndex).registerMap) =/= lsu.addressOfBundle(
+            rdbMessage.registerMap
+          )
+        } else {
+          rdbMessage.registerMap.element(
+            pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]
+          ) =/= robEntries(rdbMessage.robIndex).registerMap
+            .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
+        }
+
+        when(psfMismatch) {
+          psfMispredictions := psfMispredictions + 1
+          pipeline
+            .service[JumpService]
+            .jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
+        } otherwise {
+          psfPredictions := psfPredictions + 1
+        }
+      }
     }
 
     robEntries(rdbMessage.robIndex).rdbUpdated := True
@@ -289,6 +420,8 @@ class ReorderBuffer(
       ret.input(register) := oldestEntry.registerMap.element(register)
     }
 
+    val lsuService = pipeline.service[LsuService]
+
     // FIXME this doesn't seem the correct place to do this...
     ret.connectOutputDefaults()
     ret.connectLastValues()
@@ -304,6 +437,21 @@ class ReorderBuffer(
         oldestIndex.increment()
         willRetire := True
         isFullNext := False
+
+        if (config.stlSpec) {
+          when(
+            lsuService.operationOfBundle(
+              oldestEntry.registerMap
+            ) === LsuOperationType.STORE
+          ) {
+            when(hasSpeculatingLoad) {
+              ssbMispredictions := ssbMispredictions + 1
+              pipeline
+                .service[JumpService]
+                .flushPipeline(ret)
+            }
+          }
+        }
       }
     }
 
@@ -319,5 +467,6 @@ class ReorderBuffer(
 
   override def pipelineReset(): Unit = {
     reset()
+    flushCounter := flushCounter + 1
   }
 }
