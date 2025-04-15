@@ -40,11 +40,33 @@ class LoadManager(
     val ret = Bool()
     ret := False
     val address = pipeline.service[LsuService].addressOfBundle(rdbMessage.registerMap)
-    val hasPendingStore = rob.hasPendingStoreForEntry(rdbMessage.robIndex, address)
-    when(isAvailable && !hasPendingStore) {
-      ret := True
-      storedMessage := rdbMessage
-      stateNext := State.EXECUTING
+    val (matchingStore, unknownStore) = rob.hasPendingStoreForEntry(rdbMessage.robIndex, address)
+
+    if (config.stlSpec) {
+      when(isAvailable && !matchingStore) {
+        ret := True
+        stateNext := State.EXECUTING
+        storedMessage := rdbMessage
+        val targetRobEntry = rob.robEntries(rdbMessage.robIndex)
+
+        // TODO: this is very ugly
+        pipeline.service[LsuService].addressOfBundle(targetRobEntry.registerMap) := address
+        pipeline.service[LsuService].addressValidOfBundle(targetRobEntry.registerMap) := True
+        when(unknownStore) {
+          pipeline.service[LsuService].stlSpeculation(storedMessage.registerMap) := True
+          pipeline.service[LsuService].stlSpeculation(targetRobEntry.registerMap) := True
+          pipeline.serviceOption[SpeculationService] foreach { spec =>
+            spec.isSpeculativeMD(storedMessage.registerMap) := True
+            spec.isSpeculativeMD(targetRobEntry.registerMap) := True
+          }
+        }
+      }
+    } else {
+      when(isAvailable && !matchingStore && !unknownStore) {
+        ret := True
+        stateNext := State.EXECUTING
+        storedMessage := rdbMessage
+      }
     }
     ret
   }
@@ -79,10 +101,18 @@ class LoadManager(
     rdbStream.valid := False
     rdbStream.payload := outputCache
 
+    val address = pipeline.service[LsuService].addressOfBundle(storedMessage.registerMap)
+
     when(state === State.WAITING_FOR_STORE && !activeFlush) {
-      val address = pipeline.service[LsuService].addressOfBundle(storedMessage.registerMap)
-      when(!rob.hasPendingStoreForEntry(storedMessage.robIndex, address)) {
-        state := State.EXECUTING
+      val (matching, unknown) = rob.hasPendingStoreForEntry(storedMessage.robIndex, address)
+      if (config.stlSpec) {
+        when(!matching) {
+          state := State.EXECUTING
+        }
+      } else {
+        when(!matching && !unknown) {
+          state := State.EXECUTING
+        }
       }
     }
 
@@ -91,6 +121,7 @@ class LoadManager(
       rdbStream.payload.robIndex := storedMessage.robIndex
       rdbStream.payload.willCdbUpdate := True
       for (register <- retirementRegisters.keys) {
+        // speculation flags are also propagated here
         rdbStream.payload.registerMap.element(register) := loadStage.output(register)
       }
       outputCache := rdbStream.payload
@@ -98,6 +129,13 @@ class LoadManager(
       cdbStream.valid := True
       cdbStream.payload.writeValue := loadStage.output(pipeline.data.RD_DATA)
       cdbStream.payload.robIndex := storedMessage.robIndex
+      // for loads that did not have a PSF prediction, set the correct address to prevent a pipeline flush
+      pipeline.service[LsuService].psfAddress(cdbStream.payload.metadata) := address
+
+      pipeline.serviceOption[SpeculationService] foreach { spec =>
+        spec.isSpeculativeMD(cdbStream.metadata) := spec.isSpeculativeMD(storedMessage.registerMap)
+      }
+
       resultCdbMessage := cdbStream.payload
 
       rdbWaitingNext := !rdbStream.ready
