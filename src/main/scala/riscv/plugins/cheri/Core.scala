@@ -38,6 +38,7 @@ object createCheriPipeline {
         new rvp.RegisterFileAccessor(pipeline.decode, pipeline.writeback),
         new rvp.IntAlu(Set(pipeline.execute)),
         new rvp.Shifter(Set(pipeline.execute)),
+        new rvp.Conditional(Set(pipeline.execute)),
         new rvp.memory.Lsu(Set(pipeline.memory), Seq(pipeline.memory), pipeline.memory),
         new rvp.BranchUnit(Set(pipeline.execute)),
         new rvp.scheduling.static.PcManager(0x80000000L),

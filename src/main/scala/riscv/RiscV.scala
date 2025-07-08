@@ -65,6 +65,9 @@ object Opcodes {
   val REMU = M"0000001----------111-----0110011"
 
   val FENCE = M"0000-------------000-----0001111"
+
+  val CZEROEQZ = M"0000111----------101-----0110011"
+  val CZERONEZ = M"0000111----------111-----0110011"
 }
 
 case class Extension(char: Char) {
