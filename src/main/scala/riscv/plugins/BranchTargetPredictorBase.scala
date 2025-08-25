@@ -66,6 +66,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
   private object Data {
     object PREDICTED_PC extends PipelineData(UInt(config.xlen bits))
     object PREDICTED_JUMP extends PipelineData(Bool())
+    object PREVENT_FLUSH extends PipelineData(Bool())
   }
 
   override def predictedPc(stage: Stage): UInt = {
@@ -76,11 +77,21 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
     stage.input(Data.PREDICTED_PC) := pc
   }
 
+  override def preventFlush(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Unit = {
+    bundle.elementAs[Bool](Data.PREVENT_FLUSH.asInstanceOf[PipelineData[Data]]) := True
+    pipeline.service[JumpService].jumpOfBundle(bundle) := False
+  }
+
+  override def predictedPc(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt = {
+    bundle.elementAs[UInt](Data.PREDICTED_PC.asInstanceOf[PipelineData[Data]])
+  }
+
   override def setup(): Unit = {
     pipeline.service[DecoderService].configure { config =>
       config.addDefault(
         Map(
-          Data.PREDICTED_JUMP -> False
+          Data.PREDICTED_JUMP -> False,
+          Data.PREVENT_FLUSH -> False
         )
       )
     }
@@ -118,8 +129,9 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
         jumpIo.currentPc := value(pipeline.data.PC)
         jumpIo.target := value(pipeline.data.NEXT_PC)
 
-        // HACK this forces the jump service to restart the pipeline from NEXT_PC
-        jumpService.jumpRequested(jumpStage) := True
+        when(!value(Data.PREVENT_FLUSH)) {
+          jumpService.jumpRequested(jumpStage) := True
+        }
       }
 
       when(arbitration.isDone && value(Data.PREDICTED_JUMP)) {

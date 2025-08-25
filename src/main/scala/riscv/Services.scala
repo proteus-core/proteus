@@ -139,7 +139,7 @@ object LsuOperationType extends SpinalEnum {
 }
 
 object LsuAccessWidth extends SpinalEnum {
-  val B, H, W = newElement()
+  val B, H, W = newElement() // TODO: this could mess with memory disambiguation predictors
 }
 
 trait LsuAddressTranslator {
@@ -219,6 +219,20 @@ trait LsuService {
   def psfAddress(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt
 
   def addPsfAddress(bundle: DynBundle[PipelineData[Data]]): Unit
+
+  def address(stage: Stage): UInt
+
+  def psfMisspeculation(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+
+  def addPsfMisspeculation(bundle: DynBundle[PipelineData[Data]]): Unit
+
+  def width(
+      bundle: Bundle with DynBundleAccess[PipelineData[Data]]
+  ): SpinalEnumCraft[LsuAccessWidth.type]
+
+  def widthOut(stage: Stage): SpinalEnumCraft[LsuAccessWidth.type]
+
+  def psfMisspeculationRegister: PipelineData[Data]
 }
 
 trait ScheduleService {
@@ -318,7 +332,12 @@ trait JumpService {
 
 trait BranchTargetPredictorService {
   def predictedPc(stage: Stage): UInt
+
   def setPredictedPc(stage: Stage, pc: UInt): Unit
+
+  def predictedPc(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt
+
+  def preventFlush(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Unit
 }
 
 trait PrefetchService {

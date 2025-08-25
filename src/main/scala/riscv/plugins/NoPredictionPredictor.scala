@@ -27,4 +27,9 @@ class NoPredictionPredictor(fetchStage: Stage, executeStage: Stage)
   override def setPredictedPc(stage: Stage, pc: UInt): Unit = {
     stage.input(Data.PREDICTED_PC) := pc
   }
+
+  override def predictedPc(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt =
+    bundle.elementAs[UInt](Data.PREDICTED_PC.asInstanceOf[PipelineData[Data]])
+
+  override def preventFlush(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Unit = {}
 }

@@ -68,7 +68,9 @@ class ReservationStation(
     val IDLE, WAITING_FOR_ARGS, EXECUTING, BROADCASTING_RESULT = newElement()
   }
 
-  private val broadcastedPrediction = RegInit(False)
+  private val broadcastedPsfPrediction = RegInit(False)
+  private val noPsfPrediction = RegInit(False)
+  private val psfPredictedAddress = Reg(UInt(config.xlen bits)).init(0)
 
   private val stateNext = State()
   private val state = RegNext(stateNext).init(State.IDLE)
@@ -92,18 +94,26 @@ class ReservationStation(
   val isAvailable: Bool = Bool()
 
   val activeFlush: Bool = Bool()
+  val softFlush: Bool = Bool()
 
   def reset(): Unit = {
     isAvailable := !activeFlush
     stateNext := State.IDLE
     meta.reset()
-    broadcastedPrediction := False
+    broadcastedPsfPrediction := False
+    noPsfPrediction := False
   }
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
     val currentRs1Prior, currentRs2Prior = Flow(UInt(rob.indexBits))
     val currentLoadSpeculation = if (speculationTracking) Bool() else null
     val branchWaiting: Flow[UInt] = if (speculationTracking) Flow(UInt(rob.indexBits)) else null
+
+    when(state === State.EXECUTING || state === State.BROADCASTING_RESULT) {
+      when(cdbMessage.robIndex === robEntryIndex) {
+        cdbWaiting := False
+      }
+    }
 
     when(state === State.WAITING_FOR_ARGS) {
       currentRs1Prior := meta.rs1.priorInstruction
@@ -169,7 +179,7 @@ class ReservationStation(
         regs.setReg(pipeline.data.RS2_DATA, cdbMessage.writeValue)
       }
 
-      when(!r1w && !r2w) {
+      when(!r1w && !r2w && !softFlush) {
         // This is the only place where state is written directly (instead of
         // via stateNext). This ensures that we have priority over whatever
         // execute() writes to it which means that the order of calling
@@ -208,6 +218,7 @@ class ReservationStation(
     }
 
     activeFlush := False
+    softFlush := False
 
     // execution was invalidated while running
     when(activeFlush) {
@@ -216,18 +227,21 @@ class ReservationStation(
 
     if (config.stlSpec) {
       // when waiting for load address, broadcast a result prediction
-      when(state === State.WAITING_FOR_ARGS && !broadcastedPrediction) {
+      when(
+        state === State.WAITING_FOR_ARGS && !broadcastedPsfPrediction && !activeFlush && !noPsfPrediction
+      ) {
         pipeline.serviceOption[SpeculationService] foreach { spec =>
           spec.isSpeculativeMD(cdbStream.metadata) := True
         }
         if (config.addressBasedPsf) {
           pipeline.service[LsuService].psfAddress(cdbStream.metadata) := rob.previousStoreAddress
+          psfPredictedAddress := rob.previousStoreAddress
         }
         cdbStream.payload.writeValue := rob.previousStoreBuffer
         cdbStream.payload.robIndex := robEntryIndex
         cdbStream.valid := True
         when(cdbStream.ready) {
-          broadcastedPrediction := True
+          broadcastedPsfPrediction := True
         }
       }
     }
@@ -239,7 +253,13 @@ class ReservationStation(
       cdbStream.payload.robIndex := robEntryIndex
       dispatchStream.payload.robIndex := robEntryIndex
 
-      for (register <- retirementRegisters.keys) {
+      val lsu = pipeline.service[LsuService]
+
+      val isLoad = lsu.operationOutput(exeStage) === LsuOperationType.LOAD
+
+      val broadcastedIncorrectPsfPrediction = Bool()
+
+      for (register <- retirementRegisters.keys.filter(e => e != lsu.psfMisspeculationRegister)) {
         dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
       }
 
@@ -253,22 +273,40 @@ class ReservationStation(
         }
       }
 
+      // if the broadcasted address-based PSF prediction turned out to be incorrect, we have to activate the CDB again
+      if (config.stlSpec && config.addressBasedPsf) {
+        broadcastedIncorrectPsfPrediction := isLoad && lsu.address(
+          exeStage
+        ) =/= psfPredictedAddress && broadcastedPsfPrediction && !noPsfPrediction
+        lsu.psfMisspeculation(cdbStream.metadata) := broadcastedIncorrectPsfPrediction
+        lsu.psfMisspeculation(dispatchStream.registerMap) := broadcastedIncorrectPsfPrediction
+      }
+
       pipeline.serviceOption[SpeculationService] match {
         case Some(spec) =>
-          when(
-            exeStage.output(pipeline.data.RD_DATA_VALID) || spec.isSpeculativeCFInput(exeStage)
-          ) {
+          val condition = Bool()
+
+          if (config.stlSpec && config.addressBasedPsf) {
+            condition := exeStage.output(pipeline.data.RD_DATA_VALID) ||
+              spec.isSpeculativeCFInput(exeStage) || broadcastedIncorrectPsfPrediction
+          } else {
+            condition := exeStage.output(pipeline.data.RD_DATA_VALID) || spec.isSpeculativeCFInput(
+              exeStage
+            )
+          }
+
+          when(condition) {
             cdbStream.valid := True
           }
         case None =>
-          when(exeStage.output(pipeline.data.RD_DATA_VALID)) {
+          when(
+            exeStage.output(pipeline.data.RD_DATA_VALID) || broadcastedIncorrectPsfPrediction
+          ) {
             cdbStream.valid := True
           }
       }
 
-      dispatchStream.payload.willCdbUpdate := cdbStream.valid || pipeline
-        .service[LsuService]
-        .operationOutput(exeStage) === LsuOperationType.LOAD
+      dispatchStream.payload.willCdbUpdate := cdbStream.valid || isLoad
       dispatchStream.valid := True
 
       // Override the assignment of resultCdbMessage to make sure data can be sent in later cycles
@@ -304,6 +342,17 @@ class ReservationStation(
         reset()
       }
     }
+
+    when(rob.softResetThisCycle && state =/= State.IDLE) {
+      when(
+        rob.relativeIndexForAbsolute(robEntryIndex) > rob.relativeIndexForAbsolute(
+          rob.currentSoftResetTrigger.payload
+        )
+      ) {
+        reset()
+        softFlush := True
+      }
+    }
   }
 
   def execute(): Unit = {
@@ -319,8 +368,16 @@ class ReservationStation(
     meta.reset()
 
     if (config.stlSpec) {
-      when(pipeline.service[LsuService].operationOutput(issueStage) =/= LsuOperationType.LOAD) {
-        broadcastedPrediction := True // prevent prediction on non-loads
+      broadcastedPsfPrediction := False
+      when(
+        pipeline
+          .service[LsuService]
+          .operationOutput(issueStage) =/= LsuOperationType.LOAD || pipeline
+          .service[LsuService]
+          .widthOut(issueStage) =/= LsuAccessWidth.W ||
+          entryMeta.preventPsf
+      ) {
+        noPsfPrediction := True // prevent prediction on non-loads and non-word accesses
       }
     }
 

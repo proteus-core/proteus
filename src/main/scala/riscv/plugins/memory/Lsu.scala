@@ -30,6 +30,7 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
     object LSU_TARGET_VALID extends PipelineData(Bool())
     object LSU_STL_SPEC extends PipelineData(Bool())
     object LSU_PSF_ADDRESS extends PipelineData(UInt(config.xlen bits))
+    object LSU_PSF_MISSPECULATION extends PipelineData(Bool())
   }
 
   class DummyFormalService extends FormalService {
@@ -94,7 +95,6 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
     stage.value(Data.LSU_OPERATION_TYPE)
   }
 
-  // TODO: pretty hacky
   override def operationOutput(stage: Stage): SpinalEnumCraft[LsuOperationType.type] = {
     stage.output(Data.LSU_OPERATION_TYPE)
   }
@@ -104,6 +104,9 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
   override def addressOfBundle(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt = {
     bundle.elementAs[UInt](Data.LSU_TARGET_ADDRESS.asInstanceOf[PipelineData[Data]])
   }
+  override def address(stage: Stage): UInt = {
+    stage.output(Data.LSU_TARGET_ADDRESS)
+  }
   override def addressValidOfBundle(
       bundle: Bundle with DynBundleAccess[PipelineData[Data]]
   ): Bool = {
@@ -112,6 +115,18 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
 
   override def width(stage: Stage): SpinalEnumCraft[LsuAccessWidth.type] = {
     stage.value(Data.LSU_ACCESS_WIDTH)
+  }
+
+  override def widthOut(stage: Stage): SpinalEnumCraft[LsuAccessWidth.type] = {
+    stage.output(Data.LSU_ACCESS_WIDTH)
+  }
+
+  override def width(
+      bundle: Bundle with DynBundleAccess[PipelineData[Data]]
+  ): SpinalEnumCraft[LsuAccessWidth.type] = {
+    bundle.elementAs[SpinalEnumCraft[LsuAccessWidth.type]](
+      Data.LSU_ACCESS_WIDTH.asInstanceOf[PipelineData[Data]]
+    )
   }
 
   override def setup(): Unit = {
@@ -476,4 +491,18 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
       Data.LSU_PSF_ADDRESS.dataType
     )
   }
+
+  override def psfMisspeculation(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
+    bundle.elementAs[Bool](Data.LSU_PSF_MISSPECULATION.asInstanceOf[PipelineData[Data]])
+  }
+
+  override def addPsfMisspeculation(bundle: DynBundle[PipelineData[Data]]): Unit = {
+    bundle.addElement(
+      Data.LSU_PSF_MISSPECULATION.asInstanceOf[PipelineData[Data]],
+      Data.LSU_PSF_MISSPECULATION.dataType
+    )
+  }
+
+  override def psfMisspeculationRegister: PipelineData[Data] =
+    Data.LSU_PSF_MISSPECULATION.asInstanceOf[PipelineData[Data]]
 }

@@ -12,7 +12,6 @@ class SpeculationTracking(implicit config: Config)
     object CF_SPECULATIVE extends PipelineData(Bool())
     object MD_SPECULATIVE extends PipelineData(Bool())
     object SPECULATIVE_DEP extends PipelineData(Flow(UInt(log2Up(config.robEntries) bits)))
-    object MD_PSF_ADDRESS extends PipelineData(UInt(config.xlen bits))
   }
 
   override def setup(): Unit = {
