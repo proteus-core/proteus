@@ -36,13 +36,14 @@ Both implementations pass the [riscv-tests](https://github.com/riscv/riscv-tests
 Proteus uses [calendar versioning](https://calver.org/) with a suffix of `-I` and `-O` to differentiate between the in-order and the out-of-order pipeline implementation.
 The following table describes the released versions and extensions forking them.
 
-| Version                                                                  | Extension(s)                                                                                                                                                                                                                                                              |
-| :----------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`25.04`](https://github.com/proteus-core/proteus/releases/tag/v25.04)   |                                                                                                                                                                                                                                                                           |
-| [`24.01`](https://github.com/proteus-core/proteus/releases/tag/v24.01)   | [Libra: Architectural Support For Principled, Secure And Efficient Balanced Execution On High-End Processors](https://github.com/proteus-core/libra) (only for `24.01-O`)                                                                                                 |
-| [`23.03`](https://github.com/proteus-core/proteus/releases/tag/v23.03)   | [Architectural Mimicry: Innovative Instructions to Efficiently Address Control-Flow Leakage in Data-Oblivious Programs](https://github.com/proteus-core/ami) (both `23.03-I` and `23.03-O`)                                                                               |
-| [`23.02`](https://github.com/proteus-core/proteus/releases/tag/v23.02)   | [ProSpeCT: Provably Secure Speculation for the Constant-Time Policy](https://github.com/proteus-core/prospect) (only for `23.02-O`), [CHERI-Crypt: Transparent Memory Encryptionon Capability Architectures](https://github.com/cap-tee/cheri-crypt) (only for `23.02-I`) |
-| [`21.08-I`](https://github.com/proteus-core/proteus/releases/tag/v21.08) | Hardware capabilities (CHERI): `src/main/scala/riscv/plugins/cheri`, providing the basis for the following publication: [CHERI-TrEE: Flexible enclaves on capability machines](https://github.com/proteus-core/cheritree).                                                |
+| Version                                                                  | Extension(s)                                                                                                                                                                                                                                                               |
+|:-------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [`25.08`](https://github.com/proteus-core/proteus/releases/tag/v25.08)   |                                                                                                                                                                                                                                                                            |
+| [`25.04`](https://github.com/proteus-core/proteus/releases/tag/v25.04)   |                                                                                                                                                                                                                                                                            |
+| [`24.01`](https://github.com/proteus-core/proteus/releases/tag/v24.01)   | [Libra: Architectural Support For Principled, Secure And Efficient Balanced Execution On High-End Processors](https://github.com/proteus-core/libra) (only for `24.01-O`)                                                                                                  |
+| [`23.03`](https://github.com/proteus-core/proteus/releases/tag/v23.03)   | [Architectural Mimicry: Innovative Instructions to Efficiently Address Control-Flow Leakage in Data-Oblivious Programs](https://github.com/proteus-core/ami) (both `23.03-I` and `23.03-O`)                                                                                |
+| [`23.02`](https://github.com/proteus-core/proteus/releases/tag/v23.02)   | [ProSpeCT: Provably Secure Speculation for the Constant-Time Policy](https://github.com/proteus-core/prospect) (only for `23.02-O`), [CHERI-Crypt: Transparent Memory Encryption on Capability Architectures](https://github.com/cap-tee/cheri-crypt) (only for `23.02-I`) |
+| [`21.08-I`](https://github.com/proteus-core/proteus/releases/tag/v21.08) | Hardware capabilities (CHERI): `src/main/scala/riscv/plugins/cheri`, providing the basis for the following publication: [CHERI-TrEE: Flexible enclaves on capability machines](https://github.com/proteus-core/cheritree).                                                 |
 
 ## Contributing
 
@@ -60,19 +61,22 @@ For getting familiar and experimenting with Proteus, we recommend working with o
 [See here](https://docs.docker.com/engine/install/) for instructions on how to install Docker.
 
 The Docker container can be built using the following command:
+
 ```shell
 docker build -t proteus .
 ```
 
 Running the container afterwards is possible with:
+
 ```shell
 docker run -i -h "proteus" -t proteus
 ```
 
 If, instead of using Docker, you want to install Proteus locally, you can follow the installation steps from our [Dockerfile](./Dockerfile), adjusting them to your setup as needed:
+
 - Install OpenJDK (tested with `openjdk-17-jdk`) and Verilator
-- Install sbt: https://www.scala-sbt.org
-- Install the RISC-V toolchain with Newlib support, selecting the `rv32im_zicsr` architecture: https://github.com/riscv/riscv-gnu-toolchain
+- Install sbt: <https://www.scala-sbt.org>
+- Install the RISC-V toolchain with Newlib support, selecting the `rv32im_zicsr` architecture: <https://github.com/riscv/riscv-gnu-toolchain>
 
 ## Building software
 
