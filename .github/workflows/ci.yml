@@ -21,9 +21,11 @@ jobs:
           sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
           sudo apt-get update -yqq
           sudo apt-get install sbt -yqq
+      - name: Install ecosystem for simple tests
+        run: git clone --depth 1 --recurse-submodules https://github.com/proteus-core/ecosystem.git
       - name: Run Scalafmt
         run: sbt scalafmtCheck
       - name: Static pipeline riscv-tests
-        run: make RISCV_PREFIX=riscv64-unknown-elf -C tests
+        run: make BASE_DIR="$(pwd)" -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
       - name: Dynamic pipeline riscv-tests
-        run: make RISCV_PREFIX=riscv64-unknown-elf CORE=riscv.CoreDynamicExtMem -C tests
+        run: make BASE_DIR="$(pwd)" CORE=riscv.CoreDynamicExtMem -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
