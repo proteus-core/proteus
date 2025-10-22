@@ -11,6 +11,7 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
     object ALU_SRC2 extends PipelineData(Src2Select())
     object ALU_COMMIT_RESULT extends PipelineData(Bool())
     object ALU_RESULT extends PipelineData(UInt(config.xlen bits))
+    object ALU_TRUNC extends PipelineData(Bool())
   }
 
   override def addOperation(
@@ -19,8 +20,8 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
       src1: SpinalEnumElement[Src1Select.type],
       src2: SpinalEnumElement[Src2Select.type]
   ): Unit = {
-    pipeline.service[DecoderService].configure { config =>
-      config.addDecoding(
+    pipeline.service[DecoderService].configure { dconfig =>
+      dconfig.addDecoding(
         opcode,
         Map(
           Data.ALU_OP -> op,
@@ -37,11 +38,12 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
     val decoder = pipeline.service[DecoderService]
     val issuer = pipeline.service[IssueService]
 
-    decoder.configure { config =>
-      config.addDefault(
+    decoder.configure { dconfig =>
+      dconfig.addDefault(
         Map(
           Data.ALU_SRC1 -> Src1Select.RS1,
-          Data.ALU_COMMIT_RESULT -> False
+          Data.ALU_COMMIT_RESULT -> False,
+          Data.ALU_TRUNC -> False
         )
       )
 
@@ -56,7 +58,7 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
       )
 
       for ((opcode, op) <- regRegOpcodes) {
-        config.addDecoding(
+        dconfig.addDecoding(
           opcode,
           InstructionType.R,
           Map(
@@ -79,7 +81,7 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
       )
 
       for ((opcode, op) <- regImmOpcodes) {
-        config.addDecoding(
+        dconfig.addDecoding(
           opcode,
           InstructionType.I,
           Map(
@@ -92,7 +94,7 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
         issuer.setDestinations(opcode, aluStages)
       }
 
-      config.addDecoding(
+      dconfig.addDecoding(
         Opcodes.LUI,
         InstructionType.U,
         Map(
@@ -104,7 +106,7 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
 
       issuer.setDestinations(Opcodes.LUI, aluStages)
 
-      config.addDecoding(
+      dconfig.addDecoding(
         Opcodes.AUIPC,
         InstructionType.U,
         Map(
@@ -116,6 +118,30 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
       )
 
       issuer.setDestinations(Opcodes.AUIPC, aluStages)
+
+      if (config.xlen == 64) {
+        // 64-bit specific instructions
+
+        val ops = Seq(
+          (Opcodes64.ADDW, AluOp.ADD, InstructionType.R, Src2Select.RS2),
+          (Opcodes64.SUBW, AluOp.SUB, InstructionType.R, Src2Select.RS2),
+          (Opcodes64.ADDIW, AluOp.ADD, InstructionType.I, Src2Select.IMM)
+        )
+
+        for ((opcode, op, itype, src) <- ops) {
+          dconfig.addDecoding(
+            opcode,
+            itype,
+            Map(
+              Data.ALU_OP -> op,
+              Data.ALU_SRC2 -> src,
+              Data.ALU_COMMIT_RESULT -> True,
+              Data.ALU_TRUNC -> True
+            )
+          )
+          issuer.setDestinations(opcode, aluStages)
+        }
+      }
     }
   }
 
@@ -177,7 +203,15 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
         }
 
         when(value(Data.ALU_COMMIT_RESULT)) {
-          output(pipeline.data.RD_DATA) := result
+          if (config.xlen == 64) {
+            when(input(Data.ALU_TRUNC)) {
+              output(pipeline.data.RD_DATA) := Utils.signExtend(result(31 downto 0), 64)
+            } otherwise {
+              output(pipeline.data.RD_DATA) := result
+            }
+          } else {
+            output(pipeline.data.RD_DATA) := result
+          }
           output(pipeline.data.RD_DATA_VALID) := True
         } otherwise {
           output(Data.ALU_RESULT) := result

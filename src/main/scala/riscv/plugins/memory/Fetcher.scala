@@ -32,7 +32,16 @@ class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] with FetchService {
           arbitration.isReady := True
 
           output(pipeline.data.NEXT_PC) := nextPc
-          output(pipeline.data.IR) := rdata
+          // TODO: do we have to do this more often? kinda annoying
+          if (config.xlen == 64) {
+            when(pc(2)) {
+              output(pipeline.data.IR) := rdata(63 downto 32)
+            } otherwise {
+              output(pipeline.data.IR) := rdata(31 downto 0)
+            }
+          } else {
+            output(pipeline.data.IR) := rdata
+          }
         }
       }
     }

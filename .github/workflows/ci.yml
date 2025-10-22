@@ -22,10 +22,16 @@ jobs:
           sudo apt-get update -yqq
           sudo apt-get install sbt -yqq
       - name: Install ecosystem for simple tests
-        run: git clone --depth 1 --recurse-submodules https://github.com/proteus-core/ecosystem.git
+        run: git clone --depth 1 --recurse-submodules --branch 64bit --single-branch https://github.com/proteus-core/ecosystem.git
       - name: Run Scalafmt
         run: sbt scalafmtCheck
-      - name: Static pipeline riscv-tests
-        run: make BASE_DIR="$(pwd)" -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
-      - name: Dynamic pipeline riscv-tests
-        run: make BASE_DIR="$(pwd)" CORE=riscv.CoreDynamicExtMem -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
+      - name: 32-bit in-order pipeline riscv-tests
+        run: make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem32 -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
+      - name: 32-bit out-of-order pipeline riscv-tests
+        run: make BASE_DIR="$(pwd)" CORE=riscv.CoreDynamicExtMem32 -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
+      - name: Clean up 32-bit tests
+        run: rm -rf ecosystem/functional-tests/build
+      - name: 64-bit in-order pipeline riscv-tests
+        run: make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem64 -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 64BIT=1 -C ecosystem/functional-tests
+      - name: 64-bit out-of-order pipeline riscv-tests
+        run: make BASE_DIR="$(pwd)" CORE=riscv.CoreDynamicExtMem64 -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 64BIT=1 -C ecosystem/functional-tests

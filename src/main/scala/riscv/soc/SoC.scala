@@ -21,10 +21,9 @@ class SoC(
     createPipeline: Config => Pipeline,
     extraMemBusDelay: Int = 0,
     applyDelayToIBus: Boolean = false
-) extends Component {
+)(implicit config: Config)
+    extends Component {
   setDefinitionName("Core")
-
-  implicit val config = new Config(BaseIsa.RV32I)
 
   val io = new Bundle {
     // Peripherals

@@ -139,7 +139,7 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
 
     val intAlu = pipeline.service[IntAluService]
 
-    val allOpcodes = Seq(
+    val allOpcodes32 = Seq(
       Opcodes.LB,
       Opcodes.LH,
       Opcodes.LW,
@@ -150,14 +150,26 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
       Opcodes.SW
     )
 
+    val allOpcodes64 = Seq(
+      Opcodes64.LD,
+      Opcodes64.LWU,
+      Opcodes64.SD
+    )
+
+    val allOpcodes: Seq[MaskedLiteral] = if (config.xlen == 64) {
+      allOpcodes64 ++ allOpcodes32
+    } else {
+      allOpcodes32
+    }
+
     for (opcode <- allOpcodes) {
       intAlu.addOperation(opcode, intAlu.AluOp.ADD, intAlu.Src1Select.RS1, intAlu.Src2Select.IMM)
     }
 
     val decoder = pipeline.service[DecoderService]
 
-    decoder.configure { config =>
-      config.addDefault(
+    decoder.configure { dconfig =>
+      dconfig.addDefault(
         Map(
           Data.LSU_OPERATION_TYPE -> LsuOperationType.NONE,
           Data.LSU_IS_UNSIGNED -> False,
@@ -170,7 +182,7 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
           width: SpinalEnumElement[LsuAccessWidth.type],
           unsigned: Bool
       ) = {
-        config.addDecoding(
+        dconfig.addDecoding(
           opcode,
           InstructionType.I,
           Map(
@@ -190,8 +202,13 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
       addLoad(Opcodes.LHU, LsuAccessWidth.H, True)
       addLoad(Opcodes.LBU, LsuAccessWidth.B, True)
 
+      if (config.xlen == 64) {
+        addLoad(Opcodes64.LD, LsuAccessWidth.D, False)
+        addLoad(Opcodes64.LWU, LsuAccessWidth.W, True)
+      }
+
       def addStore(opcode: MaskedLiteral, width: SpinalEnumElement[LsuAccessWidth.type]) = {
-        config.addDecoding(
+        dconfig.addDecoding(
           opcode,
           InstructionType.S,
           Map(
@@ -207,6 +224,10 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
       addStore(Opcodes.SW, LsuAccessWidth.W)
       addStore(Opcodes.SH, LsuAccessWidth.H)
       addStore(Opcodes.SB, LsuAccessWidth.B)
+
+      if (config.xlen == 64) {
+        addStore(Opcodes64.SD, LsuAccessWidth.D)
+      }
     }
   }
 
@@ -247,20 +268,48 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
       val misaligned = Bool()
       val baseMask = Bits(config.memBusWidth / 8 bits)
 
-      switch(accessWidth) {
-        is(LsuAccessWidth.B) {
-          misaligned := False
-          baseMask := B"0001".resized
+      if (config.xlen != 64) {
+        // prevent latch because of missing double access width
+        misaligned := False
+        baseMask := B(0).resized
+      }
+
+      if (config.xlen == 32) {
+        switch(accessWidth) {
+          is(LsuAccessWidth.B) {
+            misaligned := False
+            baseMask := B"0001".resized
+          }
+          is(LsuAccessWidth.H) {
+            misaligned := (address & 1) =/= 0
+            baseMask := B"0011".resized
+          }
+          is(LsuAccessWidth.W) {
+            misaligned := (address & 3) =/= 0
+            baseMask := B"1111".resized
+          }
         }
-        is(LsuAccessWidth.H) {
-          misaligned := (address & 1) =/= 0
-          baseMask := B"0011".resized
-        }
-        is(LsuAccessWidth.W) {
-          misaligned := (address & 3) =/= 0
-          baseMask := B"1111".resized
+      } else {
+        switch(accessWidth) {
+          is(LsuAccessWidth.B) {
+            misaligned := False
+            baseMask := B"00000001".resized
+          }
+          is(LsuAccessWidth.H) {
+            misaligned := (address & 1) =/= 0
+            baseMask := B"00000011".resized
+          }
+          is(LsuAccessWidth.W) {
+            misaligned := (address & 3) =/= 0
+            baseMask := B"00001111".resized
+          }
+          is(LsuAccessWidth.D) {
+            misaligned := (address & 7) =/= 0
+            baseMask := B"11111111".resized
+          }
         }
       }
+
       (misaligned, baseMask)
     }
 
@@ -327,7 +376,7 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
             val busAddress = address & U(0xfffffffcL)
             val valid = Bool()
             valid := False
-            val wValue = UInt(config.xlen bits).getZero
+            val fullValue = UInt(config.xlen bits).getZero
             busReady := dbusCtrl.isReady
             when(busReady) {
               loadActive := True
@@ -335,19 +384,27 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
             when(busReady || loadActive) {
               val tpl = dbusCtrl.read(busAddress)
               valid := tpl._1
-              wValue := tpl._2
+              fullValue := tpl._2
             }
             when(valid) {
               loadActive := False
             }
             arbitration.isReady := valid
             val result = UInt(config.xlen bits)
-            result := wValue
+            result := fullValue
 
+            // TODO: this whole switch could be generated from a template
             switch(value(Data.LSU_ACCESS_WIDTH)) {
               is(LsuAccessWidth.H) {
-                val offset = (address(1) ## B"0000").asUInt
-                val hValue = wValue(offset, 16 bits)
+                // TODO: do we have to do this more often? kinda annoying
+                val offset_len = if (config.xlen == 64) 6 else 5
+                val offset = UInt(offset_len bits)
+                if (config.xlen == 64) {
+                  offset := (address(2) ## address(1) ## B"0000").asUInt
+                } else {
+                  offset := (address(1) ## B"0000").asUInt
+                }
+                val hValue = fullValue(offset, 16 bits)
 
                 when(value(Data.LSU_IS_UNSIGNED)) {
                   result := Utils.zeroExtend(hValue, config.xlen)
@@ -356,8 +413,15 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
                 }
               }
               is(LsuAccessWidth.B) {
-                val offset = (address(1 downto 0) ## B"000").asUInt
-                val bValue = wValue(offset, 8 bits)
+                // TODO: do we have to do this more often? kinda annoying
+                val offset_len = if (config.xlen == 64) 6 else 5
+                val offset = UInt(offset_len bits)
+                if (config.xlen == 64) {
+                  offset := (address(2 downto 0) ## B"000").asUInt
+                } else {
+                  offset := (address(1 downto 0) ## B"000").asUInt
+                }
+                val bValue = fullValue(offset, 8 bits)
 
                 when(value(Data.LSU_IS_UNSIGNED)) {
                   result := Utils.zeroExtend(bValue, config.xlen)
@@ -367,9 +431,24 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
               }
             }
 
+            if (config.xlen == 64) {
+              when(value(Data.LSU_ACCESS_WIDTH) === LsuAccessWidth.W) {
+                // TODO: do we have to do this more often? kinda annoying
+                val offset = UInt(6 bits)
+                offset := (address(2) ## B"00000").asUInt
+                val wValue = fullValue(offset, 32 bits)
+
+                when(value(Data.LSU_IS_UNSIGNED)) {
+                  result := Utils.zeroExtend(wValue, config.xlen)
+                } otherwise {
+                  result := Utils.signExtend(wValue, config.xlen)
+                }
+              }
+            }
+
             output(pipeline.data.RD_DATA) := result
             output(pipeline.data.RD_DATA_VALID) := True
-            formal.lsuOnLoad(loadStage, busAddress, mask, wValue)
+            formal.lsuOnLoad(loadStage, busAddress, mask, fullValue)
           }
         } otherwise {
           loadActive := False
@@ -422,7 +501,7 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
               val hValue = wValue(15 downto 0)
 
               when(address(1)) {
-                data := hValue << 16
+                data := (hValue << 16).resized
               } otherwise {
                 data := hValue.resized
               }

@@ -33,7 +33,7 @@ private class Misa(pipeline: Pipeline) extends Csr {
 }
 
 private class Mstatus(implicit config: Config) extends Csr {
-  assert(config.xlen == 32, "mstatus only supported for 32-bit")
+//  assert(config.xlen == 32, "mstatus only supported for 32-bit")
 
   val uie = False
   val sie = False
@@ -53,9 +53,18 @@ private class Mstatus(implicit config: Config) extends Csr {
   val tsr = False
   val sd = False
 
-  val mstatus = sd ## B(0, 8 bits) ## tsr ## tw ## tvm ## mxr ## sum ## mprv ##
-    xs ## fs ## mpp ## B"00" ## spp ## mpie ## False ## spie ##
-    upie ## mie ## False ## sie ## uie
+  val mstatus = Bits(config.xlen bits)
+
+  if (config.xlen == 32) {
+    mstatus := sd ## B(0, 8 bits) ## tsr ## tw ## tvm ## mxr ## sum ## mprv ##
+      xs ## fs ## mpp ## B"00" ## spp ## mpie ## False ## spie ##
+      upie ## mie ## False ## sie ## uie
+  } else {
+    // 64bit is missing MBE SBE SXL and UXL bits and fields
+    mstatus := sd ## B(0, 40 bits) ## tsr ## tw ## tvm ## mxr ## sum ## mprv ##
+      xs ## fs ## mpp ## B"00" ## spp ## mpie ## False ## spie ##
+      upie ## mie ## False ## sie ## uie
+  }
 
   val writableRanges = Map[Range, BaseType](
     (3 downto 3) -> mie,

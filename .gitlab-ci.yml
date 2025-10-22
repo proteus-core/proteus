@@ -1,5 +1,9 @@
 image: ubuntu:noble
 
+default:
+  tags:
+    - high-cpu
+
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
@@ -16,7 +20,7 @@ before_script:
   - apt-get update -yqq
   - apt-get install sbt -yqq
   # Clone ecosystem for functional tests
-  - git clone --depth 1 --recurse-submodules https://github.com/proteus-core/ecosystem.git
+  - git clone --depth 1 --recurse-submodules --branch 64bit --single-branch https://github.com/proteus-core/ecosystem.git
 
 scalafmt:
   script:
@@ -25,6 +29,12 @@ scalafmt:
 test:
   script:
     # Execute base RV32IM tests on the static pipeline
-    - make BASE_DIR="$(pwd)" -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
+    - make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem32 -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
     # Execute base RV32IM tests on the dynamic pipeline
-    - make BASE_DIR="$(pwd)" CORE=riscv.CoreDynamicExtMem -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
+    - make BASE_DIR="$(pwd)" CORE=riscv.CoreDynamicExtMem32 -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
+    # Clean up 32-bit tests
+    - rm -rf ecosystem/functional-tests/build
+    # Execute base RV64IM tests on the static pipeline
+    - make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem64 -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 64BIT=1 -C ecosystem/functional-tests
+    # Execute base RV64IM tests on the dynamic pipeline
+    - make BASE_DIR="$(pwd)" CORE=riscv.CoreDynamicExtMem64 -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 64BIT=1 -C ecosystem/functional-tests

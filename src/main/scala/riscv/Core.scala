@@ -85,7 +85,7 @@ object SoC {
       ramType: RamType,
       extraDbusReadDelay: Int = 0,
       applyDelayToIBus: Boolean = false
-  ): SoC = {
+  )(implicit config: Config): SoC = {
     new SoC(ramType, config => createStaticPipeline()(config), extraDbusReadDelay, applyDelayToIBus)
   }
 
@@ -93,19 +93,21 @@ object SoC {
       ramType: RamType,
       extraMemBusDelay: Int = 0,
       applyDelayToIBus: Boolean = false
-  ): SoC = {
+  )(implicit config: Config): SoC = {
     new SoC(ramType, config => createDynamicPipeline()(config), extraMemBusDelay, applyDelayToIBus)
   }
 }
 
 object Core {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I)
     SpinalVerilog(SoC.static(RamType.OnChipRam(1 GiB, args.headOption)))
   }
 }
 
 object CoreSim {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I)
     SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(1 GiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
@@ -148,6 +150,7 @@ object CoreFormal {
 
 object CoreTestSim {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I)
     var mainResult = 0
 
     SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(1 GiB, Some(args(0))))).doSim { dut =>
@@ -177,8 +180,16 @@ object CoreTestSim {
   }
 }
 
-object CoreExtMem {
+object CoreExtMem32 {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I)
+    SpinalVerilog(SoC.static(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
+  }
+}
+
+object CoreExtMem64 {
+  def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV64I)
     SpinalVerilog(SoC.static(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
   }
 }
@@ -293,12 +304,14 @@ object createDynamicPipeline {
 
 object CoreDynamic {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I)
     SpinalVerilog(SoC.dynamic(RamType.OnChipRam(1 GiB, args.headOption)))
   }
 }
 
 object CoreDynamicSim {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I)
     SimConfig.withWave.compile(SoC.dynamic(RamType.OnChipRam(1 GiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
@@ -329,8 +342,16 @@ object CoreDynamicSim {
   }
 }
 
-object CoreDynamicExtMem {
+object CoreDynamicExtMem32 {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I)
+    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
+  }
+}
+
+object CoreDynamicExtMem64 {
+  def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV64I)
     SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
   }
 }

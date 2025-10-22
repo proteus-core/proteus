@@ -139,7 +139,7 @@ object LsuOperationType extends SpinalEnum {
 }
 
 object LsuAccessWidth extends SpinalEnum {
-  val B, H, W = newElement() // TODO: this could mess with memory disambiguation predictors
+  val B, H, W, D = newElement() // TODO: this could mess with memory disambiguation predictors
 }
 
 trait LsuAddressTranslator {
