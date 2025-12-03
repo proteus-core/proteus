@@ -346,21 +346,22 @@ trait PrefetchService {
     */
   def notifyLoadRequest(address: UInt): Unit
 
-  /** Inform the prefetcher of a load response returning from memory
+  /** Inform the prefetcher of a load response returning from main memory
     */
   def notifyLoadResponseFromMemory(address: UInt, data: UInt): Unit
 
-  /** Inform the prefetcher of a prefetch response returning from memory
+  /** Inform the prefetcher of a prefetch response returning from main memory, associated with the
+    * given id
     */
-  def notifyPrefetchResponseFromMemory(address: UInt, data: UInt): Unit
+  def notifyPrefetchResponseFromMemory(address: UInt, data: UInt, id: UInt): Unit
 
   /** Check if the prefetcher has a prefetch target ready
     */
   def hasPrefetchTarget: Bool
 
-  /** Get the next prefetch target from the prefetcher
+  /** Get the next prefetch target from the prefetcher, which will be associated with the given id
     */
-  def getNextPrefetchTarget: UInt
+  def getNextPrefetchTarget(id: UInt): UInt
 }
 
 trait TrapService {

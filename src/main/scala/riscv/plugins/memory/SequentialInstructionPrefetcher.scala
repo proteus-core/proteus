@@ -25,9 +25,9 @@ class SequentialInstructionPrefetcher(implicit config: Config) extends Plugin wi
 
   override def notifyLoadResponseFromMemory(address: UInt, data: UInt): Unit = {}
 
-  override def notifyPrefetchResponseFromMemory(address: UInt, data: UInt): Unit = {}
+  override def notifyPrefetchResponseFromMemory(address: UInt, data: UInt, id: UInt): Unit = {}
 
-  override def getNextPrefetchTarget: UInt = {
+  override def getNextPrefetchTarget(id: UInt): UInt = {
     hasNewTarget := False
     ((currentAddress >> insignificantBits) + 1) << insignificantBits
   }

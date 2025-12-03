@@ -46,25 +46,13 @@ class Cache(
 
       private val cacheHits = RegInit(UInt(config.xlen bits).getZero)
       private val cacheMisses = RegInit(UInt(config.xlen bits).getZero)
-      private val forwardedLoads = RegInit(UInt(config.xlen bits).getZero)
+      // number of cache misses that are not full misses because the load was already pending at the time of the miss
+      private val forwardedCacheMisses = RegInit(UInt(config.xlen bits).getZero)
 
       private val externalId = RegInit(UInt(external.config.idWidth bits).getZero)
 
       private val storeInCycle = Bool()
       storeInCycle := False
-
-      private val outstandingPrefetches = RegInit(UInt(log2Up(maxPrefetches + 1) bits).getZero)
-      private val incrementOutstandingPrefetches = Bool()
-      private val decrementOutstandingPrefetches = Bool()
-      incrementOutstandingPrefetches := False
-      decrementOutstandingPrefetches := False
-
-      // this logic is to avoid problems when incrementing and decrementing in the same cycle
-      when(incrementOutstandingPrefetches && !decrementOutstandingPrefetches) {
-        outstandingPrefetches := outstandingPrefetches + 1
-      } elsewhen (!incrementOutstandingPrefetches && decrementOutstandingPrefetches) {
-        outstandingPrefetches := outstandingPrefetches - 1
-      }
 
       private def oldestWay(set: UInt): UInt = {
         val result = UInt(log2Up(ways) bits)
@@ -118,11 +106,13 @@ class Cache(
         val address: UInt = UInt(config.xlen bits)
         val storeInvalidated: Bool = Bool()
         val pending: Bool = Bool()
-        val isPrefetch: Bool = Bool()
         val internalIds: Bits = Bits(1 << internal.config.idWidth bits)
       }
 
       private val outstandingLoads = Vec.fill(maxId + 1)(RegInit(OutstandingTracker().getZero))
+
+      private val outstandingPrefetches = UInt((idWidth + 1) bits)
+      outstandingPrefetches := outstandingLoads.sCount(e => e.pending && e.internalIds === 0)
 
       private def forwardRspToInternal(): Unit = {
         sendingRsp := True
@@ -168,11 +158,9 @@ class Cache(
 
         when(!alreadySendingRsp) {
           prefetcher foreach { pref =>
-            when(outstandingLoads(external.rsp.id).isPrefetch) {
+            when(outstandingLoads(external.rsp.id).internalIds === 0) {
               // inform prefetcher of prefetch response from memory
-              pref.notifyPrefetchResponseFromMemory(address, external.rsp.rdata)
-              // subscract 1 from outstandingPrefetches
-              decrementOutstandingPrefetches := True
+              pref.notifyPrefetchResponseFromMemory(address, external.rsp.rdata, external.rsp.id)
             } otherwise {
               // inform prefetcher of load response from memory
               pref.notifyLoadResponseFromMemory(address, external.rsp.rdata)
@@ -247,7 +235,6 @@ class Cache(
             when(!internal.cmd.write) {
               outstandingLoads(externalId).address := internal.cmd.address
               outstandingLoads(externalId).pending := True
-              outstandingLoads(externalId).isPrefetch := False
               outstandingLoads(externalId).internalIds := B(0).resized
               outstandingLoads(externalId).internalIds(internal.cmd.id) := True
               externalId := externalId + 1
@@ -255,7 +242,6 @@ class Cache(
           } else {
             outstandingLoads(externalId).address := internal.cmd.address
             outstandingLoads(externalId).pending := True
-            outstandingLoads(externalId).isPrefetch := False
             outstandingLoads(externalId).internalIds := B(0).resized
             outstandingLoads(externalId).internalIds(internal.cmd.id) := True
             externalId := externalId + 1
@@ -295,7 +281,7 @@ class Cache(
             // at this point the cache is ready to send a prefetch command to the memory
             // getNextPrefetchTarget should not be called before the cache is ready to send the command
             // otherwise the prefetch may get lost
-            val prefetchAddress = pref.getNextPrefetchTarget
+            val prefetchAddress = pref.getNextPrefetchTarget(externalId)
 
             when(cacheable(prefetchAddress)) {
               val targetWay = wayForAddress(prefetchAddress)
@@ -316,9 +302,6 @@ class Cache(
                 }
               }
               when(!targetWay.valid && !alreadyPending) {
-                // add 1 to outstandingPrefetches
-                incrementOutstandingPrefetches := True
-
                 externalId := externalId + 1
 
                 external.cmd.valid := True
@@ -329,7 +312,6 @@ class Cache(
                 outstandingLoads(externalId).address := prefetchAddress
                 outstandingLoads(externalId).pending := True
                 outstandingLoads(externalId).internalIds := B(0).resized
-                outstandingLoads(externalId).isPrefetch := True
 
                 when(!external.cmd.ready) {
                   sendingBufferedCmd := True
@@ -373,7 +355,7 @@ class Cache(
               ) {
                 load.internalIds(internal.cmd.id) := True
                 cacheMisses := cacheMisses + 1
-                forwardedLoads := forwardedLoads + 1
+                forwardedCacheMisses := forwardedCacheMisses + 1
                 internal.cmd.ready := True
               }
             }
