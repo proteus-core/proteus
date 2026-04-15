@@ -127,7 +127,7 @@ trait StaticPipeline extends Pipeline {
     if (parentPipeline == null) {
       super.hasService[T]
     } else {
-    super.hasService[T] || parentPipeline.hasServiceLocal[T]
+      super.hasService[T] || parentPipeline.hasServiceLocal[T]
     }
   }
 
