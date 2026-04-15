@@ -4,6 +4,8 @@ import spinal.core._
 
 import collection.mutable
 
+import scala.reflect.ClassTag
+
 private class PipelineDataInfo {
   var firstOutputStageId = Int.MaxValue
   var lastOutputStageId = -1
