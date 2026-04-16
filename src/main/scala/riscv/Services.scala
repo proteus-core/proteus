@@ -423,6 +423,62 @@ trait CsrService {
   def isCsrInstruction(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
 }
 
+trait RngBuffer extends Area {
+  def read(): UInt
+  def isValid(): Bool
+  def request(): Unit
+  def flush(): Unit
+  def isFull(): Bool
+  def connect(inputStream: Stream[Bits]): Unit
+}
+
+class RngIo(implicit config: Config) extends Bundle with IMasterSlave {
+  val rdata = UInt(config.xlen bits)
+  val rdata_valid, rdata_request = Bool()
+
+  private def request(): Unit = {
+    rdata_request := True
+  }
+  private def read(): UInt = rdata
+  private def isValid(): Bool = rdata_valid
+
+  /** Get a value from this RNG queue.
+    *
+    * @return
+    *   valid: Whether the returned data is valid.
+    * @return
+    *   value: The random seed.
+    */
+  def get(): (Bool, UInt) = {
+    val valid = False
+    val value = U(0, config.xlen bits)
+
+    request()
+
+    when(isValid()) {
+      valid := True
+      value := read()
+    }
+
+    (valid, value)
+  }
+
+  override def asMaster(): Unit = {
+    out(rdata, rdata_valid)
+    in(rdata_request)
+  }
+
+  override def asSlave(): Unit = {
+    super.asSlave()
+    rdata_request := False
+  }
+}
+
+trait RngService {
+  def registerRngBuffer[T <: RngBuffer](rngbuffer: => T): Int
+  def getRngBuffer(id: Int): RngIo
+}
+
 class IrqIo extends Bundle with IMasterSlave {
   val update = Bool()
   val interruptPending = Bool()
