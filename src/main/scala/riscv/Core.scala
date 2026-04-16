@@ -214,6 +214,7 @@ object createDynamicPipeline {
       val decode = new Stage("ID").setName("decode")
 
       override val issuePipeline = new StaticPipeline {
+        override val parentPipeline = dynamicPipeline
         override val stages = Seq(fetch, decode)
         override val config = dynamicPipeline.config
         override val data = dynamicPipeline.data
