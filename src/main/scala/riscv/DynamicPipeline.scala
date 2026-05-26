@@ -131,12 +131,20 @@ trait DynamicPipeline extends Pipeline {
 
   override def serviceOption[T](implicit tag: ClassTag[T]): Option[T] = {
     super.serviceOption[T] match {
-      case None => issuePipeline.serviceOption[T]
+      case None => issuePipeline.serviceOptionLocal[T]
       case someService => someService
     }
   }
 
   override def hasService[T](implicit tag: ClassTag[T]): Boolean = {
-    super.hasService[T] || issuePipeline.hasService[T]
+    super.hasService[T] || issuePipeline.hasServiceLocal[T]
+  }
+
+  def serviceOptionLocal[T](implicit tag: ClassTag[T]): Option[T] = {
+    super.serviceOption[T]
+  }
+
+  def hasServiceLocal[T](implicit tag: ClassTag[T]): Boolean = {
+    super.hasService[T]
   }
 }

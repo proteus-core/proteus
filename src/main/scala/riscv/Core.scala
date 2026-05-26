@@ -60,6 +60,9 @@ object createStaticPipeline {
         prefetcher,
         new Cache(sets = 2, ways = 2, backbone.filterIBus, Some(prefetcher)),
         new Cache(sets = 8, ways = 2, backbone.filterDBus, cacheable = (_ >= 0x80000000L)),
+        // Different cache levels can be specified by adding more cache plugins.
+        // The order in which you add the caches is the order in which they will be connected:
+        // new Cache(sets = 16, ways = 4, backbone.filterDBus, delay = 5),
         new CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
         new Timers,
         new MachineMode(pipeline.execute),
@@ -211,6 +214,7 @@ object createDynamicPipeline {
       val decode = new Stage("ID").setName("decode")
 
       override val issuePipeline = new StaticPipeline {
+        override val parentPipeline = dynamicPipeline
         override val stages = Seq(fetch, decode)
         override val config = dynamicPipeline.config
         override val data = dynamicPipeline.data
