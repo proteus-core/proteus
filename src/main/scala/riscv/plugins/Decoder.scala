@@ -9,7 +9,7 @@ import scala.collection.mutable
 
 case class ImmediateDecoder(ir: Bits)(implicit config: Config) {
   private def signExtend(data: Bits): UInt = {
-    Utils.signExtend(data, config.xlen).asUInt
+    Utils.signExtend(data, config.isa.xlen).asUInt
   }
 
   def i = signExtend(ir(31 downto 20))
@@ -159,10 +159,10 @@ class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
         }
         default {
           pipeline.serviceOption[TrapService] foreach { trapHandler =>
-            if (config.xlen == 64) {
+            if (config.isa.xlen == 64) {
               trapHandler.trap(
                 decodeStage,
-                TrapCause.IllegalInstruction(ir.resize(config.xlen bits))
+                TrapCause.IllegalInstruction(ir.resize(config.isa.xlen bits))
               )
             } else {
               trapHandler.trap(decodeStage, TrapCause.IllegalInstruction(ir))

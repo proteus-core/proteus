@@ -13,7 +13,7 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
 
   private class CapCheck extends Area {
     private val cap = PackedCapability().assignDontCare()
-    private val address = UInt(config.xlen bits).assignDontCare()
+    private val address = UInt(config.isa.xlen bits).assignDontCare()
     private val operation = LsuOperationType().assignDontCare()
     private val byteWidth = UInt(log2Up(context.clen / 8) + 1 bits).assignDontCare()
     private val exceptionCause = UInt(5 bits)
@@ -82,7 +82,7 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           operation: SpinalEnumCraft[LsuOperationType.type],
           width: SpinalEnumCraft[LsuAccessWidth.type]
       ): UInt = {
-        val result = UInt(config.xlen bits)
+        val result = UInt(config.isa.xlen bits)
         result := address
 
         // When USE_CAP_ADDR is set, checks are done in build
@@ -241,7 +241,7 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
 
       val cap = PackedCapability()
       val capIdx = CapIdx()
-      val address = UInt(config.xlen bits)
+      val address = UInt(config.isa.xlen bits)
 
       when(value(Data.USE_CAP_ADDR)) {
         cap.assignFrom(cs1)

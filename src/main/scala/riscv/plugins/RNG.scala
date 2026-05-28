@@ -70,7 +70,10 @@ class Bivium(outputBits: Int = 64) extends Component {
   */
 class RngFifo(queueDepth: Int = 2)(implicit config: Config) extends RngBuffer {
   private val rngFifo =
-    new StreamFifoLowLatency(dataType = Bits(config.xlen bits), depth = queueDepth) // latency = 0
+    new StreamFifoLowLatency(
+      dataType = Bits(config.isa.xlen bits),
+      depth = queueDepth
+    ) // latency = 0
 
   rngFifo.io.pop.ready := False
   rngFifo.io.flush := False
@@ -80,7 +83,7 @@ class RngFifo(queueDepth: Int = 2)(implicit config: Config) extends RngBuffer {
   ////////////////////////////
 
   def read(): UInt = {
-    U(rngFifo.io.pop.payload, config.xlen bits)
+    U(rngFifo.io.pop.payload, config.isa.xlen bits)
   }
   def isValid(): Bool = {
     rngFifo.io.pop.valid
@@ -116,14 +119,14 @@ private class RngComponent(implicit config: Config) extends Component {
 }
 
 private class csrRng(implicit config: Config) extends Csr {
-  val rgnControl = Reg(UInt(config.xlen bits)).init(0)
+  val rgnControl = Reg(UInt(config.isa.xlen bits)).init(0)
 
   override def read(): UInt = rgnControl
   override def write(value: UInt): Unit = this.rgnControl := value
 }
 
 private class csrSeed(implicit config: Config) extends Csr {
-  val seedValue = Reg(Bits(config.xlen bits)).init(0)
+  val seedValue = Reg(Bits(config.isa.xlen bits)).init(0)
 
   override def read(): UInt = seedValue.asUInt
   def readb(): Bits = seedValue
@@ -256,7 +259,7 @@ class Rng(allowUninitializedRng: Boolean = false) extends Plugin[Pipeline] with 
       ///////////////////////////////
       // Initialization of the RNG //
       ///////////////////////////////
-      private val rngCore = new BiviumCore(outputBits = config.xlen)
+      private val rngCore = new BiviumCore(outputBits = config.isa.xlen)
 
       // Initial state
       private val rngIV_reg = U(INIT_IV, 80 bits)
@@ -278,9 +281,9 @@ class Rng(allowUninitializedRng: Boolean = false) extends Plugin[Pipeline] with 
       ////////////////////////////
 
       // Connect the RNG stream from the RNG core to the RNG buffers
-      val rngStream = Stream(Bits(config.xlen bits))
+      val rngStream = Stream(Bits(config.isa.xlen bits))
       rngStream.valid := rngCoreInitialized && rngCore.io.stream.valid
-      rngStream.payload := rngDisabled ? B(0, config.xlen bits) | rngCore.io.stream.payload
+      rngStream.payload := rngDisabled ? B(0, config.isa.xlen bits) | rngCore.io.stream.payload
       rngCore.io.stream.ready := rngStream.ready
 
       // Select the first ready output (Round Robin)

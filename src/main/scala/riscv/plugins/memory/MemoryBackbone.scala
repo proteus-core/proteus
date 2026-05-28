@@ -6,7 +6,7 @@ import spinal.lib._
 
 import scala.collection.mutable
 
-abstract class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService {
+abstract class MemoryBackbone(implicit config: Config) extends Plugin[Pipeline] with MemoryService {
 
   var externalIBus: MemBus = null
   var internalIBus: MemBus = null

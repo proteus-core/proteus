@@ -52,7 +52,7 @@ class ReservationStation(
     pipeline: DynamicPipeline,
     retirementRegisters: DynBundle[PipelineData[Data]],
     metaRegisters: DynBundle[PipelineData[Data]]
-)(implicit config: Config)
+)(implicit config: DynamicPipelineConfig)
     extends Area
     with CdbListener
     with Resettable {
@@ -70,7 +70,7 @@ class ReservationStation(
 
   private val broadcastedPsfPrediction = RegInit(False)
   private val noPsfPrediction = RegInit(False)
-  private val psfPredictedAddress = Reg(UInt(config.xlen bits)).init(0)
+  private val psfPredictedAddress = Reg(UInt(config.isa.xlen bits)).init(0)
 
   private val stateNext = State()
   private val state = RegNext(stateNext).init(State.IDLE)

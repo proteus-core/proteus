@@ -16,19 +16,19 @@ object RamType {
   case class ExternalAxi4(override val size: BigInt) extends RamType(size)
 }
 
-class SoC(
+class SoC[C <: Config](
     ramType: RamType,
-    createPipeline: Config => Pipeline,
-    extraMemBusDelay: Int = 0,
+    createPipeline: C => Pipeline,
+    extraDbusReadDelay: Int = 0,
     applyDelayToIBus: Boolean = false
-)(implicit config: Config)
+)(implicit config: C)
     extends Component {
   setDefinitionName("Core")
 
   val io = new Bundle {
     // Peripherals
     val charOut = master(Flow(UInt(8 bits)))
-    val testDev = master(Flow(UInt(config.xlen bits)))
+    val testDev = master(Flow(UInt(config.isa.xlen bits)))
     val byteDev = master(new ByteDevIo)
 
     val axi = ramType match {
@@ -104,23 +104,23 @@ class SoC(
       dbusAxi -> List(ramAxi, apbBridge.io.axi)
     )
 
-    if (extraMemBusDelay > 0) {
+    if (extraDbusReadDelay > 0) {
       axiCrossbar.addPipelining(dbusAxi)((dbus, crossbar) => {
         import Utils._
 
         dbus.sharedCmd >> crossbar.sharedCmd
         dbus.writeData >> crossbar.writeData
-        dbus.readRsp << crossbar.readRsp.stage(extraMemBusDelay)
+        dbus.readRsp << crossbar.readRsp.stage(extraDbusReadDelay)
         dbus.writeRsp << crossbar.writeRsp
       })
     }
 
-    if (extraMemBusDelay > 0 && applyDelayToIBus) {
+    if (extraDbusReadDelay > 0 && applyDelayToIBus) {
       axiCrossbar.addPipelining(ibusAxi)((ibus, crossbar) => {
         import Utils._
 
         ibus.readCmd.m2sPipe() >> crossbar.readCmd
-        ibus.readRsp << crossbar.readRsp.s2mPipe().stage(extraMemBusDelay)
+        ibus.readRsp << crossbar.readRsp.s2mPipe().stage(extraDbusReadDelay)
       })
     } else {
       // This pipelining is used to cut combinatorial loops caused by lowLatency=true. It is based on

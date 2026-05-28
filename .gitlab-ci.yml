@@ -29,12 +29,12 @@ scalafmt:
 test:
   script:
     # Execute base RV32IM tests on the static pipeline
-    - make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem32 -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
+    - make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem PIPELINE=Static ISA=RV32I -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
     # Execute base RV32IM tests on the dynamic pipeline
-    - make BASE_DIR="$(pwd)" CORE=riscv.CoreDynamicExtMem32 -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
+    - make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem PIPELINE=Dynamic ISA=RV32I -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
     # Clean up 32-bit tests
     - rm -rf ecosystem/functional-tests/build
     # Execute base RV64IM tests on the static pipeline
-    - make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem64 -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 64BIT=1 -C ecosystem/functional-tests
+    - make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem PIPELINE=Static ISA=RV64I -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 64BIT=1 -C ecosystem/functional-tests
     # Execute base RV64IM tests on the dynamic pipeline
-    - make BASE_DIR="$(pwd)" CORE=riscv.CoreDynamicExtMem64 -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 64BIT=1 -C ecosystem/functional-tests
+    - make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem PIPELINE=Dynamic ISA=RV64I -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 64BIT=1 -C ecosystem/functional-tests

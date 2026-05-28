@@ -7,7 +7,7 @@ class NoPredictionPredictor(fetchStage: Stage, executeStage: Stage)
     extends Plugin[Pipeline]
     with BranchTargetPredictorService {
   private object Data {
-    object PREDICTED_PC extends PipelineData(UInt(config.xlen bits))
+    object PREDICTED_PC extends PipelineData(UInt(config.isa.xlen bits))
   }
 
   override def build(): Unit = {

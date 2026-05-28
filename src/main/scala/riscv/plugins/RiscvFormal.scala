@@ -6,7 +6,7 @@ import spinal.lib.Counter
 
 class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalService {
   private object Data {
-    private val xlen = config.xlen
+    private val xlen = config.isa.xlen
 
     object FORMAL_MEM_ADDR extends PipelineData(UInt(xlen bits))
     object FORMAL_MEM_RMASK extends PipelineData(Bits(xlen / 8 bits))
@@ -29,15 +29,15 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
 
     // Integer Register Read/Write
     val rs1_addr, rs2_addr, rd_addr = UInt(5 bits)
-    val rs1_rdata, rs2_rdata, rd_wdata = UInt(config.xlen bits)
+    val rs1_rdata, rs2_rdata, rd_wdata = UInt(config.isa.xlen bits)
 
     // Program Counter
-    val pc_rdata, pc_wdata = UInt(config.xlen bits)
+    val pc_rdata, pc_wdata = UInt(config.isa.xlen bits)
 
     // Memory Access
-    val mem_addr = UInt(config.xlen bits)
-    val mem_rmask, mem_wmask = Bits(config.xlen / 8 bits)
-    val mem_rdata, mem_wdata = UInt(config.xlen bits)
+    val mem_addr = UInt(config.isa.xlen bits)
+    val mem_rmask, mem_wmask = Bits(config.isa.xlen / 8 bits)
+    val mem_rdata, mem_wdata = UInt(config.isa.xlen bits)
 
     // Internal signals
     // Has this instruction experienced an exception or interrupt?
@@ -162,7 +162,7 @@ class RiscvFormal(altops: Boolean = false) extends Plugin[Pipeline] with FormalS
     switch(rvfi.insn) {
       for ((opcode, altop, fullMask) <- altopsTable) {
         is(opcode) {
-          val mask = if (config.xlen == 32) fullMask & 0xffffffffL else fullMask
+          val mask = if (config.isa.xlen == 32) fullMask & 0xffffffffL else fullMask
           when(rvfi.rd_addr =/= 0) {
             rvfi.rd_wdata := altop(rvfi.rs1_rdata, rvfi.rs2_rdata) ^ mask
           }

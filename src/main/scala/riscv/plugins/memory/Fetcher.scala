@@ -33,7 +33,7 @@ class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] with FetchService {
 
           output(pipeline.data.NEXT_PC) := nextPc
           // TODO: do we have to do this more often? kinda annoying
-          if (config.xlen == 64) {
+          if (config.isa.xlen == 64) {
             when(pc(2)) {
               output(pipeline.data.IR) := rdata(63 downto 32)
             } otherwise {

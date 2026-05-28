@@ -3,7 +3,9 @@ package riscv.plugins.scheduling.dynamic
 import riscv._
 import spinal.core._
 
-class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
+class Scheduler()(implicit config: DynamicPipelineConfig)
+    extends Plugin[DynamicPipeline]
+    with IssueService {
 
   private object PrivateRegisters {
     object DEST_FU extends PipelineData(Bits(pipeline.rsStages.size bits))

@@ -8,9 +8,9 @@ import spinal.core.sim._
 object createStaticPipeline {
   def apply(
       disablePipelining: Boolean = false,
-      extraPlugins: Seq[Plugin[Pipeline]] = Seq(),
+      extraPlugins: Seq[Plugin[StaticPipeline]] = Seq(),
       build: Boolean = true
-  )(implicit conf: Config): StaticPipeline = {
+  )(implicit conf: StaticPipelineConfig): StaticPipeline = {
     import riscv.plugins.scheduling.static._
 
     val pipeline = new Component with StaticPipeline {
@@ -42,7 +42,32 @@ object createStaticPipeline {
 
     val backbone = new memory.StaticMemoryBackbone
 
-    val prefetcher = new memory.SequentialInstructionPrefetcher()
+    val iPrefetchers: Seq[Option[Plugin[Pipeline] with PrefetchService]] =
+      conf.iCaches.map(_.prefetcher.create)
+    val dPrefetchers: Seq[Option[Plugin[Pipeline] with PrefetchService]] =
+      conf.dCaches.map(_.prefetcher.create)
+    val iCaches: Seq[Cache] = conf.iCaches.zipWithIndex.map { case (iCache, i) =>
+      new Cache(
+        sets = iCache.sets,
+        ways = iCache.ways,
+        busFilter = backbone.filterIBus,
+        prefetcher = iPrefetchers(i),
+        maxPrefetches = iCache.maxPrefetches,
+        cacheable = (_ => True),
+        delay = iCache.delay
+      )
+    }
+    val dCaches: Seq[Cache] = conf.dCaches.zipWithIndex.map { case (dCache, i) =>
+      new Cache(
+        sets = dCache.sets,
+        ways = dCache.ways,
+        busFilter = backbone.filterDBus,
+        prefetcher = dPrefetchers(i),
+        maxPrefetches = dCache.maxPrefetches,
+        cacheable = (_ >= 0x80000000L),
+        delay = dCache.delay
+      )
+    }
 
     pipeline.addPlugins(
       Seq(
@@ -56,23 +81,23 @@ object createStaticPipeline {
         new memory.Lsu(Set(pipeline.memory), Seq(pipeline.memory), pipeline.memory),
         new BranchUnit(Set(pipeline.execute)),
         new PcManager(0x80000000L),
-        new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
-        prefetcher,
-        new Cache(sets = 2, ways = 2, backbone.filterIBus, Some(prefetcher)),
-        new Cache(sets = 8, ways = 2, backbone.filterDBus, cacheable = (_ >= 0x80000000L)),
-        // Different cache levels can be specified by adding more cache plugins.
-        // The order in which you add the caches is the order in which they will be connected:
-        // new Cache(sets = 16, ways = 4, backbone.filterDBus, delay = 5),
-        new CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
-        new Timers,
-        new MachineMode(pipeline.execute),
-        new TrapHandler(pipeline.writeback),
-        new TrapStageInvalidator,
-        new Interrupts(pipeline.writeback),
-        new MulDiv(Set(pipeline.execute)),
-        new Fence(Set(pipeline.execute)),
-        new Marker
-      ) ++ extraPlugins
+        new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.isa.xlen)
+      ) ++
+        iPrefetchers.flatten ++
+        dPrefetchers.flatten ++
+        iCaches ++
+        dCaches ++
+        Seq(
+          new CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
+          new Timers,
+          new MachineMode(pipeline.execute),
+          new TrapHandler(pipeline.writeback),
+          new TrapStageInvalidator,
+          new Interrupts(pipeline.writeback),
+          new MulDiv(Set(pipeline.execute)),
+          new Fence(Set(pipeline.execute)),
+          new Marker
+        ) ++ extraPlugins
     )
 
     if (build) {
@@ -87,30 +112,42 @@ object SoC {
   def static(
       ramType: RamType,
       extraDbusReadDelay: Int = 0,
-      applyDelayToIBus: Boolean = false
-  )(implicit config: Config): SoC = {
-    new SoC(ramType, config => createStaticPipeline()(config), extraDbusReadDelay, applyDelayToIBus)
+      applyDelayToIBus: Boolean = false,
+      extraPlugins: Seq[Plugin[StaticPipeline]] = Seq()
+  )(implicit config: StaticPipelineConfig): SoC[StaticPipelineConfig] = {
+    new SoC(
+      ramType,
+      config => createStaticPipeline(extraPlugins = extraPlugins)(config),
+      extraDbusReadDelay,
+      applyDelayToIBus
+    )
   }
 
   def dynamic(
       ramType: RamType,
-      extraMemBusDelay: Int = 0,
-      applyDelayToIBus: Boolean = false
-  )(implicit config: Config): SoC = {
-    new SoC(ramType, config => createDynamicPipeline()(config), extraMemBusDelay, applyDelayToIBus)
+      extraDbusReadDelay: Int = 0,
+      applyDelayToIBus: Boolean = false,
+      extraPlugins: Seq[Plugin[DynamicPipeline]] = Seq()
+  )(implicit config: DynamicPipelineConfig): SoC[DynamicPipelineConfig] = {
+    new SoC(
+      ramType,
+      config => createDynamicPipeline(extraPlugins = extraPlugins)(config),
+      extraDbusReadDelay,
+      applyDelayToIBus
+    )
   }
 }
 
 object Core {
   def main(args: Array[String]) {
-    implicit val config = new Config(BaseIsa.RV32I)
+    implicit val config = new StaticPipelineConfig(BaseIsa.RV32I)
     SpinalVerilog(SoC.static(RamType.OnChipRam(1 GiB, args.headOption)))
   }
 }
 
 object CoreSim {
   def main(args: Array[String]) {
-    implicit val config = new Config(BaseIsa.RV32I)
+    implicit val config = new StaticPipelineConfig(BaseIsa.RV32I)
     SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(1 GiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
@@ -141,7 +178,7 @@ object CoreSim {
 class CoreFormal extends Component {
   setDefinitionName("Core")
 
-  implicit val config = new Config(BaseIsa.RV32I)
+  implicit val config = new StaticPipelineConfig(BaseIsa.RV32I)
   val pipeline = createStaticPipeline(extraPlugins = Seq(new RiscvFormal))
 }
 
@@ -153,7 +190,7 @@ object CoreFormal {
 
 object CoreTestSim {
   def main(args: Array[String]) {
-    implicit val config = new Config(BaseIsa.RV32I)
+    implicit val config = new StaticPipelineConfig(BaseIsa.RV32I)
     var mainResult = 0
 
     SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(1 GiB, Some(args(0))))).doSim { dut =>
@@ -183,23 +220,9 @@ object CoreTestSim {
   }
 }
 
-object CoreExtMem32 {
-  def main(args: Array[String]) {
-    implicit val config = new Config(BaseIsa.RV32I)
-    SpinalVerilog(SoC.static(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
-  }
-}
-
-object CoreExtMem64 {
-  def main(args: Array[String]) {
-    implicit val config = new Config(BaseIsa.RV64I)
-    SpinalVerilog(SoC.static(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
-  }
-}
-
 object createDynamicPipeline {
-  def apply(extraPlugins: Seq[Plugin[Pipeline]] = Seq(), build: Boolean = true)(implicit
-      conf: Config
+  def apply(extraPlugins: Seq[Plugin[DynamicPipeline]] = Seq(), build: Boolean = true)(implicit
+      conf: DynamicPipelineConfig
   ): DynamicPipeline = {
     val pipeline = new Component with DynamicPipeline {
       setDefinitionName("Pipeline")
@@ -243,7 +266,32 @@ object createDynamicPipeline {
       )
     )
 
-    val prefetcher = new memory.SequentialInstructionPrefetcher()
+    val iPrefetchers: Seq[Option[Plugin[Pipeline] with PrefetchService]] =
+      conf.iCaches.map(_.prefetcher.create)
+    val dPrefetchers: Seq[Option[Plugin[Pipeline] with PrefetchService]] =
+      conf.dCaches.map(_.prefetcher.create)
+    val iCaches: Seq[Cache] = conf.iCaches.zipWithIndex.map { case (iCache, i) =>
+      new Cache(
+        sets = iCache.sets,
+        ways = iCache.ways,
+        busFilter = pipeline.backbone.filterIBus,
+        prefetcher = iPrefetchers(i),
+        maxPrefetches = iCache.maxPrefetches,
+        cacheable = (_ => True),
+        delay = iCache.delay
+      )
+    }
+    val dCaches: Seq[Cache] = conf.dCaches.zipWithIndex.map { case (dCache, i) =>
+      new Cache(
+        sets = dCache.sets,
+        ways = dCache.ways,
+        busFilter = pipeline.backbone.filterDBus,
+        prefetcher = dPrefetchers(i),
+        maxPrefetches = dCache.maxPrefetches,
+        cacheable = (_ >= 0x80000000L),
+        delay = dCache.delay
+      )
+    }
 
     pipeline.addPlugins(
       Seq(
@@ -266,30 +314,28 @@ object createDynamicPipeline {
           pipeline.fetch,
           pipeline.retirementStage,
           8,
-          conf.xlen
-        ),
-        prefetcher,
-        new Cache(sets = 2, ways = 2, pipeline.backbone.filterIBus, Some(prefetcher)),
-        new Cache(
-          sets = 8,
-          ways = 2,
-          busFilter = pipeline.backbone.filterDBus,
-          cacheable = (_ >= 0x80000000L)
-        ),
-        new IntAlu(pipeline.intAlus.toSet),
-        new Shifter(pipeline.intAlus.toSet),
-        new MulDiv(pipeline.intMuls.toSet),
-        new Conditional(pipeline.intAlus.toSet),
-        new BranchUnit(pipeline.intAlus.toSet),
-        new CsrFile(pipeline.retirementStage, pipeline.intAlus.last),
-        new TrapHandler(pipeline.retirementStage),
-        new MachineMode(pipeline.intAlus.last),
-        new Interrupts(pipeline.retirementStage),
-        new Timers,
-        new Fence(pipeline.rsStages.toSet),
-        new Marker,
-        new SpeculationTracking
-      ) ++ extraPlugins
+          conf.isa.xlen
+        )
+      ) ++
+        iPrefetchers.flatten ++
+        dPrefetchers.flatten ++
+        iCaches ++
+        dCaches ++
+        Seq(
+          new IntAlu(pipeline.intAlus.toSet),
+          new Shifter(pipeline.intAlus.toSet),
+          new MulDiv(pipeline.intMuls.toSet),
+          new Conditional(pipeline.intAlus.toSet),
+          new BranchUnit(pipeline.intAlus.toSet),
+          new CsrFile(pipeline.retirementStage, pipeline.intAlus.last),
+          new TrapHandler(pipeline.retirementStage),
+          new MachineMode(pipeline.intAlus.last),
+          new Interrupts(pipeline.retirementStage),
+          new Timers,
+          new Fence(pipeline.rsStages.toSet),
+          new Marker,
+          new SpeculationTracking
+        ) ++ extraPlugins
     )
 
     if (build) {
@@ -302,14 +348,14 @@ object createDynamicPipeline {
 
 object CoreDynamic {
   def main(args: Array[String]) {
-    implicit val config = new Config(BaseIsa.RV32I)
+    implicit val config = new DynamicPipelineConfig(BaseIsa.RV32I)
     SpinalVerilog(SoC.dynamic(RamType.OnChipRam(1 GiB, args.headOption)))
   }
 }
 
 object CoreDynamicSim {
   def main(args: Array[String]) {
-    implicit val config = new Config(BaseIsa.RV32I)
+    implicit val config = new DynamicPipelineConfig(BaseIsa.RV32I)
     SimConfig.withWave.compile(SoC.dynamic(RamType.OnChipRam(1 GiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
@@ -340,29 +386,81 @@ object CoreDynamicSim {
   }
 }
 
-object CoreDynamicExtMem32 {
-  def main(args: Array[String]) {
-    implicit val config = new Config(BaseIsa.RV32I)
-    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
-  }
-}
-
-object CoreDynamicExtMem64 {
-  def main(args: Array[String]) {
-    implicit val config = new Config(BaseIsa.RV64I)
-    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
-  }
-}
-
 class CoreDynamicFormal extends Component {
   setDefinitionName("Core")
 
-  implicit val config = new Config(BaseIsa.RV32I)
+  implicit val config = new DynamicPipelineConfig(BaseIsa.RV32I)
   val pipeline = createDynamicPipeline(extraPlugins = Seq(new RiscvFormal))
 }
 
 object CoreDynamicFormal {
   def main(args: Array[String]) {
     SpinalVerilog(new CoreDynamicFormal)
+  }
+}
+
+/** Build a core with external memory, according to the given configuration
+  *
+  * The configuration can be provided through command line arguments in two ways: either specify the
+  * pipeline type (Static or Dynamic) and ISA (RV32I, RV64I, etc.), or provide the path to a JSON
+  * configuration file for complete control over the core's configuration
+  *
+  * The JSON file must contain a "pipeline" field, either "Static" or "Dynamic", followed by the
+  * properties that differ from the default core configuration of `Config.scala`
+  *   - A minimal example: { "pipeline": "Dynamic", "dCaches": [ { "sets": 16, "ways": 4 } ] }
+  *   - More examples are available in the Proteus Ecosystem
+  *
+  * The core can be built with the Proteus Ecosystem as either:
+  *   - make CORE=riscv.CoreExtMem PIPELINE=pipeline ISA=isa
+  *     - E.g.: make CORE=riscv.CoreExtMem PIPELINE=Dynamic ISA=RV64I
+  *   - make CORE=riscv.CoreExtMem CONFIG=file_path
+  */
+object CoreExtMem {
+  def main(args: Array[String]) {
+    if (args.length < 1 || args.length > 2) {
+      throw new IllegalArgumentException(
+        "Incorrect configuration provided: provide either the path to the JSON configuration file, " +
+          "or the pipeline type and ISA as command line arguments"
+      )
+    }
+
+    var config: Config = null
+    if (args.length == 1) {
+      val configPath: String = args(0)
+      val configFile = scala.io.Source.fromFile(configPath)
+      val jsonString = configFile.getLines().mkString("\n")
+      configFile.close()
+
+      config = Config(jsonString)
+    } else {
+      config = Config(args(0), args(1))
+    }
+
+    if (config.iCaches.length > 1) {
+      throw new IllegalArgumentException(
+        s"Too many instruction caches: Proteus currently supports a maximum of 1 instruction cache"
+      )
+    }
+
+    config match {
+      case config: StaticPipelineConfig =>
+        println("Parsed config as:\n" + config.toString)
+        SpinalVerilog(
+          SoC.static(
+            RamType.ExternalAxi4(1 GiB),
+            extraDbusReadDelay = config.extraDbusReadDelay,
+            applyDelayToIBus = config.applyDelayToIBus
+          )(config)
+        )
+      case config: DynamicPipelineConfig =>
+        println("Parsed config as:\n" + config.toString)
+        SpinalVerilog(
+          SoC.dynamic(
+            RamType.ExternalAxi4(1 GiB),
+            extraDbusReadDelay = config.extraDbusReadDelay,
+            applyDelayToIBus = config.applyDelayToIBus
+          )(config)
+        )
+    }
   }
 }

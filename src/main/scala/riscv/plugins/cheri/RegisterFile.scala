@@ -51,11 +51,11 @@ class RegisterFile(readStage: Stage, writeStage: Stage)(implicit context: Contex
 
       val readIo = master(ReadIo())
       val writeIo = master(WriteIo())
-      val regs = Mem(RegCapability(), Seq.fill(config.numRegs) { RegCapability.Null })
+      val regs = Mem(RegCapability(), Seq.fill(config.isa.numRegs) { RegCapability.Null })
 
       // Add a wire for each register with a readable name. This is to easily
       // view register values in a wave dump.
-      for (i <- 0 until config.numRegs) {
+      for (i <- 0 until config.isa.numRegs) {
         val regWire = RegCapability()
         regWire.setName(s"c$i")
         regWire := regs.readAsync(U(i).resized, writeFirst)

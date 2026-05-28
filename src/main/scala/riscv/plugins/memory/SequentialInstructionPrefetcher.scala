@@ -3,15 +3,18 @@ package riscv.plugins.memory
 import riscv._
 import spinal.core._
 
-class SequentialInstructionPrefetcher(implicit config: Config) extends Plugin with PrefetchService {
+class SequentialInstructionPrefetcher(implicit config: Config)
+    extends Plugin[Pipeline]
+    with PrefetchService {
 
   private var currentAddress: UInt = null
-  private val insignificantBits = log2Up(config.xlen / 8) + log2Up(config.memBusWidth / config.xlen)
+  private val insignificantBits =
+    log2Up(config.isa.xlen / 8) + log2Up(config.memBusWidth / config.isa.xlen)
   private var hasNewTarget: Bool = null
 
   override def setup(): Unit = {
     pipeline plug new Area {
-      currentAddress = RegInit(UInt(config.xlen bits).getZero)
+      currentAddress = RegInit(UInt(config.isa.xlen bits).getZero)
       hasNewTarget = Reg(Bool()).init(False)
     }
   }

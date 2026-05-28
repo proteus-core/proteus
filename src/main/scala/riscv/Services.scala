@@ -392,7 +392,7 @@ trait Csr extends Area {
 }
 
 class CsrIo(implicit config: Config) extends Bundle with IMasterSlave {
-  val rdata, wdata = UInt(config.xlen bits)
+  val rdata, wdata = UInt(config.isa.xlen bits)
   val write = Bool()
 
   def read(): UInt = rdata
@@ -434,7 +434,7 @@ trait RngBuffer extends Area {
 }
 
 class RngIo(implicit config: Config) extends Bundle with IMasterSlave {
-  val rdata = UInt(config.xlen bits)
+  val rdata = UInt(config.isa.xlen bits)
   val rdata_valid, rdata_request = Bool()
 
   private def request(): Unit = {
@@ -452,7 +452,7 @@ class RngIo(implicit config: Config) extends Bundle with IMasterSlave {
     */
   def get(): (Bool, UInt) = {
     val valid = False
-    val value = U(0, config.xlen bits)
+    val value = U(0, config.isa.xlen bits)
 
     request()
 

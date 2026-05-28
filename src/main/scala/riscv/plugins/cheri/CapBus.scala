@@ -4,7 +4,7 @@ import spinal.core._
 import spinal.lib._
 
 case class CapBusCmd(implicit context: Context) extends Bundle {
-  val address = UInt(context.config.xlen bits)
+  val address = UInt(context.config.isa.xlen bits)
   val write = Bool()
   val wdata = MemCapability()
 }

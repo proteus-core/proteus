@@ -125,7 +125,7 @@ class Access(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
           arbitration.rs1Needed := True
           val cs = value(context.data.CS1_DATA)
 
-          val rhs = UInt(config.xlen bits)
+          val rhs = UInt(config.isa.xlen bits)
 
           when(value(pipeline.data.IMM_USED)) {
             when(value(Data.IMM_IS_UNSIGNED)) {

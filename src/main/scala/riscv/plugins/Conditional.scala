@@ -46,9 +46,9 @@ class Conditional(exeStages: Set[Stage]) extends Plugin[Pipeline] {
       exeStage plug new Area {
         import exeStage._
 
-        val src = UInt(config.xlen bits)
+        val src = UInt(config.isa.xlen bits)
         src := value(pipeline.data.RS1_DATA)
-        val cond = UInt(config.xlen bits)
+        val cond = UInt(config.isa.xlen bits)
         cond := value(pipeline.data.RS2_DATA)
 
         val op = value(Data.CONDITION_OP)

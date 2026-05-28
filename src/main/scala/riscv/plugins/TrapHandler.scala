@@ -41,7 +41,7 @@ class TrapStageInvalidator() extends Plugin[StaticPipeline] {
 private class TrapSignals(implicit config: Config) extends Bundle {
   val hasTrapped = False
   val trapCause = UInt(4 bits).assignDontCare()
-  val trapVal = UInt(config.xlen bits).assignDontCare()
+  val trapVal = UInt(config.isa.xlen bits).assignDontCare()
 }
 
 private class StageTrapSignals(implicit config: Config) extends Area {
@@ -56,7 +56,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
     object HAS_TRAPPED extends PipelineData(Bool())
     object TRAP_IS_INTERRUPT extends PipelineData(Bool())
     object TRAP_CAUSE extends PipelineData(UInt(4 bits))
-    object TRAP_VAL extends PipelineData(UInt(config.xlen bits))
+    object TRAP_VAL extends PipelineData(UInt(config.isa.xlen bits))
     object MRET extends PipelineData(Bool())
   }
 
@@ -139,13 +139,13 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
 
       when(arbitration.isValid && value(Data.HAS_TRAPPED)) {
         val mstatusCurrent = mstatus.read()
-        val mstatusNew = UInt(config.xlen bits)
+        val mstatusNew = UInt(config.isa.xlen bits)
         mstatusNew := mstatusCurrent
         mstatusNew(3) := False // mie = 0
         mstatusNew(7) := mstatusCurrent(3) // mpie = mie
         mstatus.write(mstatusNew)
 
-        val cause = U(0, config.xlen bits)
+        val cause = U(0, config.isa.xlen bits)
         cause.msb := value(Data.TRAP_IS_INTERRUPT)
         cause(3 downto 0) := value(Data.TRAP_CAUSE)
         mcause.write(cause)
@@ -153,7 +153,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
         mepc.write(value(pipeline.data.PC))
         mtval.write(value(Data.TRAP_VAL))
 
-        val vecBase = mtvec.read()(config.xlen - 1 downto 2) << 2
+        val vecBase = mtvec.read()(config.isa.xlen - 1 downto 2) << 2
         jumpService.jump(trapStage, vecBase, JumpType.Trap, checkAlignment = false)
 
         trapCommitCallbacks.foreach {
@@ -163,7 +163,7 @@ class TrapHandler(trapStage: Stage)(implicit config: Config)
 
       when(arbitration.isValid && value(Data.MRET)) {
         val mstatusCurrent = mstatus.read()
-        val mstatusNew = UInt(config.xlen bits)
+        val mstatusNew = UInt(config.isa.xlen bits)
         mstatusNew := mstatusCurrent
         mstatusNew(3) := mstatusCurrent(7) // mie = mpie
         mstatusNew(7) := True // mpie = 1

@@ -4,8 +4,8 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
-class SpeculationTracking(implicit config: Config)
-    extends Plugin[Pipeline]
+class SpeculationTracking(implicit config: DynamicPipelineConfig)
+    extends Plugin[DynamicPipeline]
     with SpeculationService {
 
   object SpeculationTracking {

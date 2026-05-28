@@ -40,14 +40,14 @@ class MemoryTagger(memoryStart: BigInt, memorySize: BigInt)(implicit context: Co
       val tagIndex = ((address - memoryStart) >> log2Up(context.clen / 8)).resized
 
       val cbusPayload = cbusIn.cmd.payload
-      val cbusWordCtr = Counter(context.clen / config.xlen)
+      val cbusWordCtr = Counter(context.clen / config.isa.xlen)
       val cbusTag = cbusPayload.wdata.tag
       val cbusWdata = cbusPayload.wdata.value
-      val cbusWords = cbusWdata.subdivideIn(config.xlen bits)
+      val cbusWords = cbusWdata.subdivideIn(config.isa.xlen bits)
       val cbusWord = cbusWords(cbusWordCtr)
-      val cbusWordAddress = cbusPayload.address + (cbusWordCtr << log2Up(config.xlen / 8))
+      val cbusWordAddress = cbusPayload.address + (cbusWordCtr << log2Up(config.isa.xlen / 8))
 
-      val cbusReadWords = Vec(Reg(UInt(config.xlen bits)), context.clen / config.xlen - 1)
+      val cbusReadWords = Vec(Reg(UInt(config.isa.xlen bits)), context.clen / config.isa.xlen - 1)
 
       val PASS_THROUGH: State = new State with EntryPoint {
         whenIsActive {

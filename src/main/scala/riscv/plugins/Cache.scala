@@ -14,12 +14,12 @@ class Cache(
     delay: Int = 1
 )(implicit config: Config)
     extends Plugin[Pipeline] {
-  private val byteIndexBits = log2Up(config.xlen / 8)
-  private val wordIndexBits = log2Up(config.memBusWidth / config.xlen)
+  private val byteIndexBits = log2Up(config.isa.xlen / 8)
+  private val wordIndexBits = log2Up(config.memBusWidth / config.isa.xlen)
   private val setIndexBits = log2Up(sets)
 
   private case class CacheEntry() extends Bundle {
-    val tag: UInt = UInt(config.xlen - (byteIndexBits + wordIndexBits + setIndexBits) bits)
+    val tag: UInt = UInt(config.isa.xlen - (byteIndexBits + wordIndexBits + setIndexBits) bits)
     val value: UInt = UInt(config.memBusWidth bits)
     val age: UInt = UInt(log2Up(ways) bits)
     val valid: Bool = Bool()
@@ -30,7 +30,7 @@ class Cache(
   }
 
   private def getTagBits(address: UInt): UInt = {
-    address(byteIndexBits + wordIndexBits + setIndexBits until config.xlen)
+    address(byteIndexBits + wordIndexBits + setIndexBits until config.isa.xlen)
   }
 
   // get all address bits that determine whether two addresses fall into the same cache line
@@ -45,10 +45,10 @@ class Cache(
 
       private val cache = Vec.fill(sets)(Vec.fill(ways)(RegInit(CacheEntry().getZero)))
 
-      private val cacheHits = RegInit(UInt(config.xlen bits).getZero)
-      private val cacheMisses = RegInit(UInt(config.xlen bits).getZero)
+      private val cacheHits = RegInit(UInt(config.isa.xlen bits).getZero)
+      private val cacheMisses = RegInit(UInt(config.isa.xlen bits).getZero)
       // number of cache misses that are not full misses because the load was already pending at the time of the miss
-      private val forwardedCacheMisses = RegInit(UInt(config.xlen bits).getZero)
+      private val forwardedCacheMisses = RegInit(UInt(config.isa.xlen bits).getZero)
 
       private val externalId = RegInit(UInt(external.config.idWidth bits).getZero)
 
@@ -110,7 +110,7 @@ class Cache(
       sendingImmediateCmd := False
 
       private case class OutstandingTracker() extends Bundle {
-        val address: UInt = UInt(config.xlen bits)
+        val address: UInt = UInt(config.isa.xlen bits)
         val storeInvalidated: Bool = Bool()
         val pending: Bool = Bool()
         val internalIds: Bits = Bits(1 << internal.config.idWidth bits)

@@ -239,7 +239,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
 
   def read(address: UInt): (Bool, UInt) = {
     val valid = False
-    val rdata = U(0, config.xlen bits)
+    val rdata = U(0, config.isa.xlen bits)
     val dropRsp = False
     val issuedThisCycle = False
 
@@ -258,11 +258,11 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
       when(issuedThisCycle || (!dropRsp && !currentCmd.isWrite)) {
         valid := True
         val addressOffset: Int = log2Up(config.memBusWidth / 8) - 1
-        val byteOffset: Int = log2Up(config.xlen / 8)
+        val byteOffset: Int = log2Up(config.isa.xlen / 8)
         val offset: UInt = address(addressOffset downto byteOffset)
-        val shifted: Int = log2Up(config.xlen)
+        val shifted: Int = log2Up(config.isa.xlen)
         val startingBit: UInt = offset << shifted
-        rdata := (bus.rsp.rdata >> startingBit) (config.xlen - 1 downto 0)
+        rdata := (bus.rsp.rdata >> startingBit) (config.isa.xlen - 1 downto 0)
       }
     }
 

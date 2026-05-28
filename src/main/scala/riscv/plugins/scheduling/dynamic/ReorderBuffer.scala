@@ -23,7 +23,7 @@ case class RsData(indexBits: BitCount)(implicit config: Config) extends Bundle {
   val updatingInstructionFound = Bool()
   val updatingInstructionFinished = Bool()
   val updatingInstructionIndex = UInt(indexBits)
-  val updatingInstructionValue = UInt(config.xlen bits)
+  val updatingInstructionValue = UInt(config.isa.xlen bits)
   val updatingInstructionLoadSpeculation = Bool()
 }
 
@@ -50,7 +50,7 @@ class ReorderBuffer(
     robCapacity: Int,
     retirementRegisters: DynBundle[PipelineData[Data]],
     metaRegisters: DynBundle[PipelineData[Data]]
-)(implicit config: Config)
+)(implicit config: DynamicPipelineConfig)
     extends Area
     with CdbListener
     with Resettable {
@@ -64,8 +64,8 @@ class ReorderBuffer(
   private val isFull = RegNext(isFullNext).init(False)
   private val willRetire = False
 
-  private val flushCounter = Reg(UInt(config.xlen bits)).init(0)
-  private val softFlushCounter = Reg(UInt(config.xlen bits)).init(0)
+  private val flushCounter = Reg(UInt(config.isa.xlen bits)).init(0)
+  private val softFlushCounter = Reg(UInt(config.isa.xlen bits)).init(0)
 
   private val fenceDetectedNext = Bool()
   private val fenceDetected = RegNext(fenceDetectedNext).init(False)
@@ -96,15 +96,15 @@ class ReorderBuffer(
    * data structures related to speculative store bypass (SSB)
    */
 
-  val ssbMispredictions = RegInit(UInt(config.xlen bits).getZero)
-  val ssbPredictions = RegInit(UInt(config.xlen bits).getZero)
+  val ssbMispredictions = RegInit(UInt(config.isa.xlen bits).getZero)
+  val ssbPredictions = RegInit(UInt(config.isa.xlen bits).getZero)
 
-  private val currentlyInsertingStore = Flow(UInt(config.xlen bits))
+  private val currentlyInsertingStore = Flow(UInt(config.isa.xlen bits))
   currentlyInsertingStore.setIdle()
 
   val ssbPredictorNumEntries = 12
   private val ssbPredictorEntries =
-    Vec.fill(ssbPredictorNumEntries)(RegInit(UInt(config.xlen bits).getZero))
+    Vec.fill(ssbPredictorNumEntries)(RegInit(UInt(config.isa.xlen bits).getZero))
   private val ssbPredictorCounter = Counter(ssbPredictorNumEntries)
 
   def findSsbPredictorEntry(pc: UInt): Bool = {
@@ -127,16 +127,16 @@ class ReorderBuffer(
    *
    */
 
-  val psfMispredictions = RegInit(UInt(config.xlen bits).getZero)
-  val psfPredictions = RegInit(UInt(config.xlen bits).getZero)
+  val psfMispredictions = RegInit(UInt(config.isa.xlen bits).getZero)
+  val psfPredictions = RegInit(UInt(config.isa.xlen bits).getZero)
 
-  val previousStoreBuffer = RegInit(UInt(config.xlen bits).getZero)
+  val previousStoreBuffer = RegInit(UInt(config.isa.xlen bits).getZero)
   val previousStoreAddress =
-    if (config.addressBasedPsf) RegInit(UInt(config.xlen bits).getZero) else null
+    if (config.addressBasedPsf) RegInit(UInt(config.isa.xlen bits).getZero) else null
 
   val psfPredictorNumEntries = 12
   private val psfPredictorEntries =
-    Vec.fill(psfPredictorNumEntries)(RegInit(UInt(config.xlen bits).getZero))
+    Vec.fill(psfPredictorNumEntries)(RegInit(UInt(config.isa.xlen bits).getZero))
   private val psfPredictorCounter = Counter(psfPredictorNumEntries)
 
   def findPsfPredictorEntry(pc: UInt): Bool = {
@@ -211,7 +211,7 @@ class ReorderBuffer(
   }
 
   private def byte2WordAddress(address: UInt) = {
-    address(config.xlen - 1 downto log2Up(config.xlen / 8))
+    address(config.isa.xlen - 1 downto log2Up(config.isa.xlen / 8))
   }
 
   private def isValidAbsoluteIndex(index: UInt): Bool = {

@@ -50,9 +50,9 @@ trait StaticPipeline extends Pipeline {
   override def connectStages() {
     // Debugging signals to ensure that PC and IR are passed through the whole
     // pipeline.
-    val retiredPc = UInt(config.xlen bits)
+    val retiredPc = UInt(config.isa.xlen bits)
     retiredPc := stages.last.output(data.PC)
-    val retiredIr = UInt(config.xlen bits)
+    val retiredIr = UInt(config.isa.xlen bits)
     retiredIr := stages.last.output(data.IR)
 
     val pipelineDataInfoMap =
