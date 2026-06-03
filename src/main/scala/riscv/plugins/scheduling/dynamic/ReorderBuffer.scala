@@ -70,7 +70,10 @@ class ReorderBuffer(
   private val fenceDetectedNext = Bool()
   private val fenceDetected = RegNext(fenceDetectedNext).init(False)
 
-  val isAvailable = (!isFull || willRetire) && !fenceDetectedNext
+  private val csrDetectedNext = Bool()
+  private val csrDetected = RegNext(csrDetectedNext).init(False)
+
+  val isAvailable = (!isFull || willRetire) && !fenceDetectedNext && !csrDetectedNext
 
   val lastSpeculativeCFInstruction = Reg(Flow(UInt(indexBits)))
 
@@ -161,6 +164,7 @@ class ReorderBuffer(
     isFull := False
     lastSpeculativeCFInstruction.setIdle()
     fenceDetected := False
+    csrDetected := False
     softResetTrigger.setIdle()
     for (nth <- 0 until capacity) {
       robEntries(nth).invalidated := False
@@ -290,6 +294,11 @@ class ReorderBuffer(
     when(pipeline.service[FenceService].isFence(issueStage)) {
       fenceDetected := True
     }
+
+    when(pipeline.service[CsrService].isCsrInstruction(pushedEntry.registerMap)) {
+      //CSR instructions are treated like fences (following instructions only start executing after the CSR instruction retires)
+      csrDetected := True
+    }    
 
     pipeline.service[LsuService].stlSpeculation(pushedEntry.registerMap) := False
 
@@ -697,6 +706,7 @@ class ReorderBuffer(
   def build(): Unit = {
     isFullNext := isFull
     fenceDetectedNext := fenceDetected
+    csrDetectedNext := csrDetected
     val oldestEntry = robEntries(oldestIndex.value)
     val updatedOldestIndex = UInt(indexBits)
     updatedOldestIndex := oldestIndex.value
@@ -708,6 +718,10 @@ class ReorderBuffer(
 
     when(pipeline.service[FenceService].isFence(ret)) {
       fenceDetectedNext := False
+    }
+
+    when(pipeline.service[CsrService].isCsrInstruction(oldestEntry.registerMap)) {
+      csrDetectedNext := False
     }
 
     for (register <- retirementRegisters.keys) {
