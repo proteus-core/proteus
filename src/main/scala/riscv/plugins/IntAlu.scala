@@ -10,7 +10,7 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
     object ALU_SRC1 extends PipelineData(Src1Select())
     object ALU_SRC2 extends PipelineData(Src2Select())
     object ALU_COMMIT_RESULT extends PipelineData(Bool())
-    object ALU_RESULT extends PipelineData(UInt(config.isa.xlen bits))
+    object ALU_RESULT extends PipelineData(UInt(config.xlen bits))
     object ALU_TRUNC extends PipelineData(Bool())
   }
 
@@ -119,7 +119,7 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
 
       issuer.setDestinations(Opcodes.AUIPC, aluStages)
 
-      if (config.isa.xlen == 64) {
+      if (config.xlen == 64) {
         // 64-bit specific instructions
 
         val ops = Seq(
@@ -151,7 +151,7 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
         import stage._
 
         val op = value(Data.ALU_OP)
-        val src1, src2 = UInt(config.isa.xlen bits)
+        val src1, src2 = UInt(config.xlen bits)
 
         switch(value(Data.ALU_SRC1)) {
           is(Src1Select.RS1) {
@@ -173,7 +173,7 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
           }
         }
 
-        val result = UInt(config.isa.xlen bits)
+        val result = UInt(config.xlen bits)
 
         switch(op) {
           is(AluOp.ADD) {
@@ -203,7 +203,7 @@ class IntAlu(aluStages: Set[Stage]) extends Plugin[Pipeline] with IntAluService 
         }
 
         when(value(Data.ALU_COMMIT_RESULT)) {
-          if (config.isa.xlen == 64) {
+          if (config.xlen == 64) {
             when(input(Data.ALU_TRUNC)) {
               output(pipeline.data.RD_DATA) := Utils.signExtend(result(31 downto 0), 64)
             } otherwise {

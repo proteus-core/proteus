@@ -16,27 +16,34 @@ object RamType {
   case class ExternalAxi4(override val size: BigInt) extends RamType(size)
 }
 
-class SoC[C <: Config](
+class SoC(
     ramType: RamType,
-    createPipeline: C => Pipeline,
-    extraDbusReadDelay: Int = 0,
+    createPipeline: Config => Pipeline,
+    extraMemBusDelay: Int = 0,
     applyDelayToIBus: Boolean = false
-)(implicit config: C)
+)(implicit config: Config)
     extends Component {
   setDefinitionName("Core")
 
   val io = new Bundle {
     // Peripherals
     val charOut = master(Flow(UInt(8 bits)))
-    val testDev = master(Flow(UInt(config.isa.xlen bits)))
+    val testDev = master(Flow(UInt(config.xlen bits)))
     val byteDev = master(new ByteDevIo)
 
     val axi = ramType match {
       case RamType.ExternalAxi4(size) =>
-        val axiConfig = Axi4SharedOnChipRam.getAxiConfig(
+        val axiConfig = Axi4Config(
+          addressWidth = log2Up(size),
           dataWidth = config.memBusWidth,
-          byteCount = size,
-          idWidth = 4
+          idWidth = 4,
+          rUserWidth = config.tagBusWidth,
+          wUserWidth = config.tagBusWidth,
+          useLock = false,
+          useRegion = false,
+          useCache = false,
+          useProt = false,
+          useQos = false
         )
 
         master(Axi4Shared(axiConfig))
@@ -104,23 +111,23 @@ class SoC[C <: Config](
       dbusAxi -> List(ramAxi, apbBridge.io.axi)
     )
 
-    if (extraDbusReadDelay > 0) {
+    if (extraMemBusDelay > 0) {
       axiCrossbar.addPipelining(dbusAxi)((dbus, crossbar) => {
         import Utils._
 
         dbus.sharedCmd >> crossbar.sharedCmd
         dbus.writeData >> crossbar.writeData
-        dbus.readRsp << crossbar.readRsp.stage(extraDbusReadDelay)
+        dbus.readRsp << crossbar.readRsp.stage(extraMemBusDelay)
         dbus.writeRsp << crossbar.writeRsp
       })
     }
 
-    if (extraDbusReadDelay > 0 && applyDelayToIBus) {
+    if (extraMemBusDelay > 0 && applyDelayToIBus) {
       axiCrossbar.addPipelining(ibusAxi)((ibus, crossbar) => {
         import Utils._
 
         ibus.readCmd.m2sPipe() >> crossbar.readCmd
-        ibus.readRsp << crossbar.readRsp.s2mPipe().stage(extraDbusReadDelay)
+        ibus.readRsp << crossbar.readRsp.s2mPipe().stage(extraMemBusDelay)
       })
     } else {
       // This pipelining is used to cut combinatorial loops caused by lowLatency=true. It is based on

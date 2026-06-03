@@ -81,11 +81,11 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
 
   override def setup(): Unit = {
     pipeline plug new Area {
-      globalTarget = Flow(UInt(config.isa.xlen bits))
+      globalTarget = Flow(UInt(config.xlen bits))
       globalTarget.valid := False
       globalTarget.payload.assignDontCare()
 
-      val pcOverride = Flow(UInt(config.isa.xlen bits))
+      val pcOverride = Flow(UInt(config.xlen bits))
       pcOverride.valid := False
       pcOverride.payload.assignDontCare()
       PcManager.this.pcOverride = pcOverride
@@ -94,7 +94,7 @@ class PcManager(resetVec: BigInt = 0x0) extends Plugin[StaticPipeline] with Jump
 
   override def finish(): Unit = {
     pipeline plug new Area {
-      val pc = Reg(UInt(config.isa.xlen bits)).init(resetVec)
+      val pc = Reg(UInt(config.xlen bits)).init(resetVec)
       val fetchStage = pipeline.stages.head
 
       def updatePc(target: UInt) = {

@@ -25,7 +25,7 @@ class Shifter(exeStages: Set[Stage]) extends Plugin[Pipeline] {
         )
       )
 
-      val imm_ops = if (config.isa.xlen == 64) {
+      val imm_ops = if (config.xlen == 64) {
         Seq(
           (Opcodes64.SLLI, ShiftOp.SLL, InstructionType.I),
           (Opcodes64.SRLI, ShiftOp.SRL, InstructionType.I),
@@ -56,7 +56,7 @@ class Shifter(exeStages: Set[Stage]) extends Plugin[Pipeline] {
         issuer.setDestinations(opcode, exeStages)
       }
 
-      if (config.isa.xlen == 64) {
+      if (config.xlen == 64) {
         // add 64-bit specific operations
 
         val ops = Seq(
@@ -88,14 +88,14 @@ class Shifter(exeStages: Set[Stage]) extends Plugin[Pipeline] {
       exeStage plug new Area {
         import exeStage._
 
-        val src = UInt(config.isa.xlen bits)
+        val src = UInt(config.xlen bits)
         val useImm = value(pipeline.data.IMM_USED)
-        val imm_len = if (config.isa.xlen == 64) 6 else 5
+        val imm_len = if (config.xlen == 64) 6 else 5
         val shamt = UInt(imm_len bits)
 
         val op = value(Data.SHIFT_OP)
 
-        if (config.isa.xlen == 64) {
+        if (config.xlen == 64) {
           when(input(Data.SHIFT_TRUNC)) {
             when(op === ShiftOp.SRA) {
               src := Utils.signExtend(value(pipeline.data.RS1_DATA)(31 downto 0), 64)
@@ -110,13 +110,13 @@ class Shifter(exeStages: Set[Stage]) extends Plugin[Pipeline] {
         }
 
         when(useImm) {
-          if (config.isa.xlen == 64) {
+          if (config.xlen == 64) {
             shamt := value(pipeline.data.IMM)(5 downto 0)
           } else {
             shamt := value(pipeline.data.IMM)(4 downto 0)
           }
         } otherwise {
-          if (config.isa.xlen == 64) {
+          if (config.xlen == 64) {
             when(input(Data.SHIFT_TRUNC)) {
               shamt := value(pipeline.data.RS2_DATA)(4 downto 0).resized
             } otherwise {
@@ -137,7 +137,7 @@ class Shifter(exeStages: Set[Stage]) extends Plugin[Pipeline] {
         when(arbitration.isValid && op =/= ShiftOp.NONE) {
           arbitration.rs1Needed := True
           arbitration.rs2Needed := !useImm
-          if (config.isa.xlen == 64) {
+          if (config.xlen == 64) {
             when(input(Data.SHIFT_TRUNC)) {
               output(pipeline.data.RD_DATA) := Utils.signExtend(result(31 downto 0), 64)
             } otherwise {

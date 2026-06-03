@@ -11,7 +11,11 @@ class StaticMemoryBackbone(implicit config: Config) extends MemoryBackbone {
   override def finish(): Unit = {
     super.finish()
 
-    setupExternalDBus(internalWriteDBus)
+    pipeline plug new Area {
+      externalDBus = master(new MemBus(config.dbusConfig)).setName("dbus")
+      dbusFilter.foreach(_(internalWriteDBusStage, internalWriteDBus, externalDBus))
+      dbusObservers.foreach(_(internalWriteDBusStage, internalWriteDBus))
+    }
   }
 
   override def createInternalDBus(

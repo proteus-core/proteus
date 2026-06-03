@@ -6,7 +6,7 @@ import spinal.lib._
 
 import scala.collection.mutable
 
-abstract class MemoryBackbone(implicit config: Config) extends Plugin[Pipeline] with MemoryService {
+abstract class MemoryBackbone(implicit config: Config) extends Plugin with MemoryService {
 
   var externalIBus: MemBus = null
   var internalIBus: MemBus = null
@@ -15,7 +15,7 @@ abstract class MemoryBackbone(implicit config: Config) extends Plugin[Pipeline] 
   var internalWriteDBus: MemBus = null
   var internalReadDBusStages: Seq[Stage] = null
   var internalWriteDBusStage: Stage = null
-  var dbusFilters = mutable.ArrayBuffer[MemBusFilter]()
+  var dbusFilter: Option[MemBusFilter] = None
   var ibusFilter: Option[MemBusFilter] = None
   val dbusObservers = mutable.ArrayBuffer[MemBusObserver]()
 
@@ -43,34 +43,15 @@ abstract class MemoryBackbone(implicit config: Config) extends Plugin[Pipeline] 
     }
   }
 
-  def setupExternalDBus(internalDBus: MemBus): Unit = {
-    pipeline plug new Area {
-      externalDBus = master(new MemBus(config.dbusConfig)).setName("dbus")
-
-      if (dbusFilters.nonEmpty) {
-        var previous_level = internalDBus
-
-        dbusFilters.zipWithIndex.foreach { case (f, i) =>
-          if (i < dbusFilters.size - 1) {
-            val intermediateDBus =
-              Stream(MemBus(config.dbusConfig)).setName("intermediate_dbus" + i)
-            f(internalWriteDBusStage, previous_level, intermediateDBus)
-
-            previous_level = intermediateDBus
-          } else {
-            f(internalWriteDBusStage, previous_level, externalDBus)
-          }
-        }
-      } else {
-        internalDBus <> externalDBus
-      }
-
-      dbusObservers.foreach(_(internalWriteDBusStage, internalDBus))
-    }
-  }
-
   override def finish(): Unit = {
     setupIBus()
+
+    // DBUS
+    if (dbusFilter.isEmpty) {
+      dbusFilter = Some((_, idbus, edbus) => {
+        idbus <> edbus
+      })
+    }
   }
 
   override def getExternalIBus: MemBus = {
@@ -99,7 +80,8 @@ abstract class MemoryBackbone(implicit config: Config) extends Plugin[Pipeline] 
   }
 
   override def filterDBus(filter: MemBusFilter): Unit = {
-    dbusFilters += filter
+    assert(dbusFilter.isEmpty)
+    dbusFilter = Some(filter)
   }
 
   override def filterIBus(filter: MemBusFilter): Unit = {

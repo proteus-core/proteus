@@ -80,7 +80,7 @@ class PccManager(branchStage: Stage)(implicit context: Context)
   def jump(stage: Stage, pcc: Capability, capIdx: CapIdx): Unit = {
     setTargetPcc(stage, pcc, capIdx)
 
-    val pc = UInt(config.isa.xlen bits)
+    val pc = UInt(config.xlen bits)
     pc := pcc.offset
     pc.lsb := False
     pipeline.service[JumpService].jump(stage, pc)
@@ -220,7 +220,7 @@ class PccManager(branchStage: Stage)(implicit context: Context)
     if (config.debug) {
       // Add a debug pipeline register for the absolute PC. Since PC is relative to PCC, it's
       // difficult to interpret the waveform when PCC.base != 0. ABS_PC to the rescue!
-      object ABS_PC extends PipelineData(UInt(config.isa.xlen bits))
+      object ABS_PC extends PipelineData(UInt(config.xlen bits))
 
       pipeline.fetchStage plug {
         pipeline.fetchStage.output(ABS_PC) := getPcc(pipeline.fetchStage).address

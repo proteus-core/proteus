@@ -32,7 +32,7 @@ class ExceptionHandler extends Plugin[Pipeline] with ExceptionService {
       }
 
       when(!isInterrupt && cause === TrapCause.CheriException.code) {
-        val newCcsr = UInt(config.isa.xlen bits)
+        val newCcsr = UInt(config.xlen bits)
         newCcsr := ccsr.read()
         newCcsr(9 downto 5) := stage.value(Data.CEXC_CAUSE)
         newCcsr(15 downto 10) := stage.value(Data.CEXC_CAP_IDX).asUInt

@@ -18,8 +18,8 @@ class ScrFile(scrStage: Stage)(implicit context: Context) extends Plugin[Pipelin
   }
 
   private class CapOffsetIo extends Bundle with IMasterSlave {
-    val rdata = UInt(config.isa.xlen bits)
-    val wdata = UInt(config.isa.xlen bits)
+    val rdata = UInt(config.xlen bits)
+    val wdata = UInt(config.xlen bits)
     val write = Bool()
 
     override def asMaster(): Unit = {

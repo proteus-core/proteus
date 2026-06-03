@@ -11,18 +11,21 @@ class Cache(
     prefetcher: Option[PrefetchService] = None,
     maxPrefetches: Int = 1,
     cacheable: (UInt => Bool) = (_ => True),
-    delay: Int = 1
+    enableMemoryTags: Boolean = true,
+    enableSilentStoreElimination: Boolean = false,
+    enableSilentStoreDefence: Boolean = false
 )(implicit config: Config)
     extends Plugin[Pipeline] {
-  private val byteIndexBits = log2Up(config.isa.xlen / 8)
-  private val wordIndexBits = log2Up(config.memBusWidth / config.isa.xlen)
+  private val byteIndexBits = log2Up(config.xlen / 8)
+  private val wordIndexBits = log2Up(config.memBusWidth / config.xlen)
   private val setIndexBits = log2Up(sets)
 
   private case class CacheEntry() extends Bundle {
-    val tag: UInt = UInt(config.isa.xlen - (byteIndexBits + wordIndexBits + setIndexBits) bits)
+    val tag: UInt = UInt(config.xlen - (byteIndexBits + wordIndexBits + setIndexBits) bits)
     val value: UInt = UInt(config.memBusWidth bits)
     val age: UInt = UInt(log2Up(ways) bits)
     val valid: Bool = Bool()
+    val tags: UInt = if (config.memoryTagger) UInt(config.tagBusWidth bits) else null
   }
 
   private def getSetIndex(address: UInt): UInt = {
@@ -30,7 +33,7 @@ class Cache(
   }
 
   private def getTagBits(address: UInt): UInt = {
-    address(byteIndexBits + wordIndexBits + setIndexBits until config.isa.xlen)
+    address(byteIndexBits + wordIndexBits + setIndexBits until config.xlen)
   }
 
   // get all address bits that determine whether two addresses fall into the same cache line
@@ -39,16 +42,17 @@ class Cache(
   }
 
   private def connect(_s: Stage, internal: MemBus, external: MemBus): Unit = {
+    val memoryTagger = pipeline.hasService[MemoryTaggerService]
     val cacheArea = pipeline plug new Area {
       private val idWidth = internal.config.idWidth
       private val maxId = UInt(idWidth bits).maxValue.intValue()
 
       private val cache = Vec.fill(sets)(Vec.fill(ways)(RegInit(CacheEntry().getZero)))
 
-      private val cacheHits = RegInit(UInt(config.isa.xlen bits).getZero)
-      private val cacheMisses = RegInit(UInt(config.isa.xlen bits).getZero)
+      private val cacheHits = RegInit(UInt(config.xlen bits).getZero)
+      private val cacheMisses = RegInit(UInt(config.xlen bits).getZero)
       // number of cache misses that are not full misses because the load was already pending at the time of the miss
-      private val forwardedCacheMisses = RegInit(UInt(config.isa.xlen bits).getZero)
+      private val forwardedCacheMisses = RegInit(UInt(config.xlen bits).getZero)
 
       private val externalId = RegInit(UInt(external.config.idWidth bits).getZero)
 
@@ -93,15 +97,9 @@ class Cache(
       private val rspBuffer = Reg(MemBusRsp(internal.config))
       private val returningCache = Reg(Bool()).init(False)
 
-      // Delay cache response with a fixed delay
-      // Note that a minimal delay of 1 clock cycle is required to prevent
-      // combinatorial loops in case of multiple dbus filters.
-      private val internalRspBuffer = Stream(MemBusRsp(internal.config))
-      internal.rsp << internalRspBuffer.delay(delay)
-
       // initial state: not sending or acknowledging anything
-      internalRspBuffer.valid := False
-      internalRspBuffer.payload.assignDontCare()
+      internal.rsp.valid := False
+      internal.rsp.payload.assignDontCare()
       internal.cmd.ready := False
       external.cmd.valid := False
       external.cmd.payload.assignDontCare()
@@ -110,7 +108,7 @@ class Cache(
       sendingImmediateCmd := False
 
       private case class OutstandingTracker() extends Bundle {
-        val address: UInt = UInt(config.isa.xlen bits)
+        val address: UInt = UInt(config.xlen bits)
         val storeInvalidated: Bool = Bool()
         val pending: Bool = Bool()
         val internalIds: Bits = Bits(1 << internal.config.idWidth bits)
@@ -123,13 +121,14 @@ class Cache(
 
       private def forwardRspToInternal(): Unit = {
         sendingRsp := True
-        internalRspBuffer.valid := True
+        internal.rsp.valid := True
 
-        internalRspBuffer.rdata := external.rsp.rdata
+        internal.rsp.rdata := external.rsp.rdata
+        if (memoryTagger && enableMemoryTags) internal.rsp.ruser := external.rsp.ruser
         // the index of 1's in internalIds indicate to which internal ids the response should be forwarded
         val internalId = OHToUInt(OHMasking.first(outstandingLoads(external.rsp.id).internalIds))
-        internalRspBuffer.id := internalId
-        when(internalRspBuffer.ready) {
+        internal.rsp.id := internalId
+        when(internal.rsp.ready) {
           // set the bit to 0 once it has been forwarded
           outstandingLoads(external.rsp.id).internalIds(internalId) := False
         }
@@ -154,6 +153,7 @@ class Cache(
           cache(setIndex)(way).tag := tag
           cache(setIndex)(way).value := external.rsp.rdata
           cache(setIndex)(way).age := U(0).resized
+          if (memoryTagger && enableMemoryTags) cache(setIndex)(way).tags := external.rsp.ruser
           increaseAgesUpTo(setIndex, ways - 1)
         }
         external.rsp.ready := True
@@ -167,10 +167,10 @@ class Cache(
           prefetcher foreach { pref =>
             when(outstandingLoads(external.rsp.id).internalIds === 0) {
               // inform prefetcher of prefetch response from memory
-              pref.notifyPrefetchResponseFromMemory(address, external.rsp.rdata, external.rsp.id)
+              pref.notifyPrefetchResponseFromMemory(address, external.rsp.rdata, external.rsp.ruser, external.rsp.id)
             } otherwise {
               // inform prefetcher of load response from memory
-              pref.notifyLoadResponseFromMemory(address, external.rsp.rdata)
+              pref.notifyLoadResponseFromMemory(address, external.rsp.rdata, external.rsp.ruser)
             }
           }
         }
@@ -183,7 +183,7 @@ class Cache(
           forwardRspToInternal()
           when(
             // when there is only one id left to forward, put result in cache and inform external bus we are done
-            internalRspBuffer.ready && CountOne(outstandingLoads(external.rsp.id).internalIds) === 1
+            internal.rsp.ready && CountOne(outstandingLoads(external.rsp.id).internalIds) === 1
           ) {
             insertRspInCache(address)
             alreadySendingRsp := False
@@ -200,11 +200,13 @@ class Cache(
           internal.cmd.ready := True
           rspBuffer.id := internal.cmd.id
           rspBuffer.rdata := cacheLine.value
+          if (memoryTagger && enableMemoryTags) rspBuffer.ruser := cacheLine.tags
           when(!sendingRsp) {
-            internalRspBuffer.valid := True
-            internalRspBuffer.id := internal.cmd.id
-            internalRspBuffer.rdata := cacheLine.value
-            when(!internalRspBuffer.ready) {
+            internal.rsp.valid := True
+            internal.rsp.id := internal.cmd.id
+            internal.rsp.rdata := cacheLine.value
+            if (memoryTagger && enableMemoryTags) internal.rsp.ruser := cacheLine.tags
+            when(!internal.rsp.ready) {
               returningCache := True
             }
           } otherwise {
@@ -216,9 +218,9 @@ class Cache(
 
       when(returningCache && !sendingRsp) {
         // when not forwarding rsp but have a stored cache hit, return that
-        internalRspBuffer.valid := True
-        internalRspBuffer.payload := rspBuffer
-        when(internalRspBuffer.ready) {
+        internal.rsp.valid := True
+        internal.rsp.payload := rspBuffer
+        when(internal.rsp.ready) {
           returningCache := False
         }
       }
@@ -238,6 +240,7 @@ class Cache(
             external.cmd.write := internal.cmd.write
             external.cmd.wdata := internal.cmd.wdata
             external.cmd.wmask := internal.cmd.wmask
+            if (memoryTagger && enableMemoryTags) external.cmd.wuser := internal.cmd.wuser
 
             when(!internal.cmd.write) {
               outstandingLoads(externalId).address := internal.cmd.address
@@ -389,11 +392,31 @@ class Cache(
 
         if (internal.config.readWrite) {
           when(internal.cmd.write) {
+            val performWrite = Bool()
+            performWrite := True
+
             storeInCycle := True
             // write command: invalidates line and forwards to external bus
             for (i <- 0 until ways) {
               when(cache(indexBits)(i).tag === tagBits) {
-                cache(indexBits)(i).valid := False
+                val bitMask = Utils.byteMaskToBitMask(internal.cmd.wmask).asUInt
+                val isSilent =
+                  if (enableSilentStoreElimination)
+                    ((internal.cmd.wdata & bitMask) === (cache(indexBits)(i).value & bitMask)) && cache(indexBits)(i).valid
+                  else False
+                val isTainted = Bool()
+                if (config.memoryTagger && enableMemoryTags && enableSilentStoreDefence) {
+                  val userMask = internal.cmd.wmask.subdivideIn(config.tagGranularity / 8 bits).map(_.orR).asBits
+                  val tag = cache(indexBits)(i).tags.asBits & userMask
+                  isTainted := internal.cmd.wuser.orR || tag.orR
+                } else {
+                  isTainted := False
+                }
+                performWrite := !isSilent || isTainted
+
+                when(performWrite) {
+                  cache(indexBits)(i).valid := False
+                }
                 cache(indexBits)(i).age := ways - 1
                 decreaseAgesUntil(indexBits, cache(indexBits)(i).age)
               }
@@ -409,7 +432,11 @@ class Cache(
               }
             }
 
-            initiateCmdForwarding()
+            when(performWrite) {
+              initiateCmdForwarding()
+            } otherwise {
+              internal.cmd.ready := True
+            }
             // if currently forwarding a cmd, we do not ack it, it will stay on the bus for the next cycle
           } otherwise {
             getResult(internal.cmd.address)

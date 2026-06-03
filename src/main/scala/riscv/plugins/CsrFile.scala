@@ -8,7 +8,7 @@ import scala.collection.mutable
 
 private class CsrFileIo(implicit config: Config) extends Bundle with IMasterSlave {
   val rid, wid = UInt(12 bits)
-  val rdata, wdata = UInt(config.isa.xlen bits)
+  val rdata, wdata = UInt(config.xlen bits)
   val read, write = Bool()
   val error = Bool()
 
@@ -187,10 +187,10 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
       val op = value(Data.CSR_OP)
       val ignoreRead = value(pipeline.data.RD) === 0
       val ignoreWrite = value(pipeline.data.RS1) === 0
-      val src = UInt(config.isa.xlen bits)
+      val src = UInt(config.xlen bits)
 
       when(value(Data.CSR_USE_IMM)) {
-        src := Utils.zeroExtend(value(pipeline.data.RS1), config.isa.xlen)
+        src := Utils.zeroExtend(value(pipeline.data.RS1), config.xlen)
       } otherwise {
         src := value(pipeline.data.RS1_DATA)
         arbitration.rs1Needed := True
@@ -232,10 +232,10 @@ class CsrFile(csrStage: Stage, exeStage: Stage) extends Plugin[Pipeline] with Cs
 
         when(csrIo.error) {
           val trapHandler = pipeline.service[TrapService]
-          if (config.isa.xlen == 64) {
+          if (config.xlen == 64) {
             trapHandler.trap(
               csrStage,
-              TrapCause.IllegalInstruction(value(pipeline.data.IR).resize(config.isa.xlen bits))
+              TrapCause.IllegalInstruction(value(pipeline.data.IR).resize(config.xlen bits))
             )
           } else {
             trapHandler.trap(csrStage, TrapCause.IllegalInstruction(value(pipeline.data.IR)))

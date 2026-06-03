@@ -9,7 +9,7 @@ class PipelineData[T <: Data](val dataType: HardType[T]) {
 }
 
 class StandardPipelineData(config: Config) {
-  private val xlen = config.isa.xlen
+  private val xlen = config.xlen
 
   object PC extends PipelineData(UInt(xlen bits))
   object NEXT_PC extends PipelineData(UInt(xlen bits))
