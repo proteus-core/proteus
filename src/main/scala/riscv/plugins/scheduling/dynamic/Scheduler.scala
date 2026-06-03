@@ -3,9 +3,7 @@ package riscv.plugins.scheduling.dynamic
 import riscv._
 import spinal.core._
 
-class Scheduler()(implicit config: DynamicPipelineConfig)
-    extends Plugin[DynamicPipeline]
-    with IssueService {
+class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
 
   private object PrivateRegisters {
     object DEST_FU extends PipelineData(Bits(pipeline.rsStages.size bits))
@@ -19,24 +17,24 @@ class Scheduler()(implicit config: DynamicPipelineConfig)
 
   override def finish(): Unit = {
     pipeline plug new Area {
-      val cdbBMetaData = new DynBundle[PipelineData[spinal.core.Data]]
+      val cdbMetadata = new DynBundle[PipelineData[spinal.core.Data]]
       val registerBundle = new DynBundle[PipelineData[spinal.core.Data]]
 
-      private val lsu = pipeline.service[LsuService]
-      lsu.addPsfAddress(cdbBMetaData)
-      lsu.addPsfMisspeculation(cdbBMetaData)
-      lsu.addPsfMisspeculation(registerBundle)
-      lsu.addPsfAddress(registerBundle)
-
-      pipeline.serviceOption[SpeculationService] foreach { spec =>
-        spec.addIsSpeculativeCF(cdbBMetaData)
-        spec.addIsSpeculativeMD(cdbBMetaData)
-        spec.addIsSpeculativeMD(registerBundle)
-        spec.addSpeculationDependency(cdbBMetaData)
+      pipeline.serviceOption[ControlSpeculationService] foreach { spec =>
+        spec.addIsSpeculativeCF(cdbMetadata)
+        spec.addSpeculationDependency(cdbMetadata)
       }
 
-      if (!pipeline.hasService[SpeculationService]) {
-        pipeline.service[LsuService].addStlSpeculation(registerBundle)
+      pipeline.serviceOption[DataSpeculationService] foreach { spec =>
+        spec.addIsSsbSpeculative(cdbMetadata)
+        spec.addIsSsbSpeculative(registerBundle)
+        spec.addIsPsfSpeculative(cdbMetadata)
+        spec.addIsPsfSpeculative(registerBundle)
+      }
+
+      pipeline.serviceOption[PipelineTaintService] foreach { tracking =>
+        tracking.addTaintToBundle(cdbMetadata)
+        tracking.addTaintToBundle(registerBundle)
       }
 
       private val ret = pipeline.retirementStage
@@ -48,20 +46,20 @@ class Scheduler()(implicit config: DynamicPipelineConfig)
         registerBundle.addElement(register, register.dataType)
       }
 
-      pipeline.rob = new ReorderBuffer(pipeline, config.robEntries, registerBundle, cdbBMetaData)
+      pipeline.rob = new ReorderBuffer(pipeline, config.robEntries, registerBundle, cdbMetadata)
 
       private val rob = pipeline.rob
       rob.build()
 
       private val reservationStations = pipeline.rsStages.map(stage =>
-        new ReservationStation(stage, rob, pipeline, registerBundle, cdbBMetaData)
+        new ReservationStation(stage, rob, pipeline, registerBundle, cdbMetadata)
       )
 
       private val loadManagers = pipeline.loadStages.map(stage =>
-        new LoadManager(pipeline, stage, rob, registerBundle, cdbBMetaData)
+        new LoadManager(pipeline, stage, rob, registerBundle, cdbMetadata)
       )
 
-      val cdb = new CommonDataBus(reservationStations, rob, cdbBMetaData, loadManagers.size)
+      val cdb = new CommonDataBus(reservationStations, rob, cdbMetadata, loadManagers.size)
       cdb.build()
       for ((rs, index) <- reservationStations.zipWithIndex) {
         rs.build()

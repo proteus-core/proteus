@@ -159,6 +159,9 @@ trait LsuAddressTranslator {
 }
 
 trait LsuService {
+  def loadStages: Seq[Stage]
+  def storeStage: Stage
+
   def setAddressTranslator(translator: LsuAddressTranslator): Unit
 
   /** Add a custom store instruction.
@@ -210,29 +213,13 @@ trait LsuService {
 
   def operationOutput(stage: Stage): SpinalEnumCraft[LsuOperationType.type]
 
-  def stlSpeculation(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
-
-  def stlSpeculation(stage: Stage): Bool
-
-  def addStlSpeculation(bundle: DynBundle[PipelineData[Data]]): Unit
-
-  def psfAddress(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt
-
-  def addPsfAddress(bundle: DynBundle[PipelineData[Data]]): Unit
-
   def address(stage: Stage): UInt
-
-  def psfMisspeculation(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
-
-  def addPsfMisspeculation(bundle: DynBundle[PipelineData[Data]]): Unit
 
   def width(
       bundle: Bundle with DynBundleAccess[PipelineData[Data]]
   ): SpinalEnumCraft[LsuAccessWidth.type]
 
   def widthOut(stage: Stage): SpinalEnumCraft[LsuAccessWidth.type]
-
-  def psfMisspeculationRegister: PipelineData[Data]
 }
 
 trait ScheduleService {
@@ -348,12 +335,12 @@ trait PrefetchService {
 
   /** Inform the prefetcher of a load response returning from main memory
     */
-  def notifyLoadResponseFromMemory(address: UInt, data: UInt): Unit
+  def notifyLoadResponseFromMemory(address: UInt, data: UInt, tag: UInt): Unit
 
   /** Inform the prefetcher of a prefetch response returning from main memory, associated with the
     * given id
     */
-  def notifyPrefetchResponseFromMemory(address: UInt, data: UInt, id: UInt): Unit
+  def notifyPrefetchResponseFromMemory(address: UInt, data: UInt, id: UInt, tag: UInt): Unit
 
   /** Check if the prefetcher has a prefetch target ready
     */
@@ -392,7 +379,7 @@ trait Csr extends Area {
 }
 
 class CsrIo(implicit config: Config) extends Bundle with IMasterSlave {
-  val rdata, wdata = UInt(config.isa.xlen bits)
+  val rdata, wdata = UInt(config.xlen bits)
   val write = Bool()
 
   def read(): UInt = rdata
@@ -422,62 +409,6 @@ trait CsrService {
   def getCsr(id: Int): CsrIo
   def csrWriteInCycle(): Bool
   def isCsrInstruction(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
-}
-
-trait RngBuffer extends Area {
-  def read(): UInt
-  def isValid(): Bool
-  def request(): Unit
-  def flush(): Unit
-  def isFull(): Bool
-  def connect(inputStream: Stream[Bits]): Unit
-}
-
-class RngIo(implicit config: Config) extends Bundle with IMasterSlave {
-  val rdata = UInt(config.isa.xlen bits)
-  val rdata_valid, rdata_request = Bool()
-
-  private def request(): Unit = {
-    rdata_request := True
-  }
-  private def read(): UInt = rdata
-  private def isValid(): Bool = rdata_valid
-
-  /** Get a value from this RNG queue.
-    *
-    * @return
-    *   valid: Whether the returned data is valid.
-    * @return
-    *   value: The random seed.
-    */
-  def get(): (Bool, UInt) = {
-    val valid = False
-    val value = U(0, config.isa.xlen bits)
-
-    request()
-
-    when(isValid()) {
-      valid := True
-      value := read()
-    }
-
-    (valid, value)
-  }
-
-  override def asMaster(): Unit = {
-    out(rdata, rdata_valid)
-    in(rdata_request)
-  }
-
-  override def asSlave(): Unit = {
-    super.asSlave()
-    rdata_request := False
-  }
-}
-
-trait RngService {
-  def registerRngBuffer[T <: RngBuffer](rngbuffer: => T): Int
-  def getRngBuffer(id: Int): RngIo
 }
 
 class IrqIo extends Bundle with IMasterSlave {
@@ -547,7 +478,14 @@ trait Resettable {
   def pipelineReset(): Unit
 }
 
-trait SpeculationService {
+trait DataSpeculationService {
+  def addIsSsbSpeculative(bundle: DynBundle[PipelineData[Data]]): Unit
+  def isSsbSpeculative(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+  def addIsPsfSpeculative(bundle: DynBundle[PipelineData[Data]]): Unit
+  def isPsfSpeculative(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+}
+
+trait ControlSpeculationService {
   def isSpeculativeCFOutput(stage: Stage): Bool
   def isSpeculativeCFInput(stage: Stage): Bool
   def isSpeculativeCF(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
@@ -555,12 +493,24 @@ trait SpeculationService {
   def addSpeculationDependency(bundle: DynBundle[PipelineData[Data]]): Unit
   def speculationDependency(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Flow[UInt]
   def speculativeCFMap(): Map[PipelineData[_ <: Data], Bool]
-  def addIsSpeculativeMD(bundle: DynBundle[PipelineData[Data]]): Unit
-  def isSpeculativeMD(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
-  def isSpeculativeMDInput(stage: Stage): Bool
-  def isSpeculativeMDOutput(stage: Stage): Bool
 }
+
+trait PipelineTaintService {
+  def tainted(stage: Stage): Bool
+  def taintedPipelineReg(reg: PipelineData[Data]): Boolean
+  def tainted(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+  def addTaintToBundle(bundle: DynBundle[PipelineData[Data]]): Unit
+  def registerTaint(regId: UInt): Bool
+}
+
+trait ProSpeCTService {}
 
 trait FenceService {
   def isFence(stage: Stage): Bool
 }
+
+trait MemoryTaggerService {
+  def busTag: PipelineData[UInt]
+}
+
+trait SecretRegionService {}

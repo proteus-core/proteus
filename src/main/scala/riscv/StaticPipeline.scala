@@ -4,8 +4,6 @@ import spinal.core._
 
 import collection.mutable
 
-import scala.reflect.ClassTag
-
 private class PipelineDataInfo {
   var firstOutputStageId = Int.MaxValue
   var lastOutputStageId = -1
@@ -27,7 +25,6 @@ private class PipelineDataInfo {
 
 trait StaticPipeline extends Pipeline {
   private var pipelineRegsMap: Map[Stage, PipelineRegs] = null
-  val parentPipeline: DynamicPipeline = null
 
   def pipelineRegs: Map[Stage, PipelineRegs] = {
     assert(pipelineRegsMap != null)
@@ -50,9 +47,9 @@ trait StaticPipeline extends Pipeline {
   override def connectStages() {
     // Debugging signals to ensure that PC and IR are passed through the whole
     // pipeline.
-    val retiredPc = UInt(config.isa.xlen bits)
+    val retiredPc = UInt(config.xlen bits)
     retiredPc := stages.last.output(data.PC)
-    val retiredIr = UInt(config.isa.xlen bits)
+    val retiredIr = UInt(config.xlen bits)
     retiredIr := stages.last.output(data.IR)
 
     val pipelineDataInfoMap =
@@ -112,32 +109,5 @@ trait StaticPipeline extends Pipeline {
       stage.connectOutputDefaults()
       stage.connectLastValues()
     }
-  }
-
-  override def serviceOption[T](implicit tag: ClassTag[T]): Option[T] = {
-    if (parentPipeline == null) {
-      super.serviceOption[T]
-    } else {
-      super.serviceOption[T] match {
-        case None => parentPipeline.serviceOptionLocal[T]
-        case someService => someService
-      }
-    }
-  }
-
-  override def hasService[T](implicit tag: ClassTag[T]): Boolean = {
-    if (parentPipeline == null) {
-      super.hasService[T]
-    } else {
-      super.hasService[T] || parentPipeline.hasServiceLocal[T]
-    }
-  }
-
-  def serviceOptionLocal[T](implicit tag: ClassTag[T]): Option[T] = {
-    super.serviceOption[T]
-  }
-
-  def hasServiceLocal[T](implicit tag: ClassTag[T]): Boolean = {
-    super.hasService[T]
   }
 }

@@ -79,7 +79,7 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
         issueService.setDestinations(opcode, exeStages)
       }
 
-      if (config.isa.xlen == 64) {
+      if (config.xlen == 64) {
         val mulDecodings = Seq(
           (Opcodes64.MULW, False, True, True)
         )
@@ -137,13 +137,13 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
 
         // These variables are declared here to make sure they will be added to
         // the waveform
-        val product = Reg(UInt(config.isa.xlen * 2 bits))
-        val productH = product(config.isa.xlen * 2 - 1 downto config.isa.xlen)
-        val productL = product(config.isa.xlen - 1 downto 0)
+        val product = Reg(UInt(config.xlen * 2 bits))
+        val productH = product(config.xlen * 2 - 1 downto config.xlen)
+        val productL = product(config.xlen - 1 downto 0)
         val initMul = Reg(Bool()).init(True)
-        val step = Counter(config.isa.xlen + 1)
-        val multiplicand = UInt(config.isa.xlen + 1 bits)
-        val multiplier = UInt(config.isa.xlen bits)
+        val step = Counter(config.xlen + 1)
+        val multiplicand = UInt(config.xlen + 1 bits)
+        val multiplier = UInt(config.xlen bits)
         multiplicand := 0
         multiplier := 0
         val isMul = value(Data.MUL)
@@ -166,13 +166,13 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
           when(value(Data.MULDIV_RS2_SIGNED) && rs2.asSInt < 0) {
             // If RS2 is signed, RS1 is also signed
             multiplicand :=
-              Utils.signExtend(Utils.twosComplement(rs1), config.isa.xlen + 1)
+              Utils.signExtend(Utils.twosComplement(rs1), config.xlen + 1)
             multiplier := Utils.twosComplement(rs2)
           } otherwise {
             when(value(Data.MULDIV_RS1_SIGNED)) {
-              multiplicand := Utils.signExtend(rs1, config.isa.xlen + 1)
+              multiplicand := Utils.signExtend(rs1, config.xlen + 1)
             } otherwise {
-              multiplicand := Utils.zeroExtend(rs1, config.isa.xlen + 1)
+              multiplicand := Utils.zeroExtend(rs1, config.xlen + 1)
             }
 
             multiplier := rs2
@@ -189,7 +189,7 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
 
             val result = value(Data.MUL_HIGH) ? productH | productL
 
-            if (config.isa.xlen == 64) {
+            if (config.xlen == 64) {
               when(input(Data.TRUNC)) {
                 output(pipeline.data.RD_DATA) := Utils.signExtend(result(31 downto 0), 64)
               } otherwise {
@@ -204,25 +204,25 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
           } otherwise {
             step.increment()
 
-            val extendedProductH = UInt(config.isa.xlen + 1 bits)
+            val extendedProductH = UInt(config.xlen + 1 bits)
 
             when(value(Data.MULDIV_RS1_SIGNED) || value(Data.MULDIV_RS2_SIGNED)) {
-              extendedProductH := Utils.signExtend(productH, config.isa.xlen + 1)
+              extendedProductH := Utils.signExtend(productH, config.xlen + 1)
             } otherwise {
-              extendedProductH := Utils.zeroExtend(productH, config.isa.xlen + 1)
+              extendedProductH := Utils.zeroExtend(productH, config.xlen + 1)
             }
 
-            val partialSum = UInt(config.isa.xlen + 1 bits)
+            val partialSum = UInt(config.xlen + 1 bits)
 
             when(product.lsb) {
               when(
                 value(Data.MUL_HIGH) && rs1.asSInt < 0 && rs2.asSInt < 0 &&
                   value(Data.MULDIV_RS2_SIGNED) && value(Data.MULDIV_RS1_SIGNED)
               ) {
-                partialSum := extendedProductH + multiplicand(config.isa.xlen - 1 downto 0)
-              } elsewhen (step.value === config.isa.xlen - 1 && rs1.asSInt < 0
+                partialSum := extendedProductH + multiplicand(config.xlen - 1 downto 0)
+              } elsewhen (step.value === config.xlen - 1 && rs1.asSInt < 0
                 && value(Data.MULDIV_RS2_SIGNED) && value(Data.MULDIV_RS1_SIGNED)) {
-                partialSum := extendedProductH + multiplicand(config.isa.xlen - 1 downto 0)
+                partialSum := extendedProductH + multiplicand(config.xlen - 1 downto 0)
               } otherwise {
                 partialSum := extendedProductH + multiplicand
               }
@@ -230,7 +230,7 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
               partialSum := extendedProductH
             }
 
-            product := partialSum @@ product(config.isa.xlen - 1 downto 1)
+            product := partialSum @@ product(config.xlen - 1 downto 1)
           }
         }
       }
@@ -240,10 +240,10 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
       divStage plug new Area {
         import divStage._
 
-        val quotient = Reg(UInt(config.isa.xlen bits)).init(0)
-        val remainder = Reg(UInt(config.isa.xlen bits)).init(0)
+        val quotient = Reg(UInt(config.xlen bits)).init(0)
+        val remainder = Reg(UInt(config.xlen bits)).init(0)
         val initDiv = Reg(Bool()).init(True)
-        val step = Counter(config.isa.xlen + 1)
+        val step = Counter(config.xlen + 1)
         val isDiv = value(Data.DIV)
 
         when(arbitration.isIdle) {
@@ -269,7 +269,7 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
           when(divisor === 0) {
             arbitration.isReady := True
             output(pipeline.data.RD_DATA) :=
-              value(Data.REM) ? rs1 | S(-1, config.isa.xlen bits).asUInt
+              value(Data.REM) ? rs1 | S(-1, config.xlen bits).asUInt
             output(pipeline.data.RD_DATA_VALID) := True
           } elsewhen (initDiv) {
             quotient := dividend
@@ -277,7 +277,7 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
             step.clear()
             initDiv := False
           } elsewhen (step.willOverflowIfInc) {
-            val correctedQuotient, correctedRemainder = UInt(config.isa.xlen bits)
+            val correctedQuotient, correctedRemainder = UInt(config.xlen bits)
             correctedQuotient := quotient
             correctedRemainder := remainder
 
@@ -291,7 +291,7 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
 
             val result = value(Data.REM) ? correctedRemainder | correctedQuotient
 
-            if (config.isa.xlen == 64) {
+            if (config.xlen == 64) {
               when(input(Data.TRUNC)) {
                 output(pipeline.data.RD_DATA) := Utils.signExtend(result(31 downto 0), 64)
               } otherwise {
@@ -306,7 +306,7 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
             step.increment()
             initDiv := True
           } otherwise {
-            val newRemainder = remainder(config.isa.xlen - 2 downto 0) @@ quotient.msb
+            val newRemainder = remainder(config.xlen - 2 downto 0) @@ quotient.msb
             val quotientLsb = Bool()
 
             when(newRemainder >= divisor) {
@@ -317,7 +317,7 @@ class MulDiv(exeStages: Set[Stage]) extends Plugin[Pipeline] {
               quotientLsb := False
             }
 
-            quotient := quotient(config.isa.xlen - 2 downto 0) @@ quotientLsb
+            quotient := quotient(config.xlen - 2 downto 0) @@ quotientLsb
 
             step.increment()
           }

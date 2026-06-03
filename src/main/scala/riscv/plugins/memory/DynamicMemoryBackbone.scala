@@ -9,7 +9,7 @@ import scala.collection.mutable
 class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with Resettable {
 
   private var activeFlush: Bool = null
-  private var unifiedInternalDBus: Stream[MemBus] = null
+  private val memoryTagging = config.memoryTagger
 
   override def build(): Unit = {
     pipeline plug new Area {
@@ -23,7 +23,9 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
     super.finish()
 
     pipeline plug new Area {
-      unifiedInternalDBus = Stream(MemBus(config.dbusConfig))
+      externalDBus = master(new MemBus(config.dbusConfig)).setName("dbus")
+
+      private val unifiedInternalDBus = Stream(MemBus(config.dbusConfig))
 
       unifiedInternalDBus.cmd.valid := False
       unifiedInternalDBus.cmd.address.assignDontCare()
@@ -31,6 +33,7 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
       unifiedInternalDBus.cmd.write := False
       unifiedInternalDBus.cmd.wdata.assignDontCare()
       unifiedInternalDBus.cmd.wmask.assignDontCare()
+      if (memoryTagging) unifiedInternalDBus.cmd.wuser.assignDontCare()
 
       unifiedInternalDBus.rsp.ready := False
 
@@ -80,6 +83,7 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
           fullReadDBusCmd.write := False
           fullReadDBusCmd.wmask.assignDontCare()
           fullReadDBusCmd.wdata.assignDontCare()
+          if (memoryTagging) fullReadDBusCmd.wuser.assignDontCare()
           fullReadDBusCmd.address := internalReadDBus.cmd.address
 
           val busValid = Bool()
@@ -169,6 +173,7 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
             unifiedInternalDBus.cmd.write := cmd.write
             unifiedInternalDBus.cmd.wdata := cmd.wdata
             unifiedInternalDBus.cmd.wmask := cmd.wmask
+            if (memoryTagging) unifiedInternalDBus.cmd.wuser := cmd.wuser
             when(!cmd.write) {
               busId2StageIndex(nextId).invalidated := activeFlush
             }
@@ -192,9 +197,10 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
             }
           }
       }
-    }
 
-    setupExternalDBus(unifiedInternalDBus)
+      dbusFilter.foreach(_(internalWriteDBusStage, unifiedInternalDBus, externalDBus))
+      dbusObservers.foreach(_(internalWriteDBusStage, unifiedInternalDBus))
+    }
   }
 
   override def createInternalDBus(

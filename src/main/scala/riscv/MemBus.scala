@@ -9,7 +9,8 @@ case class MemBusConfig(
     addressWidth: Int,
     idWidth: Int,
     dataWidth: Int,
-    readWrite: Boolean = true
+    readWrite: Boolean = true,
+    tagBusWidth: Int
 ) {
   def byte2WordAddress(ba: UInt): UInt = ba(dataWidth - 1 downto log2Up(dataWidth / 8))
   def word2ByteAddress(wa: UInt): UInt = wa << log2Up(dataWidth / 8)
@@ -21,11 +22,13 @@ case class MemBusCmd(config: MemBusConfig) extends Bundle {
   val write = if (config.readWrite) Bool() else null
   val wdata = if (config.readWrite) UInt(config.dataWidth bits) else null
   val wmask = if (config.readWrite) Bits(config.dataWidth / 8 bits) else null
+  val wuser = if (config.readWrite && config.tagBusWidth > 0) UInt(config.tagBusWidth bits) else null
 }
 
 case class MemBusRsp(config: MemBusConfig) extends Bundle {
   val rdata = UInt(config.dataWidth bits)
   val id = UInt(config.idWidth bits)
+  val ruser = if (config.tagBusWidth > 0) UInt(config.tagBusWidth bits) else null
 }
 
 case class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
@@ -70,6 +73,7 @@ case class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
     rsp.valid := axi4Bus.readRsp.valid
     rsp.id := axi4Bus.readRsp.id
     rsp.rdata := axi4Bus.readRsp.data.asUInt
+    if (config.tagBusWidth > 0) rsp.ruser := axi4Bus.readRsp.user.asUInt
     axi4Bus.readRsp.ready := rsp.ready
 
     axi4Bus
@@ -96,6 +100,7 @@ case class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
     axi4Bus.writeData.valid := cmd.write && cmd.valid && !writeReadyBuffer
     axi4Bus.writeData.data := cmd.wdata.asBits
     axi4Bus.writeData.strb := cmd.wmask
+    if (config.tagBusWidth > 0) axi4Bus.writeData.user := cmd.wuser.asBits
     axi4Bus.writeData.last := True
 
     when(axi4Bus.writeData.ready && !axi4Bus.sharedCmd.ready && axi4Bus.writeData.valid) {
@@ -122,6 +127,7 @@ case class MemBus(val config: MemBusConfig) extends Bundle with IMasterSlave {
     rsp.valid := axi4Bus.readRsp.valid
     rsp.id := axi4Bus.readRsp.id
     rsp.rdata := axi4Bus.readRsp.data.asUInt
+    if (config.tagBusWidth > 0) rsp.ruser := axi4Bus.readRsp.user.asUInt
 
     axi4Bus
   }
@@ -138,6 +144,8 @@ object MemBus {
   def getAxi4Config(config: MemBusConfig) = Axi4Config(
     addressWidth = config.addressWidth,
     dataWidth = config.dataWidth,
+    rUserWidth = config.tagBusWidth,
+    wUserWidth = config.tagBusWidth,
     useId = true,
     idWidth = config.idWidth,
     useRegion = false,
@@ -182,6 +190,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     bus.cmd.write := currentCmd.cmd.write
     bus.cmd.wdata := currentCmd.cmd.wdata
     bus.cmd.wmask := currentCmd.cmd.wmask
+    if (config.tagBusWidth > 0) bus.cmd.wuser := currentCmd.cmd.wuser
   }
 
   bus.rsp.ready := True
@@ -200,7 +209,8 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
       address: UInt,
       write: Boolean = false,
       wdata: UInt = null,
-      wmask: Bits = null
+      wmask: Bits = null,
+      wuser: UInt = null
   ) = {
     assert(!write || bus.config.readWrite)
 
@@ -221,9 +231,11 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
         currentCmd.cmd.write := True
         currentCmd.cmd.wdata := wdata
         currentCmd.cmd.wmask := wmask
+        if (config.tagBusWidth > 0) currentCmd.cmd.wuser := wuser
         bus.cmd.write := True
         bus.cmd.wdata := wdata
         bus.cmd.wmask := wmask
+        if (config.tagBusWidth > 0) bus.cmd.wuser := wuser
       } else {
         currentCmd.cmd.write := False
         bus.cmd.write := False
@@ -237,9 +249,10 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     currentCmd.ready := False
   }
 
-  def read(address: UInt): (Bool, UInt) = {
+  def read(address: UInt): (Bool, UInt, UInt) = {
     val valid = False
-    val rdata = U(0, config.isa.xlen bits)
+    val rdata = U(0, config.xlen bits)
+    val ruser = U(0, config.xlen / config.tagGranularity bits)
     val dropRsp = False
     val issuedThisCycle = False
 
@@ -258,26 +271,33 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
       when(issuedThisCycle || (!dropRsp && !currentCmd.isWrite)) {
         valid := True
         val addressOffset: Int = log2Up(config.memBusWidth / 8) - 1
-        val byteOffset: Int = log2Up(config.isa.xlen / 8)
+        val byteOffset: Int = log2Up(config.xlen / 8)
         val offset: UInt = address(addressOffset downto byteOffset)
-        val shifted: Int = log2Up(config.isa.xlen)
+        val shifted: Int = log2Up(config.xlen)
         val startingBit: UInt = offset << shifted
-        rdata := (bus.rsp.rdata >> startingBit) (config.isa.xlen - 1 downto 0)
+        rdata := (bus.rsp.rdata >> startingBit) (config.xlen - 1 downto 0)
+
+        if (config.tagBusWidth > 0) {
+          val tagByteOffset: Int = log2Up(config.tagGranularity / 8)
+          val tagOffset: UInt = address(addressOffset downto tagByteOffset)
+          ruser := (bus.rsp.ruser >> tagOffset)(config.xlen / config.tagGranularity - 1 downto 0)
+        }
       }
     }
 
-    (valid, rdata)
+    (valid, rdata, ruser)
   }
 
-  def write(address: UInt, wdata: UInt, wmask: Bits): Bool = {
+  def write(address: UInt, wdata: UInt, wmask: Bits, tag: Bool = False): Bool = {
     assert(bus.config.readWrite)
 
     val accepted = False
     val dropRsp = False
     val issuedThisCycle = False
+    val wuser = if (config.tagBusWidth > 0) U(config.tagBusWidth bits, default -> tag) else null
 
     when(!currentCmd.isIssued) {
-      issueCommand(address, write = true, wdata, wmask)
+      issueCommand(address, write = true, wdata, wmask, wuser)
       issuedThisCycle := True
     } elsewhen (currentCmd.cmd.address =/= address) {
       dropRsp := True

@@ -62,11 +62,16 @@ trait DynamicPipeline extends Pipeline {
       service[BranchTargetPredictorService].predictedPc(stage)
       service[JumpService].jumpRequested(stage)
       service[FenceService].isFence(stage)
-      service[LsuService].stlSpeculation(stage)
 
-      serviceOption[SpeculationService] foreach { spec =>
+      if (config.stlSpec) {
+        assert(
+          hasService[DataSpeculationService],
+          "SSB/PSF speculation requires data speculation tracking"
+        )
+      }
+
+      serviceOption[ControlSpeculationService] foreach { spec =>
         spec.isSpeculativeCFOutput(stage)
-        spec.isSpeculativeMDOutput(stage)
       }
     }
 
@@ -131,20 +136,12 @@ trait DynamicPipeline extends Pipeline {
 
   override def serviceOption[T](implicit tag: ClassTag[T]): Option[T] = {
     super.serviceOption[T] match {
-      case None => issuePipeline.serviceOptionLocal[T]
+      case None => issuePipeline.serviceOption[T]
       case someService => someService
     }
   }
 
   override def hasService[T](implicit tag: ClassTag[T]): Boolean = {
-    super.hasService[T] || issuePipeline.hasServiceLocal[T]
-  }
-
-  def serviceOptionLocal[T](implicit tag: ClassTag[T]): Option[T] = {
-    super.serviceOption[T]
-  }
-
-  def hasServiceLocal[T](implicit tag: ClassTag[T]): Boolean = {
-    super.hasService[T]
+    super.hasService[T] || issuePipeline.hasService[T]
   }
 }

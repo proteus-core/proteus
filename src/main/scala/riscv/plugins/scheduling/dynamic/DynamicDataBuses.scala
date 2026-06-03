@@ -8,7 +8,7 @@ case class CdbMessage(metaRegisters: DynBundle[PipelineData[Data]], robIndexBits
     config: Config
 ) extends Bundle {
   val robIndex: UInt = UInt(robIndexBits)
-  val writeValue: UInt = UInt(config.isa.xlen bits)
+  val writeValue: UInt = UInt(config.xlen bits)
   val metadata: Bundle with DynBundleAccess[PipelineData[Data]] = metaRegisters.createBundle
 
   override def clone(): CdbMessage = {

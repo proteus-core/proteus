@@ -14,7 +14,7 @@ class BranchTargetPredictor(
 
   case class PredictionEntry() extends Bundle {
     val pc: UInt = UInt(storedPcBitLength bits)
-    val target: UInt = UInt(config.isa.xlen bits)
+    val target: UInt = UInt(config.xlen bits)
   }
 
   override def build(): Unit = {
@@ -51,7 +51,7 @@ class BranchTargetPredictor(
 
       def findEntry(pc: UInt): Flow[UInt] = {
         val index = findEntryIndex(pc)
-        val result = Flow(UInt(config.isa.xlen bits))
+        val result = Flow(UInt(config.xlen bits))
         result.valid := False
         result.payload.assignDontCare()
 

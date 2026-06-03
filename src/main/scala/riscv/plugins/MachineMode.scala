@@ -6,7 +6,7 @@ import spinal.core._
 import spinal.lib._
 
 private class Misa(pipeline: Pipeline) extends Csr {
-  val xlen = pipeline.config.isa.xlen
+  val xlen = pipeline.config.xlen
 
   val mxlVal = xlen match {
     case 32 => 1
@@ -33,7 +33,7 @@ private class Misa(pipeline: Pipeline) extends Csr {
 }
 
 private class Mstatus(implicit config: Config) extends Csr {
-//  assert(config.isa.xlen == 32, "mstatus only supported for 32-bit")
+//  assert(config.xlen == 32, "mstatus only supported for 32-bit")
 
   val uie = False
   val sie = False
@@ -53,9 +53,9 @@ private class Mstatus(implicit config: Config) extends Csr {
   val tsr = False
   val sd = False
 
-  val mstatus = Bits(config.isa.xlen bits)
+  val mstatus = Bits(config.xlen bits)
 
-  if (config.isa.xlen == 32) {
+  if (config.xlen == 32) {
     mstatus := sd ## B(0, 8 bits) ## tsr ## tw ## tvm ## mxr ## sum ## mprv ##
       xs ## fs ## mpp ## B"00" ## spp ## mpie ## False ## spie ##
       upie ## mie ## False ## sie ## uie
@@ -88,8 +88,8 @@ private class Mstatus(implicit config: Config) extends Csr {
 }
 
 private class Mtvec(implicit config: Config) extends Csr {
-  val mtvec = Reg(UInt(config.isa.xlen bits))
-  val base = mtvec(config.isa.xlen - 1 downto 2) << 2
+  val mtvec = Reg(UInt(config.xlen bits))
+  val base = mtvec(config.xlen - 1 downto 2) << 2
   val mode = mtvec(1 downto 0)
 
   override def read(): UInt = mtvec
@@ -97,14 +97,14 @@ private class Mtvec(implicit config: Config) extends Csr {
 }
 
 private class Mscratch(implicit config: Config) extends Csr {
-  val scratch = Reg(UInt(config.isa.xlen bits))
+  val scratch = Reg(UInt(config.xlen bits))
 
   override def read(): UInt = scratch
   override def write(value: UInt): Unit = scratch := value
 }
 
 private class Mepc(implicit config: Config) extends Csr {
-  val epc = Reg(UInt(config.isa.xlen - 2 bits))
+  val epc = Reg(UInt(config.xlen - 2 bits))
 
   override def read(): UInt = epc << 2
   override def write(value: UInt): Unit = epc := value >> 2
@@ -113,7 +113,7 @@ private class Mepc(implicit config: Config) extends Csr {
 private class Mcause(implicit config: Config) extends Csr {
   val interrupt = Reg(Bool()).init(False)
   val cause = Reg(UInt(4 bits)).init(0)
-  val mcause = interrupt ## Utils.zeroExtend(cause, config.isa.xlen - 1)
+  val mcause = interrupt ## Utils.zeroExtend(cause, config.xlen - 1)
 
   override def read(): UInt = mcause.asUInt
   override def write(value: UInt): Unit = {
@@ -123,7 +123,7 @@ private class Mcause(implicit config: Config) extends Csr {
 }
 
 private class Mtval(implicit config: Config) extends Csr {
-  val tval = Reg(UInt(config.isa.xlen bits))
+  val tval = Reg(UInt(config.xlen bits))
 
   override def read(): UInt = tval
   override def write(value: UInt): Unit = tval := value
@@ -131,22 +131,22 @@ private class Mtval(implicit config: Config) extends Csr {
 
 private class Mvendorid(implicit config: Config) extends Csr {
   // 0 can be used for non-commercial implementations
-  override def read(): UInt = U(0, config.isa.xlen bits)
+  override def read(): UInt = U(0, config.xlen bits)
 }
 
 private class Marchid(implicit config: Config) extends Csr {
   // Proteus received the open-source architecture ID of 32 from the RISC-V foundation.
   // https://github.com/riscv/riscv-isa-manual/blob/master/marchid.md
-  override def read(): UInt = U(32, config.isa.xlen bits)
+  override def read(): UInt = U(32, config.xlen bits)
 }
 
 private class Mimpid(implicit config: Config) extends Csr {
   // We could use this field to identify different versions of our core.
-  override def read(): UInt = U(0, config.isa.xlen bits)
+  override def read(): UInt = U(0, config.xlen bits)
 }
 
 private class Mhartid(implicit config: Config) extends Csr {
-  override def read(): UInt = U(0, config.isa.xlen bits)
+  override def read(): UInt = U(0, config.xlen bits)
 }
 
 class MachineMode(ecallStage: Stage, addMtvec: Boolean = true, addMepc: Boolean = true)

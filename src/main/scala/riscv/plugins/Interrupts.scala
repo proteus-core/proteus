@@ -16,7 +16,7 @@ private class Mip(implicit config: Config) extends Csr {
   val seip = False
   val meip = Reg(Bool()).init(False)
 
-  val mip = B(0, config.isa.xlen - 12 bits) ## meip ## False ## seip ## ueip ##
+  val mip = B(0, config.xlen - 12 bits) ## meip ## False ## seip ## ueip ##
     mtip ## False ## stip ## utip ## msip ## False ## ssip ## usip
 
   override def read(): UInt = {
@@ -43,7 +43,7 @@ private class Mie(implicit config: Config) extends Csr {
   val seie = False
   val meie = Reg(Bool()).init(False)
 
-  val mie = B(0, config.isa.xlen - 12 bits) ## meie ## False ## seie ## ueie ##
+  val mie = B(0, config.xlen - 12 bits) ## meie ## False ## seie ## ueie ##
     mtie ## False ## stie ## utie ## msie ## False ## ssie ## usie
 
   override def read(): UInt = {
@@ -88,7 +88,7 @@ class Interrupts(interruptStage: Stage) extends Plugin[Pipeline] with InterruptS
       val mip = slave(new CsrIo)
 
       when(mtimer.update || external.update) {
-        val mipValue = UInt(config.isa.xlen bits)
+        val mipValue = UInt(config.xlen bits)
         mipValue := mip.read()
 
         when(mtimer.update) {

@@ -22,7 +22,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
 
     // if the speculation tracking is active, mark branches initially as speculative
     def speculationMap: Map[PipelineData[_ <: Data], Bool] = {
-      pipeline.serviceOption[SpeculationService] match {
+      pipeline.serviceOption[ControlSpeculationService] match {
         case Some(spec) => spec.speculativeCFMap()
         case None => Map()
       }
@@ -106,7 +106,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
 
         val misaligned = target(1 downto 0).orR
 
-        val src1, src2 = UInt(config.isa.xlen bits)
+        val src1, src2 = UInt(config.xlen bits)
         src1 := value(pipeline.data.RS1_DATA)
         src2 := value(pipeline.data.RS2_DATA)
 
@@ -137,7 +137,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
             arbitration.rs2Needed := True
           }
 
-          pipeline.serviceOption[SpeculationService] foreach { spec =>
+          pipeline.serviceOption[ControlSpeculationService] foreach { spec =>
             {
               // mark correct speculations as non-speculative (incorrect predictions will remain speculative)
               when(

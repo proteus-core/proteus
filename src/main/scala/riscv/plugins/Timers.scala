@@ -15,7 +15,7 @@ class Timers extends Plugin[Pipeline] {
         cycle := cycle + 1
 
         override def read(): UInt = {
-          if (config.isa.xlen == 32) {
+          if (config.xlen == 32) {
             cycle(31 downto 0)
           } else {
             cycle
@@ -38,7 +38,7 @@ class Timers extends Plugin[Pipeline] {
         }
 
         override def read(): UInt = {
-          if (config.isa.xlen == 32) {
+          if (config.xlen == 32) {
             instret(31 downto 0)
           } else {
             instret
@@ -51,7 +51,7 @@ class Timers extends Plugin[Pipeline] {
       instretCsr.incInstret := pipeline.retirementStage.arbitration.isDone
     }
 
-    if (config.isa.xlen == 32) {
+    if (config.xlen == 32) {
       val cyclehCsr = csr.registerCsr(
         0xc80,
         new Csr {

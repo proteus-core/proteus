@@ -40,14 +40,14 @@ class MemoryTagger(memoryStart: BigInt, memorySize: BigInt)(implicit context: Co
       val tagIndex = ((address - memoryStart) >> log2Up(context.clen / 8)).resized
 
       val cbusPayload = cbusIn.cmd.payload
-      val cbusWordCtr = Counter(context.clen / config.isa.xlen)
+      val cbusWordCtr = Counter(context.clen / config.xlen)
       val cbusTag = cbusPayload.wdata.tag
       val cbusWdata = cbusPayload.wdata.value
-      val cbusWords = cbusWdata.subdivideIn(config.isa.xlen bits)
+      val cbusWords = cbusWdata.subdivideIn(config.xlen bits)
       val cbusWord = cbusWords(cbusWordCtr)
-      val cbusWordAddress = cbusPayload.address + (cbusWordCtr << log2Up(config.isa.xlen / 8))
+      val cbusWordAddress = cbusPayload.address + (cbusWordCtr << log2Up(config.xlen / 8))
 
-      val cbusReadWords = Vec(Reg(UInt(config.isa.xlen bits)), context.clen / config.isa.xlen - 1)
+      val cbusReadWords = Vec(Reg(UInt(config.xlen bits)), context.clen / config.xlen - 1)
 
       val PASS_THROUGH: State = new State with EntryPoint {
         whenIsActive {
@@ -65,7 +65,7 @@ class MemoryTagger(memoryStart: BigInt, memorySize: BigInt)(implicit context: Co
                 }
               }
             } otherwise {
-              val (valid, rdata) = dbusControl.read(payload.address)
+              val (valid, rdata, _) = dbusControl.read(payload.address)
 
               when(valid) {
                 dbusIn.cmd.ready := True
@@ -82,7 +82,7 @@ class MemoryTagger(memoryStart: BigInt, memorySize: BigInt)(implicit context: Co
                 goto(CAP_OP)
               }
             } otherwise {
-              val (valid, rdata) = dbusControl.read(cbusWordAddress)
+              val (valid, rdata, _) = dbusControl.read(cbusWordAddress)
 
               when(valid) {
                 cbusReadWords(cbusWordCtr) := rdata
@@ -112,7 +112,7 @@ class MemoryTagger(memoryStart: BigInt, memorySize: BigInt)(implicit context: Co
               cbusWordCtr.increment()
             }
           } otherwise {
-            val (valid, rdata) = dbusControl.read(cbusWordAddress)
+            val (valid, rdata, _) = dbusControl.read(cbusWordAddress)
 
             when(valid) {
               when(cbusWordCtr.willOverflowIfInc) {

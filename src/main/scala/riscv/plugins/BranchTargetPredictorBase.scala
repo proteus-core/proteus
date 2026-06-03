@@ -25,8 +25,8 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
     with BranchTargetPredictorService {
 
   case class PredictIo() extends Bundle with IMasterSlave {
-    val currentPc = UInt(config.isa.xlen bits)
-    val predictedAddress = Flow(UInt(config.isa.xlen bits))
+    val currentPc = UInt(config.xlen bits)
+    val predictedAddress = Flow(UInt(config.xlen bits))
 
     override def asMaster(): Unit = {
       in(currentPc)
@@ -40,8 +40,8 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
 
   case class JumpIo() extends Bundle with IMasterSlave {
     val mispredicted = Bool()
-    val currentPc = UInt(config.isa.xlen bits)
-    val target = UInt(config.isa.xlen bits)
+    val currentPc = UInt(config.xlen bits)
+    val target = UInt(config.xlen bits)
     val correctlyPredicted = Bool()
 
     override def asMaster(): Unit = {
@@ -64,7 +64,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
   var predictorComponent: PredictorComponent
 
   private object Data {
-    object PREDICTED_PC extends PipelineData(UInt(config.isa.xlen bits))
+    object PREDICTED_PC extends PipelineData(UInt(config.xlen bits))
     object PREDICTED_JUMP extends PipelineData(Bool())
     object PREVENT_FLUSH extends PipelineData(Bool())
   }
@@ -155,7 +155,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
       }
 
       // mark branch prediction as speculative
-      pipeline.serviceOption[SpeculationService] foreach { spec =>
+      pipeline.serviceOption[ControlSpeculationService] foreach { spec =>
         {
           spec.isSpeculativeCFOutput(fetchStage) := predictIo.predictedAddress.valid
         }
@@ -165,8 +165,8 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
 
   override def finish(): Unit = {
     pipeline plug new Area {
-      val mispredictionCount = RegInit(U(0, config.isa.xlen bits))
-      val predictionCount = RegInit(U(0, config.isa.xlen bits))
+      val mispredictionCount = RegInit(U(0, config.xlen bits))
+      val predictionCount = RegInit(U(0, config.xlen bits))
 
       predictorComponent.predictIo <> fetchArea.predictIo
       predictorComponent.jumpIo <> jumpArea.jumpIo

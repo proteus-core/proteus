@@ -81,6 +81,6 @@ trait Pipeline {
   }
 
   def getImplementedExtensions: Seq[Extension] = {
-    Extension(config.isa) +: plugins.flatMap(_.getImplementedExtensions)
+    Extension(config.baseIsa) +: plugins.flatMap(_.getImplementedExtensions)
   }
 }
