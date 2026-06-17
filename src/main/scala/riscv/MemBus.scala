@@ -262,7 +262,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
         val offset: UInt = address(addressOffset downto byteOffset)
         val shifted: Int = log2Up(config.isa.xlen)
         val startingBit: UInt = offset << shifted
-        rdata := (bus.rsp.rdata >> startingBit) (config.isa.xlen - 1 downto 0)
+        rdata := (bus.rsp.rdata >> startingBit)(config.isa.xlen - 1 downto 0)
       }
     }
 
