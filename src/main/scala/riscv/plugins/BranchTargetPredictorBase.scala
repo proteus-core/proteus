@@ -155,7 +155,7 @@ abstract class BranchTargetPredictorBase(fetchStage: Stage, jumpStage: Stage)
       }
 
       // mark branch prediction as speculative
-      pipeline.serviceOption[SpeculationService] foreach { spec =>
+      pipeline.serviceOption[ControlSpeculationService] foreach { spec =>
         {
           spec.isSpeculativeCFOutput(fetchStage) := predictIo.predictedAddress.valid
         }

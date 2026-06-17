@@ -210,29 +210,13 @@ trait LsuService {
 
   def operationOutput(stage: Stage): SpinalEnumCraft[LsuOperationType.type]
 
-  def stlSpeculation(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
-
-  def stlSpeculation(stage: Stage): Bool
-
-  def addStlSpeculation(bundle: DynBundle[PipelineData[Data]]): Unit
-
-  def psfAddress(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt
-
-  def addPsfAddress(bundle: DynBundle[PipelineData[Data]]): Unit
-
   def address(stage: Stage): UInt
-
-  def psfMisspeculation(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
-
-  def addPsfMisspeculation(bundle: DynBundle[PipelineData[Data]]): Unit
 
   def width(
       bundle: Bundle with DynBundleAccess[PipelineData[Data]]
   ): SpinalEnumCraft[LsuAccessWidth.type]
 
   def widthOut(stage: Stage): SpinalEnumCraft[LsuAccessWidth.type]
-
-  def psfMisspeculationRegister: PipelineData[Data]
 }
 
 trait ScheduleService {
@@ -547,7 +531,14 @@ trait Resettable {
   def pipelineReset(): Unit
 }
 
-trait SpeculationService {
+trait DataSpeculationService {
+  def addIsSsbSpeculative(bundle: DynBundle[PipelineData[Data]]): Unit
+  def isSsbSpeculative(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+  def addIsPsfSpeculative(bundle: DynBundle[PipelineData[Data]]): Unit
+  def isPsfSpeculative(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+}
+
+trait ControlSpeculationService {
   def isSpeculativeCFOutput(stage: Stage): Bool
   def isSpeculativeCFInput(stage: Stage): Bool
   def isSpeculativeCF(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
@@ -555,10 +546,14 @@ trait SpeculationService {
   def addSpeculationDependency(bundle: DynBundle[PipelineData[Data]]): Unit
   def speculationDependency(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Flow[UInt]
   def speculativeCFMap(): Map[PipelineData[_ <: Data], Bool]
-  def addIsSpeculativeMD(bundle: DynBundle[PipelineData[Data]]): Unit
-  def isSpeculativeMD(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
-  def isSpeculativeMDInput(stage: Stage): Bool
-  def isSpeculativeMDOutput(stage: Stage): Bool
+}
+
+trait PipelineTaintService {
+  def tainted(stage: Stage): Bool
+  def taintedPipelineReg(reg: PipelineData[Data]): Boolean
+  def tainted(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+  def addTaintToBundle(bundle: DynBundle[PipelineData[Data]]): Unit
+  def registerTaint(regId: UInt): Bool
 }
 
 trait FenceService {
