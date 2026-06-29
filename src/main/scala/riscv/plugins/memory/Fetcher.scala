@@ -24,6 +24,19 @@ class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] with FetchService {
       val pc = input(pipeline.data.PC)
       val nextPc = pc + 4
 
+      val pmpAllowed = Bool()
+      pmpAllowed := True
+      pmpAllowed.allowOverride // otherwise can't override the value with the PMPService value
+      if (pipeline.hasService[PMPService]) {
+        pmpAllowed := pipeline.service[PMPService].isAllowedToExecute(pc)
+      }
+
+      when(!pmpAllowed) {
+        if (pipeline.hasService[TrapService]) {
+          pipeline.service[TrapService].trap(fetchStage, TrapCause.InstructionAccessFault(pc))
+        }
+      }
+
       when(arbitration.isRunning) {
         val fetchAddress = addressTranslator.translate(fetchStage, pc)
         val (valid, rdata) = ibusCtrl.read(fetchAddress)

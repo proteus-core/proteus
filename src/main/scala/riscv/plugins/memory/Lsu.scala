@@ -367,7 +367,20 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
           }
         }
 
-        when(arbitration.isValid && !misaligned) {
+        val pmpAllowed = Bool()
+        pmpAllowed := True
+        pmpAllowed.allowOverride // otherwise can't override the value with the PMPService value
+        if (pipeline.hasService[PMPService]) {
+          pmpAllowed := pipeline.service[PMPService].isAllowedToRead(address)
+        }
+
+        when(isActive && !pmpAllowed) {
+          if (pipeline.hasService[TrapService]) {
+            trap(TrapCause.LoadAccessFault(address), loadStage)
+          }
+        }
+
+        when(arbitration.isValid && !misaligned && pmpAllowed) {
           when(isActive) {
             val busAddress = address & U(0xfffffffcL)
             val valid = Bool()
@@ -485,7 +498,20 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
         }
       }
 
-      when(arbitration.isValid && !misaligned) {
+      val pmpAllowed = Bool()
+      pmpAllowed := True
+      pmpAllowed.allowOverride // otherwise can't override the value with the PMPService value
+      if (pipeline.hasService[PMPService]) {
+        pmpAllowed := pipeline.service[PMPService].isAllowedToWrite(address)
+      }
+
+      when(isActive && !pmpAllowed) {
+        if (pipeline.hasService[TrapService]) {
+          trap(TrapCause.StoreAccessFault(address), storeStage)
+        }
+      }
+
+      when(arbitration.isValid && !misaligned && pmpAllowed) {
         when(isActive) {
           val wValue = value(pipeline.data.RS2_DATA)
           arbitration.rs2Needed := True
