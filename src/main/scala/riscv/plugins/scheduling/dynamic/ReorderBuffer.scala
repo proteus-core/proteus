@@ -296,9 +296,9 @@ class ReorderBuffer(
     }
 
     when(pipeline.service[CsrService].isCsrInstruction(pushedEntry.registerMap)) {
-      //CSR instructions are treated like fences (following instructions only start executing after the CSR instruction retires)
+      // CSR instructions are treated like fences (following instructions only start executing after the CSR instruction retires)
       csrDetected := True
-    }    
+    }
 
     pipeline.service[LsuService].stlSpeculation(pushedEntry.registerMap) := False
 

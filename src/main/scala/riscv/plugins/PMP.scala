@@ -1,4 +1,4 @@
-package riscv.plugins.PMP
+package riscv.plugins
 
 import riscv._
 import spinal.core._
@@ -16,12 +16,11 @@ class PMP extends Plugin[Pipeline] with PMPService {
   private val pmpEntries = 16
   private val pmpCfgPerReg = 4
   private val pmpCsrCount = pmpEntries / pmpCfgPerReg
-  
 
-  private class csrPmpCsr(implicit config: Config) extends Csr {
+  private class csrPmpCfg(implicit config: Config) extends Csr {
     // TODO: Expand to also include 64-bit arch
     // 32-bit version stores 4 configs per register
-    val csrBytes = Reg(UInt(config.xlen bits)).init(0)
+    val csrBytes = Reg(UInt(config.isa.xlen bits)).init(0)
 
     override def read(): UInt = csrBytes
 
@@ -59,7 +58,7 @@ class PMP extends Plugin[Pipeline] with PMPService {
   }
 
   private class csrPmpAddr(num: Int)(implicit config: Config) extends Csr {
-    val addr = Reg(UInt(config.xlen bits)).init(0)
+    val addr = Reg(UInt(config.isa.xlen bits)).init(0)
     override def read(): UInt = addr
 
     val cfgReg = num / pmpCfgPerReg
@@ -89,7 +88,7 @@ class PMP extends Plugin[Pipeline] with PMPService {
         }
       }
       when(!(lockedBySelf | lockedByNext)) {
-        this.addr(29 downto 0) := addr (29 downto 0)
+        this.addr(29 downto 0) := addr(29 downto 0)
       }
     }
   }
@@ -98,7 +97,7 @@ class PMP extends Plugin[Pipeline] with PMPService {
     pipeline plug new Area {
       csrService = pipeline.service[CsrService]
       for (i <- 0 until pmpCsrCount) {
-        csrService.registerCsr(CSR_PMPCSR0 + i, new csrPmpCsr)
+        csrService.registerCsr(CSR_PMPCSR0 + i, new csrPmpCfg)
       }
       for (j <- 0 until pmpEntries) {
         csrService.registerCsr(CSR_PMPADDR0 + j, new csrPmpAddr(j))
@@ -152,11 +151,10 @@ class PMP extends Plugin[Pipeline] with PMPService {
         val l = cfg(7)
 
         when(a === 1) { // TOR
-          val bottom = UInt(config.xlen bits)
+          val bottom = UInt(config.isa.xlen bits)
           if (i == 0 && j == 0) {
             bottom := 0
-          }
-          else {
+          } else {
             val stub_bottom = slave(new CsrIo)
             pipeline plug {
               stub_bottom <> csrService.getCsr(CSR_PMPADDR0 + i * 4 + j - 1)

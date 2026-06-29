@@ -501,7 +501,7 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
           formal.lsuOnMisaligned(storeStage)
         }
       }
-      
+
       val pmpAllowed = Bool()
       pmpAllowed := True
       pmpAllowed.allowOverride // otherwise can't override the value with the PMPService value
