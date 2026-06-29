@@ -181,19 +181,27 @@ class PccManager(branchStage: Stage)(implicit context: Context)
       }
     }
 
-    pipeline.service[ScrService] registerScr (ScrIndex.MTCC, 0x305, new Area with Scr {
-      override val needAsr: Boolean = true
-      private val mtcc = Reg(PackedCapability()).init(PackedCapability.Root)
-      override def read(): Capability = mtcc
-      override def write(value: Capability): Unit = mtcc.assignFrom(value)
-    })
+    pipeline.service[ScrService] registerScr (
+      ScrIndex.MTCC,
+      0x305,
+      new Area with Scr {
+        override val needAsr: Boolean = true
+        private val mtcc = Reg(PackedCapability()).init(PackedCapability.Root)
+        override def read(): Capability = mtcc
+        override def write(value: Capability): Unit = mtcc.assignFrom(value)
+      }
+    )
 
-    pipeline.service[ScrService] registerScr (ScrIndex.MEPCC, 0x341, new Area with Scr {
-      override val needAsr: Boolean = true
-      private val mepcc = Reg(PackedCapability()).init(PackedCapability.Root)
-      override def read(): Capability = mepcc
-      override def write(value: Capability): Unit = mepcc.assignFrom(value)
-    })
+    pipeline.service[ScrService] registerScr (
+      ScrIndex.MEPCC,
+      0x341,
+      new Area with Scr {
+        override val needAsr: Boolean = true
+        private val mepcc = Reg(PackedCapability()).init(PackedCapability.Root)
+        override def read(): Capability = mepcc
+        override def write(value: Capability): Unit = mepcc.assignFrom(value)
+      }
+    )
   }
 
   override def build(): Unit = {
