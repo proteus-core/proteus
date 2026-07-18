@@ -57,6 +57,8 @@ class LoadManager(
         stateNext := State.EXECUTING
         storedMessage := rdbMessage
 
+        discardResult := False
+
         // TODO: this is very ugly
         lsu.addressOfBundle(targetRobEntry.registerMap) := address
         lsu.addressValidOfBundle(targetRobEntry.registerMap) := True
@@ -110,7 +112,14 @@ class LoadManager(
       }
     }
 
-    lsu.psfMisspeculation(resultCdbMessage.metadata) := False
+    if (config.stlSpec && config.addressBasedPsf) {
+      // Forward the RS state (MISS) if predicting
+      lsu.psfState(cdbStream.payload.metadata).allowOverride() := lsu.psfState(storedMessage.registerMap)
+    } else {
+      // Default to NONE for normal execution
+      lsu.psfState(cdbStream.payload.metadata).allowOverride() := PsfState.NONE
+    }
+
     cdbStream.valid := False
     cdbStream.payload := resultCdbMessage
 

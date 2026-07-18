@@ -142,6 +142,10 @@ object LsuAccessWidth extends SpinalEnum {
   val B, H, W = newElement() // TODO: this could mess with memory disambiguation predictors
 }
 
+object PsfState extends SpinalEnum {
+  val NONE, PREDICTION, WARNING, MISS = newElement()
+}
+
 trait LsuAddressTranslator {
 
   /** This method can be used to change the address used by the LSU. The input address is the one
@@ -222,9 +226,9 @@ trait LsuService {
 
   def address(stage: Stage): UInt
 
-  def psfMisspeculation(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+  def psfState(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): SpinalEnumCraft[PsfState.type]
 
-  def addPsfMisspeculation(bundle: DynBundle[PipelineData[Data]]): Unit
+  def addPsfState(bundle: DynBundle[PipelineData[Data]]): Unit
 
   def width(
       bundle: Bundle with DynBundleAccess[PipelineData[Data]]
@@ -232,7 +236,7 @@ trait LsuService {
 
   def widthOut(stage: Stage): SpinalEnumCraft[LsuAccessWidth.type]
 
-  def psfMisspeculationRegister: PipelineData[Data]
+  def psfStateRegister: PipelineData[Data]
 }
 
 trait ScheduleService {

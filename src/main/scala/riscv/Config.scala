@@ -28,13 +28,13 @@ class Config(val baseIsa: BaseIsa, val debug: Boolean = true, val stlSpec: Boole
 
   def memBusWidth: Int = 128
 
-  def robEntries: Int = 32
+  def robEntries: Int = 8
 
-  def parallelAlus: Int = 8
+  def parallelAlus: Int = 2
 
-  def parallelMulDivs: Int = 2
+  def parallelMulDivs: Int = 1
 
-  def parallelLoads: Int = 3
+  def parallelLoads: Int = 1
 
   def addressBasedPsf: Boolean = true
 

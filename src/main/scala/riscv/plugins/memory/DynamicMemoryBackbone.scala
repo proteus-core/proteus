@@ -131,9 +131,13 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
 
       // check whether the correct load bus is ready to receive
       when(unifiedInternalDBus.rsp.valid) {
-        unifiedInternalDBus.rsp.ready := internalReadDBuses(
-          busId2StageIndex(unifiedInternalDBus.rsp.id).stageIndex
-        ).rsp.ready
+        if (internalReadDBuses.length == 1) {
+          unifiedInternalDBus.rsp.ready := internalReadDBuses.head.rsp.ready
+        } else {
+          unifiedInternalDBus.rsp.ready := internalReadDBuses(
+            busId2StageIndex(unifiedInternalDBus.rsp.id).stageIndex.resized
+          ).rsp.ready
+        }
       }
 
       // TODO: is it possible to do the following with an arbiter instead of this manual mess?

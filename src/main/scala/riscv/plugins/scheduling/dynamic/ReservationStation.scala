@@ -19,7 +19,7 @@ case class RegisterSource(indexBits: BitCount) extends Bundle {
 }
 
 case class InstructionDependencies(indexBits: BitCount, speculationTracking: Boolean)
-    extends Bundle {
+  extends Bundle {
   val rs1: RegisterSource = RegisterSource(indexBits)
   val rs2: RegisterSource = RegisterSource(indexBits)
 
@@ -47,13 +47,13 @@ case class InstructionDependencies(indexBits: BitCount, speculationTracking: Boo
 }
 
 class ReservationStation(
-    exeStage: Stage,
-    rob: ReorderBuffer,
-    pipeline: DynamicPipeline,
-    retirementRegisters: DynBundle[PipelineData[Data]],
-    metaRegisters: DynBundle[PipelineData[Data]]
-)(implicit config: Config)
-    extends Area
+                          exeStage: Stage,
+                          rob: ReorderBuffer,
+                          pipeline: DynamicPipeline,
+                          retirementRegisters: DynBundle[PipelineData[Data]],
+                          metaRegisters: DynBundle[PipelineData[Data]]
+                        )(implicit config: Config)
+  extends Area
     with CdbListener
     with Resettable {
   setPartialName(s"RS_${exeStage.stageName}")
@@ -104,16 +104,11 @@ class ReservationStation(
     noPsfPrediction := False
   }
 
-  override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
-    val currentRs1Prior, currentRs2Prior = Flow(UInt(rob.indexBits))
+  override def onCdbMessage(cdbMessage: Flow[CdbMessage]): Unit = {
+    val currentRs1Prior = Flow(UInt(rob.indexBits))
+    val currentRs2Prior = Flow(UInt(rob.indexBits))
     val currentLoadSpeculation = if (speculationTracking) Bool() else null
     val branchWaiting: Flow[UInt] = if (speculationTracking) Flow(UInt(rob.indexBits)) else null
-
-    when(state === State.EXECUTING || state === State.BROADCASTING_RESULT) {
-      when(cdbMessage.robIndex === robEntryIndex) {
-        cdbWaiting := False
-      }
-    }
 
     when(state === State.WAITING_FOR_ARGS) {
       currentRs1Prior := meta.rs1.priorInstruction
@@ -131,8 +126,30 @@ class ReservationStation(
       }
     }
 
-    pipeline.serviceOption[SpeculationService] foreach { spec =>
-      {
+    val r1w = Bool()
+    r1w := False
+    val r2w = Bool()
+    r2w := False
+    val lsw = if (speculationTracking) Bool() else null
+    if (speculationTracking) lsw := False
+
+    when(state === State.WAITING_FOR_ARGS || stateNext === State.WAITING_FOR_ARGS) {
+      r1w := currentRs1Prior.valid
+      r2w := currentRs2Prior.valid
+      if (speculationTracking) {
+        lsw := currentLoadSpeculation
+      }
+    }
+
+    when(cdbMessage.valid) {
+
+      when(state === State.EXECUTING || state === State.BROADCASTING_RESULT) {
+        when(cdbMessage.robIndex === robEntryIndex) {
+          cdbWaiting := False
+        }
+      }
+
+      pipeline.serviceOption[SpeculationService] foreach { spec => {
         // keep track of incoming branch updates, even if already executing
         when(branchWaiting.valid && cdbMessage.robIndex === branchWaiting.payload) {
           val pending = spec.speculationDependency(cdbMessage.metadata)
@@ -143,42 +160,36 @@ class ReservationStation(
           }
         }
       }
+      }
+
+      when(state === State.WAITING_FOR_ARGS || stateNext === State.WAITING_FOR_ARGS) {
+        when(currentRs1Prior.valid && cdbMessage.robIndex === currentRs1Prior.payload) {
+          meta.rs1.priorInstruction.valid := False
+          r1w := False
+          pipeline.serviceOption[SpeculationService] foreach { spec =>
+            when(spec.isSpeculativeMD(cdbMessage.metadata)) {
+              meta.loadSpeculation := True
+              lsw := True
+            }
+          }
+          regs.setReg(pipeline.data.RS1_DATA, cdbMessage.writeValue)
+        }
+
+        when(currentRs2Prior.valid && cdbMessage.robIndex === currentRs2Prior.payload) {
+          meta.rs2.priorInstruction.valid := False
+          r2w := False
+          pipeline.serviceOption[SpeculationService] foreach { spec =>
+            when(spec.isSpeculativeMD(cdbMessage.metadata)) {
+              meta.loadSpeculation := True
+              lsw := True
+            }
+          }
+          regs.setReg(pipeline.data.RS2_DATA, cdbMessage.writeValue)
+        }
+      }
     }
 
     when(state === State.WAITING_FOR_ARGS || stateNext === State.WAITING_FOR_ARGS) {
-      val r1w = Bool()
-      r1w := currentRs1Prior.valid
-      val r2w = Bool()
-      r2w := currentRs2Prior.valid
-      val lsw = if (speculationTracking) Bool() else null
-      if (speculationTracking) {
-        lsw := currentLoadSpeculation
-      }
-
-      when(currentRs1Prior.valid && cdbMessage.robIndex === currentRs1Prior.payload) {
-        meta.rs1.priorInstruction.valid := False
-        r1w := False
-        pipeline.serviceOption[SpeculationService] foreach { spec =>
-          when(spec.isSpeculativeMD(cdbMessage.metadata)) {
-            meta.loadSpeculation := True
-            lsw := True
-          }
-        }
-        regs.setReg(pipeline.data.RS1_DATA, cdbMessage.writeValue)
-      }
-
-      when(currentRs2Prior.valid && cdbMessage.robIndex === currentRs2Prior.payload) {
-        meta.rs2.priorInstruction.valid := False
-        r2w := False
-        pipeline.serviceOption[SpeculationService] foreach { spec =>
-          when(spec.isSpeculativeMD(cdbMessage.metadata)) {
-            meta.loadSpeculation := True
-            lsw := True
-          }
-        }
-        regs.setReg(pipeline.data.RS2_DATA, cdbMessage.writeValue)
-      }
-
       when(!r1w && !r2w && !softFlush) {
         // This is the only place where state is written directly (instead of
         // via stateNext). This ensures that we have priority over whatever
@@ -191,7 +202,11 @@ class ReservationStation(
     }
   }
 
+
   def build(): Unit = {
+
+    val lsu = pipeline.service[LsuService]
+
     meta.build()
 
     cdbWaitingNext := cdbWaiting
@@ -239,6 +254,8 @@ class ReservationStation(
         }
         cdbStream.payload.writeValue := rob.previousStoreBuffer
         cdbStream.payload.robIndex := robEntryIndex
+        lsu.psfState(cdbStream.metadata) := PsfState.PREDICTION
+
         cdbStream.valid := True
         when(cdbStream.ready) {
           broadcastedPsfPrediction := True
@@ -253,24 +270,20 @@ class ReservationStation(
       cdbStream.payload.robIndex := robEntryIndex
       dispatchStream.payload.robIndex := robEntryIndex
 
-      val lsu = pipeline.service[LsuService]
-
       val isLoad = lsu.operationOutput(exeStage) === LsuOperationType.LOAD
-
       val broadcastedIncorrectPsfPrediction = Bool()
 
-      for (register <- retirementRegisters.keys.filter(e => e != lsu.psfMisspeculationRegister)) {
+      for (register <- retirementRegisters.keys.filter(e => e != lsu.psfStateRegister)) {
         dispatchStream.payload.registerMap.element(register) := exeStage.output(register)
       }
 
-      pipeline.serviceOption[SpeculationService] foreach { spec =>
-        {
-          spec.speculationDependency(cdbStream.payload.metadata) := meta.priorBranch
-          // keep control flow speculation taint if the CF speculation is resolved while still load speculating
-          spec.isSpeculativeCF(cdbStream.metadata) := spec.isSpeculativeCFOutput(exeStage) || (spec
-            .isSpeculativeCFInput(exeStage) && meta.loadSpeculation)
-          spec.isSpeculativeMD(cdbStream.metadata) := meta.loadSpeculation
-        }
+      pipeline.serviceOption[SpeculationService] foreach { spec => {
+        spec.speculationDependency(cdbStream.payload.metadata) := meta.priorBranch
+        // keep control flow speculation taint if the CF speculation is resolved while still load speculating
+        spec.isSpeculativeCF(cdbStream.metadata) := spec.isSpeculativeCFOutput(exeStage) || (spec
+          .isSpeculativeCFInput(exeStage) && meta.loadSpeculation)
+        spec.isSpeculativeMD(cdbStream.metadata) := meta.loadSpeculation
+      }
       }
 
       // if the broadcasted address-based PSF prediction turned out to be incorrect, we have to activate the CDB again
@@ -278,8 +291,14 @@ class ReservationStation(
         broadcastedIncorrectPsfPrediction := isLoad && lsu.address(
           exeStage
         ) =/= psfPredictedAddress && broadcastedPsfPrediction && !noPsfPrediction
-        lsu.psfMisspeculation(cdbStream.metadata) := broadcastedIncorrectPsfPrediction
-        lsu.psfMisspeculation(dispatchStream.registerMap) := broadcastedIncorrectPsfPrediction
+
+        lsu.psfState(cdbStream.metadata) := PsfState.NONE
+        lsu.psfState(dispatchStream.registerMap) := PsfState.NONE
+
+        when(broadcastedIncorrectPsfPrediction) {
+          lsu.psfState(cdbStream.metadata) := PsfState.WARNING
+          lsu.psfState(dispatchStream.registerMap) := PsfState.MISS
+        }
       }
 
       pipeline.serviceOption[SpeculationService] match {
@@ -388,10 +407,10 @@ class ReservationStation(
     }
 
     def dependencySetup(
-        metaRs: RegisterSource,
-        rsData: Flow[RsData],
-        regData: PipelineData[UInt]
-    ): Unit = {
+                         metaRs: RegisterSource,
+                         rsData: Flow[RsData],
+                         regData: PipelineData[UInt]
+                       ): Unit = {
       when(rsData.valid) {
         when(rsData.payload.updatingInstructionFound) {
           when(rsData.payload.updatingInstructionFinished) {

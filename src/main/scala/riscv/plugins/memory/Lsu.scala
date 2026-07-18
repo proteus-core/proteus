@@ -30,7 +30,7 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
     object LSU_TARGET_VALID extends PipelineData(Bool())
     object LSU_STL_SPEC extends PipelineData(Bool())
     object LSU_PSF_ADDRESS extends PipelineData(UInt(config.xlen bits))
-    object LSU_PSF_MISSPECULATION extends PipelineData(Bool())
+    object LSU_PSF_STATE extends PipelineData(PsfState())
   }
 
   class DummyFormalService extends FormalService {
@@ -492,17 +492,17 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
     )
   }
 
-  override def psfMisspeculation(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool = {
-    bundle.elementAs[Bool](Data.LSU_PSF_MISSPECULATION.asInstanceOf[PipelineData[Data]])
+  override def psfState(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): SpinalEnumCraft[PsfState.type] = {
+    bundle.elementAs[SpinalEnumCraft[PsfState.type]](Data.LSU_PSF_STATE.asInstanceOf[PipelineData[Data]])
   }
 
-  override def addPsfMisspeculation(bundle: DynBundle[PipelineData[Data]]): Unit = {
+  override def addPsfState(bundle: DynBundle[PipelineData[Data]]): Unit = {
     bundle.addElement(
-      Data.LSU_PSF_MISSPECULATION.asInstanceOf[PipelineData[Data]],
-      Data.LSU_PSF_MISSPECULATION.dataType
+      Data.LSU_PSF_STATE.asInstanceOf[PipelineData[Data]],
+      Data.LSU_PSF_STATE.dataType
     )
   }
 
-  override def psfMisspeculationRegister: PipelineData[Data] =
-    Data.LSU_PSF_MISSPECULATION.asInstanceOf[PipelineData[Data]]
+  override def psfStateRegister: PipelineData[Data] =
+    Data.LSU_PSF_STATE.asInstanceOf[PipelineData[Data]]
 }

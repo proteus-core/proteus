@@ -25,7 +25,7 @@ case class RdbMessage(retirementRegisters: DynBundle[PipelineData[Data]], robInd
 }
 
 trait CdbListener {
-  def onCdbMessage(cdbMessage: CdbMessage)
+  def onCdbMessage(cdbMessage: Flow[CdbMessage])
 }
 
 class CommonDataBus(
@@ -43,15 +43,15 @@ class CommonDataBus(
 
   private val arbitratedInputs = StreamArbiterFactory.roundRobin.noLock.on(inputs)
 
+
   def build(): Unit = {
-    when(arbitratedInputs.valid) {
-      arbitratedInputs.ready := True
-      val listeners = reservationStations :+ rob
-      for (listener <- listeners) {
-        listener.onCdbMessage(arbitratedInputs.payload)
-      }
-    } otherwise {
-      arbitratedInputs.ready := False
+    // TODO: This fix makes the call to 'onCdbMessage' unconditional (not in a when block) so it does not cause a scope
+    // violation. It is uglier for a single message but I think it is necessary anyway when there are multiple messages.
+    val arbitratedFlow = arbitratedInputs.toFlow
+
+    val listeners = reservationStations :+ rob
+    for (listener <- listeners) {
+      listener.onCdbMessage(arbitratedFlow)
     }
   }
 }
@@ -87,11 +87,9 @@ class RobDataBus(
   private val arbitratedInputs = StreamArbiterFactory.roundRobin.noLock.on(inputs)
 
   def build(): Unit = {
-    when(arbitratedInputs.valid) {
-      arbitratedInputs.ready := True
-      rob.onRdbMessage(arbitratedInputs.payload)
-    } otherwise {
-      arbitratedInputs.ready := False
-    }
+    // TODO: This fix makes the call to 'onCdbMessage' unconditional (not in a when block) so it does not cause a scope
+    // violation. It is uglier for a single message but I think it is necessary anyway when there are multiple messages.
+    // .toFlow automatically drives arbitratedInputs.ready := True
+    rob.onRdbMessage(arbitratedInputs.toFlow)
   }
 }

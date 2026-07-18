@@ -22,8 +22,8 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
 
       private val lsu = pipeline.service[LsuService]
       lsu.addPsfAddress(cdbBMetaData)
-      lsu.addPsfMisspeculation(cdbBMetaData)
-      lsu.addPsfMisspeculation(registerBundle)
+      lsu.addPsfState(cdbBMetaData)
+      lsu.addPsfState(registerBundle)
       lsu.addPsfAddress(registerBundle)
 
       pipeline.serviceOption[SpeculationService] foreach { spec =>
@@ -80,6 +80,8 @@ class Scheduler() extends Plugin[DynamicPipeline] with IssueService {
 
       val dispatchBus = new DispatchBus(reservationStations, rob, dispatcher, registerBundle)
       dispatchBus.build()
+
+      rob.processFlushes()
 
       dispatcher.rdbStream >> robDataBus.inputs(0)
 

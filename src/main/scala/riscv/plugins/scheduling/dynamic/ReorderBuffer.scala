@@ -2,7 +2,10 @@ package riscv.plugins.scheduling.dynamic
 
 import riscv._
 import spinal.core._
-import spinal.lib.{Counter, Flow}
+import spinal.lib._
+
+import scala.collection.mutable.ArrayBuffer
+import scala.language.postfixOps
 
 case class RobEntry(retirementRegisters: DynBundle[PipelineData[Data]])(implicit config: Config)
     extends Bundle {
@@ -82,8 +85,6 @@ class ReorderBuffer(
   currentSoftResetTrigger.setIdle()
   val currentCdbUpdate = Flow(UInt(indexBits))
   currentCdbUpdate.setIdle()
-  val currentCdbSoftReset = Bool()
-  currentCdbSoftReset := False
   val currentRdbUpdate = Flow(UInt(indexBits))
   currentRdbUpdate.setIdle()
 
@@ -123,12 +124,13 @@ class ReorderBuffer(
     ssbPredictorCounter.increment()
   }
 
-  /* data structures related to predictive store forwarding (PSF)
-   *
+  /*
+   * data structures related to predictive store forwarding (PSF)
    */
 
   val psfMispredictions = RegInit(UInt(config.xlen bits).getZero)
   val psfPredictions = RegInit(UInt(config.xlen bits).getZero)
+  val totalLoads = RegInit(UInt(config.xlen bits).getZero)
 
   val previousStoreBuffer = RegInit(UInt(config.xlen bits).getZero)
   val previousStoreAddress =
@@ -167,47 +169,207 @@ class ReorderBuffer(
     }
   }
 
-  private def softFlush(lastCorrectId: UInt, nextPc: UInt): Bool = {
-    val ret = False
-    // prevent flushes caused by transient instructions
-    when(!robEntries(lastCorrectId).invalidated && !hardResetThisCycle && !softResetTrigger.valid) {
-      // this is fine, because fences are always the last instruction in the ROB (cannot insert anything else while it's present)
-      fenceDetected := False
+  /** A builder pattern helper used to attach specific callbacks or actions to a flush request
+   * depending on the type of flush (soft or hard) granted by the arbiter.
+   *
+   * @param req The parent [[FlushPort]] associated with this builder.
+   */
+  class FlushActionBuilder(req: FlushPort) {
+    /** Registers a block of code to execute if a soft flush is granted. */
+    def onSoftFlush(block: => Unit): FlushActionBuilder = {
+      when(req.grantedSoftFlush) { block }
+      this
+    }
 
-      softResetThisCycle := True
-      softResetTrigger.push(lastCorrectId)
-      currentSoftResetTrigger.push(lastCorrectId)
-      newestAtSoftReset := newestIndex
+    /** Registers a block of code to execute if a hard flush is granted. */
+    def onHardFlush(block: => Unit): FlushActionBuilder = {
+      when(req.grantedHardFlush) { block }
+      this
+    }
 
-      // set fetch PC to correct next PC (even if it was predicted as something else) and invalidate issuepipeline stages
-      pipeline.issuePipeline.service[JumpService].jump(nextPc)
+    /** Registers a block of code to execute if either a soft or hard flush is granted. */
+    def onAnyFlush(block: => Unit): FlushActionBuilder = {
+      when(req.grantedAnyFlush) { block }
+      this
+    }
+  }
 
-      // reset last speculative instruction
-      lastSpeculativeCFInstruction.setIdle()
+  /** Represents a port through which pipeline services can request a pipeline flush.
+   * Automatically registers itself into the ROB's internal `_flushRequests` list upon creation.
+   */
+  class FlushPort(implicit config: Config) extends Bundle {
+    // Automatically register this port into the global arbitration pool so the correct logic can be added later.
+    _flushRequests += this
 
-      // ensure entries between oldest and newest are invalidated -> new entry should only be pushed
-      //     if rob/cdb updates are already there for invalid or stages got invalidated
-      for (relative <- 0 until capacity) {
-        val absolute = absoluteIndexForRelative(relative).resized
-        val entry = robEntries(absolute)
-        when(isValidAbsoluteIndex(absolute)) {
-          when(relative > relativeIndexForAbsolute(lastCorrectId)) {
-            entry.invalidated := True
-          } otherwise {
-            // if there are still valid control-flow speculation instructions, set the youngest one as the last
-            pipeline.serviceOption[SpeculationService] foreach { spec =>
-              when(spec.isSpeculativeCF(entry.registerMap)) {
-                lastSpeculativeCFInstruction.push(absolute)
+    /** Indicates whether this flush request is active. */
+    val valid            = Bool()
+    /** The ROB index of the last correct instruction (typically the instruction requesting the flush). */
+    val lastCorrectId    = UInt(indexBits)
+    /** The target program counter (PC) where execution should resume after the flush. */
+    val nextPc           = UInt(config.xlen bits)
+
+    /** Set if this request wins and is serviced via a soft flush. */
+    val grantedSoftFlush = Bool()
+    /** Set if this request is serviced via a hard flush. */
+    val grantedHardFlush = Bool()
+    /** Helper indicating if any flush type was granted to this request. */
+    def grantedAnyFlush  = grantedSoftFlush || grantedHardFlush
+
+    /** Initializes the flush port with target metadata and defaults flags to false.
+     *
+     * @param lastCorrectId The ROB index of the instruction requesting the flush.
+     * @param nextPc The target PC to jump to after flushing.
+     * @return This initialized [[FlushPort]] instance.
+     */
+    def init(lastCorrectId: UInt, nextPc: UInt): FlushPort = {
+      this.lastCorrectId := lastCorrectId
+      this.nextPc := nextPc
+      this.valid := False
+      this.grantedSoftFlush := False
+      this.grantedHardFlush := False
+      this
+    }
+
+    /** Activates the flush request and returns an action builder to register callbacks.
+     *
+     * @return A [[FlushActionBuilder]] for handling grant callbacks.
+     */
+    def request(): FlushActionBuilder = {
+      this.valid := True
+      new FlushActionBuilder(this)
+    }
+
+    /** Convenience method to trigger a flush due to a Predictive Store Forwarding (PSF) misprediction.
+     * Automatically trains the PSF predictor and increments the misprediction counter when granted.
+     * TODO: Should be moved to a PSF specific module later.
+     * @param pc The PC of the mispredicted instruction.
+     */
+    def requestPsf(pc: UInt): Unit = {
+      request().onAnyFlush {
+        addPsfPredictorEntry(pc)
+        psfMispredictions := psfMispredictions + 1
+      }
+    }
+
+    /** Convenience method to trigger a flush due to a Speculative Store Bypass (SSB) misprediction.
+     * Automatically trains the SSB predictor and increments the misprediction counter when granted.
+     * TODO: Should be moved to a SSB specific module later.
+     *
+     * @param pc The PC of the mispredicted instruction.
+     */
+    def requestSsb(pc: UInt): Unit = {
+      request().onAnyFlush {
+        addSsbPredictorEntry(pc)
+        ssbMispredictions := ssbMispredictions + 1
+      }
+    }
+  }
+
+  /** Collection of all active flush ports instantiated during code generation. */
+  private val _flushRequests = ArrayBuffer[FlushPort]()
+
+  /** Evaluates all pending flush requests, arbitrates to find the oldest requesting instruction,
+   * and executes the appropriate flush mechanism (Soft Flush vs. Hard Flush).
+   *
+   * A **Soft Flush** is preferred as it immediately invalidates only younger, speculative instructions
+   * in the ROB and redirects the fetch stage without waiting for the faulting instruction to retire.
+   *
+   * Due to hardware constraints, there can only be one soft flush at a time. If it is already taken,
+   * a **Hard Flush** acts as a fallback by marking the instruction bundle to jump upon retirement
+   * completely wiping the pipeline when it reaches the end of the ROB.
+   */
+  def processFlushes(): Unit = {
+    var winnerFound: Bool = False
+    var winningIndex: UInt = U(0, indexBits)
+    var winningPc: UInt = U(0, config.xlen bits)
+
+    // Iterate through all registered flush ports to find the oldest request in this cycle.
+    // In an out-of-order execution engine, the oldest instruction always takes priority to ensure
+    // program order correctness.
+    for (req <- _flushRequests) {
+      val older = isOlder(req.lastCorrectId, winningIndex)
+      val takeThis = req.valid && (!winnerFound || older)
+
+      winnerFound = winnerFound || req.valid
+      winningIndex = Mux(takeThis, req.lastCorrectId, winningIndex)
+      winningPc = Mux(takeThis, req.nextPc, winningPc)
+    }
+
+    when(winnerFound) {
+      val winningEntry = robEntries(winningIndex)
+
+      // Ensure the winning entry hasn't already been invalidated by an earlier flush
+      // and that a global hard reset isn't currently taking place.
+      when(!winningEntry.invalidated && !hardResetThisCycle) {
+
+        // Handle edge cases where multiple ports request a flush from the EXACT same instruction index.
+        // We create a bitmask of all valid requests matching the winning index and pick the first one.
+        val winnerMask = B(_flushRequests.map(req => req.valid && req.lastCorrectId === winningIndex))
+        val singleWinnerOH = OHMasking.firstV2(winnerMask)
+
+        // Check if the current soft reset is still valid or if it can be replaced.
+        val currentTriggerRetiring = softResetTrigger.valid &&
+          softResetTrigger.payload === oldestIndex.value &&
+          willRetire
+        val currentTriggerValid = softResetTrigger.valid && !currentTriggerRetiring
+        val isRedundant = currentTriggerValid && winningIndex === softResetTrigger.payload || pipeline.service[JumpService].jumpOfBundle(winningEntry.registerMap)
+
+        // We can perform a soft flush if there is no active trigger, or if the new flush is older than the existing trigger.
+        val canSoftFlush = !currentTriggerValid || isOlder(winningIndex, softResetTrigger.payload)
+
+        when(isRedundant) {
+          // Do nothing; the pipeline is already scheduled to flush from this instruction point.
+        } elsewhen(canSoftFlush) {
+          // --- SOFT FLUSH EXECUTION ---
+          fenceDetected := False
+          softResetThisCycle := True
+          softResetTrigger.push(winningIndex)
+          currentSoftResetTrigger.push(winningIndex)
+          newestAtSoftReset := newestIndex.value
+
+          pipeline.issuePipeline.service[JumpService].jump(winningPc)
+          lastSpeculativeCFInstruction.setIdle()
+
+          // Grant the soft flush signal to the winning port to trigger its `onSoftFlush` / `onAnyFlush` callbacks.
+          for ((req, i) <- _flushRequests.zipWithIndex) {
+            when(singleWinnerOH(i)) {
+              req.grantedSoftFlush := True
+            }
+          }
+
+          // Invalidate all ROB entries younger than the winning instruction.
+          for (relative <- 0 until capacity) {
+            val absolute = absoluteIndexForRelative(relative).resized
+            val entry = robEntries(absolute)
+            when(isValidAbsoluteIndex(absolute)) {
+              when(relative > relativeIndexForAbsolute(winningIndex)) {
+                entry.invalidated := True
+              } otherwise {
+                // For surviving older entries, update the latest speculative control-flow tracking.
+                pipeline.serviceOption[SpeculationService] foreach { spec =>
+                  when(spec.isSpeculativeCF(entry.registerMap)) {
+                    lastSpeculativeCFInstruction.push(absolute)
+                  }
+                }
               }
+            }
+          }
+          softFlushCounter := softFlushCounter + 1
+        } otherwise {
+          // --- HARD FLUSH FALLBACK ---
+          // If a soft flush cannot be applied, defer the flush until the winning instruction retires.
+          // This is done by asserting the jump flag on the instruction's register bundle.
+          pipeline.service[JumpService].jumpOfBundle(winningEntry.registerMap) := True
+
+          // Grant the hard flush signal to the winning port to trigger its `onHardFlush` / `onAnyFlush` callbacks.
+          for ((req, i) <- _flushRequests.zipWithIndex) {
+            when(singleWinnerOH(i)) {
+              req.grantedHardFlush := True
             }
           }
         }
       }
-      softFlushCounter := softFlushCounter + 1
-
-      ret := True
     }
-    ret
   }
 
   private def byte2WordAddress(address: UInt) = {
@@ -262,6 +424,14 @@ class ReorderBuffer(
       adjusted := absolute
     }
     adjusted
+  }
+
+  def isOlder(a: UInt, b: UInt): Bool = {
+    relativeIndexForAbsolute(a) < relativeIndexForAbsolute(b)
+  }
+
+  def isYounger(a: UInt, b: UInt): Bool = {
+    relativeIndexForAbsolute(a) > relativeIndexForAbsolute(b)
   }
 
   def pushEntry(): (UInt, EntryMetadata) = {
@@ -367,64 +537,66 @@ class ReorderBuffer(
     meta
   }
 
-  override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
+  override def onCdbMessage(cdbMessage: Flow[CdbMessage]): Unit = {
     // TODO: the PSF update logic is probably way too complicated...
     val lsu = pipeline.service[LsuService]
-    if (config.addressBasedPsf) {
-      when(lsu.psfMisspeculation(cdbMessage.metadata)) {
-        robEntries(cdbMessage.robIndex).cdbUpdated := robEntries(
-          cdbMessage.robIndex
-        ).rdbUpdated || (currentRdbUpdate.valid && currentRdbUpdate.payload === cdbMessage.robIndex)
-        currentCdbUpdate.push(cdbMessage.robIndex)
-        // do not update stored value when it's a misprediction update
-        psfMispredictions := psfMispredictions + 1
-        addPsfPredictorEntry(
-          robEntries(cdbMessage.robIndex).registerMap
-            .elementAs[UInt](pipeline.data.PC.asInstanceOf[PipelineData[Data]])
-        )
-        val flushed = softFlush(
-          cdbMessage.robIndex,
-          robEntries(cdbMessage.robIndex).registerMap.elementAs[UInt](
-            pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]
-          )
-        )
-        currentCdbSoftReset := flushed
-        when(!flushed) {
-          pipeline
-            .service[JumpService]
-            .jumpOfBundle(robEntries(cdbMessage.robIndex).registerMap) := True
-        }
-      } otherwise {
-        robEntries(cdbMessage.robIndex).cdbUpdated := True
-        robEntries(cdbMessage.robIndex).registerMap
-          .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
-      }
-    } else {
-      robEntries(cdbMessage.robIndex).cdbUpdated := True
-      robEntries(cdbMessage.robIndex).registerMap
-        .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
+
+    val entry = robEntries(cdbMessage.robIndex)
+    val pc = entry.registerMap
+      .elementAs[UInt](pipeline.data.PC.asInstanceOf[PipelineData[Data]])
+    val nextPc = entry.registerMap
+      .elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]])
+    val flushPort = (new FlushPort).init(cdbMessage.robIndex, nextPc)
+
+    def processValidEntry(): Unit = {
+      entry.cdbUpdated := True
+      entry.registerMap.element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
     }
 
-    lsu.psfAddress(robEntries(cdbMessage.robIndex).registerMap) := lsu.psfAddress(
-      cdbMessage.metadata
-    )
+    when(cdbMessage.valid) {
+      if (config.addressBasedPsf) {
+        switch(lsu.psfState(cdbMessage.metadata)) {
+          is(PsfState.NONE) {
+            processValidEntry()
+          }
+          is(PsfState.PREDICTION) {
+            psfPredictions := psfPredictions + 1
+          }
+          is(PsfState.WARNING) {
+            // Request a flush
+            flushPort.requestPsf(pc)
+          }
+          is(PsfState.MISS) {
+            // Request a flush (this may be redundant but it is technically possible that the WARNING message has not
+            // arrived yet.). The flush is still necessary because the reservation stations received the incorrect value
+            // from the prediction.
+            flushPort.requestPsf(pc)
 
-    pipeline.serviceOption[SpeculationService] foreach { spec =>
-      // mark PSF speculation
-      spec.isSpeculativeMD(robEntries(cdbMessage.robIndex).registerMap) := spec.isSpeculativeMD(
-        cdbMessage.metadata
-      )
-      spec.isSpeculativeCF(robEntries(cdbMessage.robIndex).registerMap) := spec.isSpeculativeCF(
-        cdbMessage.metadata
-      )
+            // This message does contain the correct values, so store the values
+            processValidEntry()
+          }
+        }
+      } else {
+        processValidEntry()
+      }
 
-      // if this instruction's CF change was correctly predicted, disregard it as the most recent speculative instruction
-      when(
-        lastSpeculativeCFInstruction.valid &&
-          lastSpeculativeCFInstruction.payload === cdbMessage.robIndex &&
-          !spec.isSpeculativeCF(cdbMessage.metadata)
-      ) {
-        lastSpeculativeCFInstruction := spec.speculationDependency(cdbMessage.metadata).resized
+      when(!entry.cdbUpdated) {
+        if (config.addressBasedPsf) {
+          lsu.psfAddress(entry.registerMap) := lsu.psfAddress(cdbMessage.metadata)
+        }
+
+        pipeline.serviceOption[SpeculationService] foreach { spec =>
+          spec.isSpeculativeMD(entry.registerMap) := spec.isSpeculativeMD(cdbMessage.metadata)
+          spec.isSpeculativeCF(entry.registerMap) := spec.isSpeculativeCF(cdbMessage.metadata)
+
+          when(
+            lastSpeculativeCFInstruction.valid &&
+              lastSpeculativeCFInstruction.payload === cdbMessage.robIndex &&
+              !spec.isSpeculativeCF(cdbMessage.metadata)
+          ) {
+            lastSpeculativeCFInstruction := spec.speculationDependency(cdbMessage.metadata).resized
+          }
+        }
       }
     }
   }
@@ -455,12 +627,9 @@ class ReorderBuffer(
       val entryAddress = lsuService.addressOfBundle(entry.registerMap)
       val entryWordAddress = byte2WordAddress(entryAddress)
       val addressesMatch = entryWordAddress === wordAddress
-      val isOlder = relativeIndexForAbsolute(index) < relativeIndexForAbsolute(robIndex)
 
       when(
-        isValidAbsoluteIndex(nth)
-          && isOlder
-          && entryIsStore
+        isValidAbsoluteIndex(nth) && isOlder(index, robIndex)  && entryIsStore
       ) {
         when(entryAddressValid && addressesMatch) {
           foundMatch := True
@@ -499,18 +668,18 @@ class ReorderBuffer(
       val loadValue: UInt =
         entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
       val valueValid = entry.cdbUpdated
-      val isYounger = relativeIndexForAbsolute(index) > relativeIndexForAbsolute(storeIndex)
+      val younger = isYounger(index, storeIndex)
 
       val speculative = pipeline.service[LsuService].stlSpeculation(entry.registerMap)
 
       val entriesMatch: Bool = if (config.addressBasedSsb) {
         isValidAbsoluteIndex(
           nth
-        ) && entryIsLoad && isYounger && (entryAddressValid && addressesMatch && speculative)
+        ) && entryIsLoad && younger && (entryAddressValid && addressesMatch && speculative)
       } else {
         isValidAbsoluteIndex(
           nth
-        ) && entryIsLoad && isYounger && (entryAddressValid && addressesMatch && speculative) && (!valueValid || storeValue =/= loadValue)
+        ) && entryIsLoad && younger && (entryAddressValid && addressesMatch && speculative) && (!valueValid || storeValue =/= loadValue)
       }
 
       when(entriesMatch) {
@@ -520,168 +689,80 @@ class ReorderBuffer(
     found
   }
 
-  def onRdbMessage(rdbMessage: RdbMessage): Unit = {
+  def onRdbMessage(rdbMessage: Flow[RdbMessage]): Unit = {
     val btb = pipeline.service[BranchTargetPredictorService]
     val jmp = pipeline.service[JumpService]
     val lsu = pipeline.service[LsuService]
 
-    currentRdbUpdate.push(rdbMessage.robIndex)
-    robEntries(rdbMessage.robIndex).registerMap := rdbMessage.registerMap
-    robEntries(rdbMessage.robIndex).willCdbUpdate := rdbMessage.willCdbUpdate
+    val entry = robEntries(rdbMessage.robIndex)
+    val pc = entry.registerMap.elementAs[UInt](pipeline.data.PC.asInstanceOf[PipelineData[Data]])
+    val nextPc = rdbMessage.registerMap.elementAs[UInt](pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]])
 
-    when(
-      rdbMessage.registerMap.elementAs[UInt](
-        pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]
-      ) =/= btb.predictedPc(rdbMessage.registerMap)
-    ) {
-      val flushed = False
-      when(!currentCdbSoftReset) {
-        flushed := softFlush(
-          rdbMessage.robIndex,
-          rdbMessage.registerMap.elementAs[UInt](
-            pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]
-          )
-        )
-      }
+    val flushPort = (new FlushPort).init(rdbMessage.robIndex, nextPc)
 
-      when(flushed) {
-        btb.preventFlush(robEntries(rdbMessage.robIndex).registerMap)
-      }
-    }
+    when(rdbMessage.valid) {
 
-    when(pipeline.service[CsrService].isCsrInstruction(rdbMessage.registerMap)) {
-      jmp.jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
-      val flushed = False
-      when(!currentCdbSoftReset) {
-        flushed := softFlush(
-          rdbMessage.robIndex,
-          rdbMessage.registerMap.elementAs[UInt](
-            pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]
-          )
-        )
-      }
+      // Copy all pipeline data
+      entry.registerMap := rdbMessage.registerMap
+      entry.willCdbUpdate := rdbMessage.willCdbUpdate
 
-      when(!flushed) {
-        // CSR reads are not correctly handled, so for now we always flush
-      }
-    }
-
-    if (config.stlSpec) {
-      when(
-        lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.STORE
-      ) {
-        val storeValue = rdbMessage.registerMap.elementAs[UInt](
-          pipeline.data.RS2_DATA.asInstanceOf[PipelineData[Data]]
-        )
-        val storeAddress = lsu.addressOfBundle(rdbMessage.registerMap)
-        currentlyInsertingStore.push(storeAddress)
-        when(lsu.width(rdbMessage.registerMap) === LsuAccessWidth.W) {
-          // for now, we only predict word memory operation
-          previousStoreBuffer := storeValue
-          if (config.addressBasedPsf) {
-            previousStoreAddress := storeAddress
-          }
-        }
-
-        val ssbReset = hasSpeculatingLoad(rdbMessage.robIndex, storeValue, storeAddress)
-
-        when(ssbReset) {
-          addSsbPredictorEntry(
-            rdbMessage.registerMap.elementAs[UInt](
-              pipeline.data.PC.asInstanceOf[PipelineData[Data]]
-            )
-          )
-          ssbMispredictions := ssbMispredictions + 1
-          val flushed = False
-          when(!currentCdbSoftReset) {
-            flushed := softFlush(
-              rdbMessage.robIndex,
-              rdbMessage.registerMap.elementAs[UInt](
-                pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]
-              )
-            )
-          }
-          when(!flushed) {
-            jmp.jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
-          }
+      // Exception 1: Branch Misprediction
+      when(nextPc =/= btb.predictedPc(rdbMessage.registerMap)) {
+        flushPort.request().onSoftFlush {
+          btb.preventFlush(entry.registerMap)
         }
       }
 
-      if (config.addressBasedPsf) {
-        when(lsu.psfMisspeculation(rdbMessage.registerMap)) {
-          psfMispredictions := psfMispredictions + 1
-          addPsfPredictorEntry(
-            robEntries(rdbMessage.robIndex).registerMap
-              .elementAs[UInt](pipeline.data.PC.asInstanceOf[PipelineData[Data]])
-          )
-          val flushed = softFlush(
-            rdbMessage.robIndex,
-            rdbMessage.registerMap.elementAs[UInt](
-              pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]
-            )
-          )
-          when(!flushed) {
-            jmp.jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
-          }
+      // Exception 2: CSR Serialization
+      when(pipeline.service[CsrService].isCsrInstruction(rdbMessage.registerMap)) {
+        flushPort.request().onSoftFlush {
+          jmp.jumpOfBundle(entry.registerMap) := True
         }
+      }
+
+      if (config.stlSpec) {
+        // Exception 3: SSB
         when(
-          lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.LOAD
+          lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.STORE
         ) {
-          when(
-            (currentCdbUpdate.valid && currentCdbUpdate.payload === rdbMessage.robIndex) || jmp
-              .jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap)
-          ) {
-            jmp.jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
-          } otherwise {
-            psfPredictions := psfPredictions + 1
+          val storeValue = rdbMessage.registerMap.elementAs[UInt](
+            pipeline.data.RS2_DATA.asInstanceOf[PipelineData[Data]]
+          )
+          val storeAddress = lsu.addressOfBundle(rdbMessage.registerMap)
+          currentlyInsertingStore.push(storeAddress)
+          when(lsu.width(rdbMessage.registerMap) === LsuAccessWidth.W) {
+            // for now, we only predict word memory operation
+            previousStoreBuffer := storeValue
+            if (config.addressBasedPsf) {
+              previousStoreAddress := storeAddress
+            }
+          }
+
+          when(hasSpeculatingLoad(rdbMessage.robIndex, storeValue, storeAddress)) {
+            flushPort.requestSsb(pc)
+          }
+        }
+
+        // Exception 4: Predictive Store Forwarding (PSF)
+        if (config.addressBasedPsf) {
+          when(lsu.psfState(rdbMessage.registerMap) === PsfState.MISS) {
+            flushPort.requestPsf(pc)
+          }
+        } else {
+          // Value-based PSF Fallback
+          when(lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.LOAD && entry.cdbUpdated) {
+            val psfMismatch = rdbMessage.registerMap.element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) =/=
+              entry.registerMap.element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
+
+            when(psfMismatch) {
+              flushPort.requestPsf(pc)
+            }
           }
         }
       }
 
-      if (!config.addressBasedPsf) {
-        // detect wrongly forwarded value-based PSF
-        when(
-          lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.LOAD && robEntries(
-            rdbMessage.robIndex
-          ).cdbUpdated
-        ) {
-          val psfMismatch: Bool = if (config.addressBasedPsf) {
-            lsu.psfAddress(robEntries(rdbMessage.robIndex).registerMap) =/= lsu.addressOfBundle(
-              rdbMessage.registerMap
-            )
-          } else {
-            rdbMessage.registerMap.element(
-              pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]
-            ) =/= robEntries(rdbMessage.robIndex).registerMap
-              .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
-          }
-
-          when(psfMismatch) {
-            psfMispredictions := psfMispredictions + 1
-            addPsfPredictorEntry(
-              robEntries(rdbMessage.robIndex).registerMap
-                .elementAs[UInt](pipeline.data.PC.asInstanceOf[PipelineData[Data]])
-            )
-            val flushed = False
-            when(!currentCdbSoftReset) {
-              flushed := softFlush(
-                rdbMessage.robIndex,
-                rdbMessage.registerMap.elementAs[UInt](
-                  pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]
-                )
-              )
-            }
-            when(!flushed) {
-              jmp.jumpOfBundle(robEntries(rdbMessage.robIndex).registerMap) := True
-            }
-          } otherwise {
-            psfPredictions := psfPredictions + 1
-          }
-        }
-      }
+      entry.rdbUpdated := True
     }
-
-    robEntries(rdbMessage.robIndex).rdbUpdated := True
   }
 
   def build(): Unit = {
