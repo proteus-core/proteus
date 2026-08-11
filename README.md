@@ -37,6 +37,11 @@ The following table describes the released versions and extensions forking them.
 | [`23.02`](https://github.com/proteus-core/proteus/releases/tag/v23.02)   | [ProSpeCT: Provably Secure Speculation for the Constant-Time Policy](https://github.com/proteus-core/prospect) (only for `23.02-O`), [CHERI-Crypt: Transparent Memory Encryption on Capability Architectures](https://github.com/cap-tee/cheri-crypt) (only for `23.02-I`) |
 | [`21.08-I`](https://github.com/proteus-core/proteus/releases/tag/v21.08) | Hardware capabilities (CHERI): `src/main/scala/riscv/plugins/cheri`, providing the basis for the following publication: [CHERI-TrEE: Flexible enclaves on capability machines](https://github.com/proteus-core/cheritree).                                                 |
 
+Proteus has also been used in the following publications:
+
+- [Masking Out of Order: Side-Channel Leaks from Software-Masked Cryptography on Out-of-Order Processors](https://eprint.iacr.org/2026/123.pdf)
+- [SPARC: Automated Root-Cause Analysis of Pre-Silicon Power Side-Channel Leakage in the Processor Design Flow](https://arxiv.org/pdf/2607.23218)
+
 ## Working with Proteus
 
 Starting from release v25.09, Proteus should be used together with the central [ecosystem](https://github.com/proteus-core/ecosystem) repository, which contains all the software components necessary to use the core for research.
