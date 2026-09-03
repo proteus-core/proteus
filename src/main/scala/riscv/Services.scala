@@ -328,16 +328,17 @@ trait PrefetchService {
 
   /** Inform the prefetcher of a load request
     */
-  def notifyLoadRequest(address: UInt): Unit
+  def notifyLoadRequest(address: UInt, pc: UInt): Unit
 
-  /** Inform the prefetcher of a load response returning from main memory
+  /** Inform the prefetcher of a load response returning from the cache (cacheHit is true) or from a
+    * lower level in the memory hierarchy (cacheHit is false)
     */
-  def notifyLoadResponseFromMemory(address: UInt, data: UInt): Unit
+  def notifyLoadResponse(address: UInt, pc: UInt, data: UInt, cacheHit: Boolean): Unit
 
-  /** Inform the prefetcher of a prefetch response returning from main memory, associated with the
-    * given id
+  /** Inform the prefetcher of a cache fill from a prefetch request returning from a lower level in
+    * the memory hierarchy, associated with the given id
     */
-  def notifyPrefetchResponseFromMemory(address: UInt, data: UInt, id: UInt): Unit
+  def notifyPrefetchResponse(address: UInt, data: UInt, id: UInt): Unit
 
   /** Check if the prefetcher has a prefetch target ready
     */

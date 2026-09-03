@@ -378,7 +378,10 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
               loadActive := True
             }
             when(busReady || loadActive) {
-              val tpl = dbusCtrl.read(busAddress)
+              val tpl = dbusCtrl.read(
+                busAddress,
+                if (loadDBuses(stageIndex).config.includePcWire) value(pipeline.data.PC) else null
+              )
               valid := tpl._1
               fullValue := tpl._2
             }
@@ -525,7 +528,13 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
           // Position the data within the cache line
           val cacheLine = data << (busAddress(addressOffset downto 0) << 3)
 
-          val accepted = dbusCtrl.write(busAddress, cacheLine.resized, mask)
+          val accepted =
+            dbusCtrl.write(
+              busAddress,
+              if (storeDBus.config.includePcWire) value(pipeline.data.PC) else null,
+              cacheLine.resized,
+              mask
+            )
           arbitration.isReady := accepted
 
           formal.lsuOnStore(storeStage, address, baseMask.resize(config.isa.xlen / 8 bits), wValue)

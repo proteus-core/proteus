@@ -27,7 +27,7 @@ abstract class MemoryBackbone(implicit config: Config) extends Plugin[Pipeline] 
 
   def setupIBus(): Unit = {
     pipeline plug new Area {
-      externalIBus = master(new MemBus(config.ibusConfig)).setName("ibus")
+      externalIBus = master(new MemBus(config.externalIBusConfig)).setName("ibus")
 
       if (internalIBus != null) {
         if (ibusFilter.isEmpty) {
@@ -45,7 +45,7 @@ abstract class MemoryBackbone(implicit config: Config) extends Plugin[Pipeline] 
 
   def setupExternalDBus(internalDBus: MemBus): Unit = {
     pipeline plug new Area {
-      externalDBus = master(new MemBus(config.dbusConfig)).setName("dbus")
+      externalDBus = master(new MemBus(config.externalDBusConfig)).setName("dbus")
 
       if (dbusFilters.nonEmpty) {
         var previous_level = internalDBus
@@ -53,7 +53,7 @@ abstract class MemoryBackbone(implicit config: Config) extends Plugin[Pipeline] 
         dbusFilters.zipWithIndex.foreach { case (f, i) =>
           if (i < dbusFilters.size - 1) {
             val intermediateDBus =
-              Stream(MemBus(config.dbusConfig)).setName("intermediate_dbus" + i)
+              Stream(MemBus(config.internalDBusConfig)).setName("intermediate_dbus" + i)
             f(internalWriteDBusStage, previous_level, intermediateDBus)
 
             previous_level = intermediateDBus
@@ -87,7 +87,7 @@ abstract class MemoryBackbone(implicit config: Config) extends Plugin[Pipeline] 
     assert(internalIBus == null)
 
     stage plug new Area {
-      internalIBus = master(new MemBus(config.ibusConfig))
+      internalIBus = master(new MemBus(config.internalIBusConfig))
       internalIBus.cmd.id.assignDontCare()
     }
 

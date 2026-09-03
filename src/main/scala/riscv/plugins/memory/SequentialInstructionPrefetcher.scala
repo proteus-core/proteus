@@ -19,16 +19,16 @@ class SequentialInstructionPrefetcher(implicit config: Config)
     }
   }
 
-  override def notifyLoadRequest(address: UInt): Unit = {
+  override def notifyLoadRequest(address: UInt, pc: UInt): Unit = {
     when(currentAddress >> insignificantBits =/= address >> insignificantBits) {
       currentAddress := address
       hasNewTarget := True
     }
   }
 
-  override def notifyLoadResponseFromMemory(address: UInt, data: UInt): Unit = {}
+  override def notifyLoadResponse(address: UInt, pc: UInt, data: UInt, cacheHit: Boolean): Unit = {}
 
-  override def notifyPrefetchResponseFromMemory(address: UInt, data: UInt, id: UInt): Unit = {}
+  override def notifyPrefetchResponse(address: UInt, data: UInt, id: UInt): Unit = {}
 
   override def getNextPrefetchTarget(id: UInt): UInt = {
     hasNewTarget := False

@@ -254,6 +254,9 @@ class Lsu(stage: Stage)(implicit context: Context) extends Plugin[Pipeline] {
       }
 
       cbus.cmd.payload.address := address
+      if (context.config.internalDBusConfig.includePcWire) {
+        cbus.cmd.payload.pc := value(pipeline.data.PC)
+      }
 
       def checkCapBounds(operation: SpinalEnumCraft[LsuOperationType.type]): Bool = {
         val cause = capCheck.check(cap, address, operation, context.clen / 8)

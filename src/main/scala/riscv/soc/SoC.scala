@@ -80,7 +80,7 @@ class SoC[C <: Config](
     }
 
     val apbBridge = Axi4SharedToApb3Bridge(
-      addressWidth = config.dbusConfig.addressWidth,
+      addressWidth = config.externalDBusConfig.addressWidth,
       dataWidth = config.memBusWidth,
       idWidth = 4
     )

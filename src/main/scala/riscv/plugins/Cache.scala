@@ -11,7 +11,7 @@ class Cache(
     prefetcher: Option[PrefetchService] = None,
     maxPrefetches: Int = 1,
     cacheable: (UInt => Bool) = (_ => True),
-    delay: Int = 1
+    delay: Int = 0
 )(implicit config: Config)
     extends Plugin[Pipeline] {
   private val byteIndexBits = log2Up(config.isa.xlen / 8)
@@ -40,13 +40,14 @@ class Cache(
 
   private def connect(_s: Stage, internal: MemBus, external: MemBus): Unit = {
     val cacheArea = pipeline plug new Area {
-      private val idWidth = internal.config.idWidth
+      private val idWidth = external.config.idWidth
       private val maxId = UInt(idWidth bits).maxValue.intValue()
 
       private val cache = Vec.fill(sets)(Vec.fill(ways)(RegInit(CacheEntry().getZero)))
 
       private val cacheHits = RegInit(UInt(config.isa.xlen bits).getZero)
       private val cacheMisses = RegInit(UInt(config.isa.xlen bits).getZero)
+      private val issuedPrefetches = RegInit(UInt(config.isa.xlen bits).getZero)
       // number of cache misses that are not full misses because the load was already pending at the time of the miss
       private val forwardedCacheMisses = RegInit(UInt(config.isa.xlen bits).getZero)
 
@@ -84,14 +85,16 @@ class Cache(
 
       private val sendingImmediateCmd = Bool()
       private val sendingBufferedCmd = Reg(Bool()).init(False)
-      private val cmdBuffer = Reg(MemBusCmd(internal.config))
+      private val cmdBuffer = Reg(MemBusCmd(external.config))
 
       // rsp sending buffer
       private val sendingRsp = Bool()
       sendingRsp := False
-      private val alreadySendingRsp = Reg(Bool()).init(False)
       private val rspBuffer = Reg(MemBusRsp(internal.config))
       private val returningCache = Reg(Bool()).init(False)
+      private val returningCacheAddress = RegInit(UInt(config.isa.xlen bits).getZero)
+      private val returningCachePc =
+        if (internal.config.includePcWire) RegInit(UInt(config.isa.xlen bits).getZero) else null
 
       // Delay cache response with a fixed delay
       // Note that a minimal delay of 1 clock cycle is required to prevent
@@ -109,29 +112,37 @@ class Cache(
 
       sendingImmediateCmd := False
 
+      private case class InternalForwardingEntry() extends Bundle {
+        val valid: Bool = Bool()
+        val internalId: UInt = UInt(internal.config.idWidth bits)
+        val addressOffset: UInt = UInt(byteIndexBits + wordIndexBits bits)
+        val pc: UInt = if (internal.config.includePcWire) UInt(config.isa.xlen bits) else null
+      }
+
       private case class OutstandingTracker() extends Bundle {
         val address: UInt = UInt(config.isa.xlen bits)
         val storeInvalidated: Bool = Bool()
         val pending: Bool = Bool()
-        val internalIds: Bits = Bits(1 << internal.config.idWidth bits)
+        val internalForwarding: Vec[InternalForwardingEntry] =
+          Vec.fill(1 << internal.config.idWidth)(InternalForwardingEntry())
       }
 
       private val outstandingLoads = Vec.fill(maxId + 1)(RegInit(OutstandingTracker().getZero))
 
       private val outstandingPrefetches = UInt((idWidth + 1) bits)
-      outstandingPrefetches := outstandingLoads.sCount(e => e.pending && e.internalIds === 0)
+      outstandingPrefetches := outstandingLoads.sCount(load =>
+        load.pending && !load.internalForwarding.sExist(entry => entry.valid)
+      )
 
-      private def forwardRspToInternal(): Unit = {
+      private def forwardRspToInternal(internalForwardingEntry: InternalForwardingEntry): Unit = {
         sendingRsp := True
         internalRspBuffer.valid := True
 
         internalRspBuffer.rdata := external.rsp.rdata
-        // the index of 1's in internalIds indicate to which internal ids the response should be forwarded
-        val internalId = OHToUInt(OHMasking.first(outstandingLoads(external.rsp.id).internalIds))
-        internalRspBuffer.id := internalId
+        internalRspBuffer.id := internalForwardingEntry.internalId
         when(internalRspBuffer.ready) {
           // set the bit to 0 once it has been forwarded
-          outstandingLoads(external.rsp.id).internalIds(internalId) := False
+          internalForwardingEntry.valid := False
         }
       }
 
@@ -162,41 +173,48 @@ class Cache(
       // handling an incoming result from the memory
       when(external.rsp.valid) {
         val address = outstandingLoads(external.rsp.id).address
+        val (forwardResult, entryIdx) =
+          outstandingLoads(external.rsp.id).internalForwarding.sFindFirst(entry => entry.valid)
 
-        when(!alreadySendingRsp) {
-          prefetcher foreach { pref =>
-            when(outstandingLoads(external.rsp.id).internalIds === 0) {
-              // inform prefetcher of prefetch response from memory
-              pref.notifyPrefetchResponseFromMemory(address, external.rsp.rdata, external.rsp.id)
-            } otherwise {
-              // inform prefetcher of load response from memory
-              pref.notifyLoadResponseFromMemory(address, external.rsp.rdata)
-            }
+        prefetcher foreach { pref =>
+          when(!forwardResult) {
+            // inform prefetcher of prefetch response
+            pref.notifyPrefetchResponse(address, external.rsp.rdata, external.rsp.id)
+          } elsewhen (internalRspBuffer.ready) {
+            // inform prefetcher of load response
+            pref.notifyLoadResponse(
+              (address(
+                config.isa.xlen - 1 downto byteIndexBits + wordIndexBits
+              ) ## outstandingLoads(external.rsp.id)
+                .internalForwarding(entryIdx)
+                .addressOffset).asUInt,
+              outstandingLoads(external.rsp.id).internalForwarding(entryIdx).pc,
+              external.rsp.rdata,
+              cacheHit = false
+            )
           }
         }
 
-        when(outstandingLoads(external.rsp.id).internalIds === 0) {
+        when(!forwardResult) {
           // store result in cache without forwarding
           insertRspInCache(address)
         } otherwise {
           // forward result and store in cache
-          forwardRspToInternal()
+          forwardRspToInternal(outstandingLoads(external.rsp.id).internalForwarding(entryIdx))
           when(
             // when there is only one id left to forward, put result in cache and inform external bus we are done
-            internalRspBuffer.ready && CountOne(outstandingLoads(external.rsp.id).internalIds) === 1
+            internalRspBuffer.ready && outstandingLoads(external.rsp.id).internalForwarding.sCount(
+              entry => entry.valid
+            ) === 1
           ) {
             insertRspInCache(address)
-            alreadySendingRsp := False
-          } otherwise {
-            alreadySendingRsp := True
           }
         }
       }
 
-      private def returnFromCache(cacheLine: CacheEntry): Unit = {
+      private def returnFromCache(cacheLine: CacheEntry, address: UInt): Unit = {
         // result served from cache
         when(!returningCache) {
-          cacheHits := cacheHits + 1
           internal.cmd.ready := True
           rspBuffer.id := internal.cmd.id
           rspBuffer.rdata := cacheLine.value
@@ -206,9 +224,23 @@ class Cache(
             internalRspBuffer.rdata := cacheLine.value
             when(!internalRspBuffer.ready) {
               returningCache := True
+              returningCacheAddress := address
+              if (internal.config.includePcWire) {
+                returningCachePc := internal.cmd.pc
+              }
+            } otherwise {
+              cacheHits := cacheHits + 1
+              prefetcher foreach { pref =>
+                // inform prefetcher of load response
+                pref.notifyLoadResponse(address, internal.cmd.pc, cacheLine.value, cacheHit = true)
+              }
             }
           } otherwise {
             returningCache := True
+            returningCacheAddress := address
+            if (internal.config.includePcWire) {
+              returningCachePc := internal.cmd.pc
+            }
           }
         }
         // if buffer is currently full, we do not ack the cmd, it will stay on the bus for the next cycle
@@ -220,6 +252,21 @@ class Cache(
         internalRspBuffer.payload := rspBuffer
         when(internalRspBuffer.ready) {
           returningCache := False
+          returningCacheAddress := 0
+          if (internal.config.includePcWire) {
+            returningCachePc := 0
+          }
+
+          cacheHits := cacheHits + 1
+          prefetcher foreach { pref =>
+            // inform prefetcher of load response
+            pref.notifyLoadResponse(
+              returningCacheAddress,
+              returningCachePc,
+              rspBuffer.rdata,
+              cacheHit = true
+            )
+          }
         }
       }
 
@@ -233,6 +280,9 @@ class Cache(
 
           external.cmd.address := internal.cmd.address
           external.cmd.id := externalId
+          if (external.config.includePcWire) {
+            external.cmd.pc := internal.cmd.pc
+          }
 
           if (internal.config.readWrite) {
             external.cmd.write := internal.cmd.write
@@ -242,15 +292,31 @@ class Cache(
             when(!internal.cmd.write) {
               outstandingLoads(externalId).address := internal.cmd.address
               outstandingLoads(externalId).pending := True
-              outstandingLoads(externalId).internalIds := B(0).resized
-              outstandingLoads(externalId).internalIds(internal.cmd.id) := True
+              outstandingLoads(externalId).internalForwarding := outstandingLoads(
+                externalId
+              ).internalForwarding.getZero
+              outstandingLoads(externalId).internalForwarding(0).valid := True
+              outstandingLoads(externalId).internalForwarding(0).internalId := internal.cmd.id
+              outstandingLoads(externalId).internalForwarding(0).addressOffset := internal.cmd
+                .address(byteIndexBits + wordIndexBits - 1 downto 0)
+              if (internal.config.includePcWire) {
+                outstandingLoads(externalId).internalForwarding(0).pc := internal.cmd.pc
+              }
               externalId := externalId + 1
             }
           } else {
             outstandingLoads(externalId).address := internal.cmd.address
             outstandingLoads(externalId).pending := True
-            outstandingLoads(externalId).internalIds := B(0).resized
-            outstandingLoads(externalId).internalIds(internal.cmd.id) := True
+            outstandingLoads(externalId).internalForwarding := outstandingLoads(
+              externalId
+            ).internalForwarding.getZero
+            outstandingLoads(externalId).internalForwarding(0).valid := True
+            outstandingLoads(externalId).internalForwarding(0).internalId := internal.cmd.id
+            outstandingLoads(externalId).internalForwarding(0).addressOffset := internal.cmd
+              .address(byteIndexBits + wordIndexBits - 1 downto 0)
+            if (internal.config.includePcWire) {
+              outstandingLoads(externalId).internalForwarding(0).pc := internal.cmd.pc
+            }
             externalId := externalId + 1
           }
           when(!external.cmd.ready) {
@@ -309,16 +375,22 @@ class Cache(
                 }
               }
               when(!targetWay.valid && !alreadyPending) {
+                issuedPrefetches := issuedPrefetches + 1
                 externalId := externalId + 1
 
                 external.cmd.valid := True
                 external.cmd.address := prefetchAddress
                 external.cmd.id := externalId
+                if (external.config.includePcWire) {
+                  external.cmd.pc := 0
+                }
                 cmdBuffer := external.cmd.payload
 
                 outstandingLoads(externalId).address := prefetchAddress
                 outstandingLoads(externalId).pending := True
-                outstandingLoads(externalId).internalIds := B(0).resized
+                outstandingLoads(externalId).internalForwarding := outstandingLoads(
+                  externalId
+                ).internalForwarding.getZero
 
                 when(!external.cmd.ready) {
                   sendingBufferedCmd := True
@@ -330,9 +402,11 @@ class Cache(
       }
 
       private def getResult(address: UInt): Unit = {
-        // inform prefetcher of load request
-        prefetcher foreach { pref =>
-          pref.notifyLoadRequest(address)
+        when(internal.cmd.ready) {
+          // inform prefetcher of load request
+          prefetcher foreach { pref =>
+            pref.notifyLoadRequest(address, internal.cmd.pc)
+          }
         }
 
         val targetWay = wayForAddress(address)
@@ -343,7 +417,7 @@ class Cache(
         when(targetWay.valid) {
           cacheSet(targetWay.payload).age := U(0).resized
           increaseAgesUpTo(setIndex, cacheSet(targetWay.payload).age)
-          returnFromCache(cacheSet(targetWay.payload))
+          returnFromCache(cacheSet(targetWay.payload), address)
         } otherwise {
           val alreadyPending = False
           for (i <- 0 until outstandingLoads.length) {
@@ -360,7 +434,17 @@ class Cache(
                   outstandingLoads(external.rsp.id).address
                 ))
               ) {
-                load.internalIds(internal.cmd.id) := True
+                val entryIdx = PriorityMux(load.internalForwarding.zipWithIndex.map {
+                  case (entry, idx) => (!entry.valid, U(idx, internal.config.idWidth bits))
+                })
+                load.internalForwarding(entryIdx).valid := True
+                load.internalForwarding(entryIdx).internalId := internal.cmd.id
+                load.internalForwarding(entryIdx).addressOffset := address(
+                  byteIndexBits + wordIndexBits - 1 downto 0
+                )
+                if (internal.config.includePcWire) {
+                  load.internalForwarding(entryIdx).pc := internal.cmd.pc
+                }
                 cacheMisses := cacheMisses + 1
                 forwardedCacheMisses := forwardedCacheMisses + 1
                 internal.cmd.ready := True

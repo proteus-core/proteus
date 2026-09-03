@@ -24,7 +24,7 @@ class StaticMemoryBackbone(implicit config: Config) extends MemoryBackbone {
     internalWriteDBusStage = readStages.head
 
     internalWriteDBusStage plug new Area {
-      val dbus = master(new MemBus(config.dbusConfig))
+      val dbus = master(new MemBus(config.internalDBusConfig))
       internalWriteDBus = dbus
     }
 

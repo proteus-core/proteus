@@ -23,13 +23,25 @@ object BaseIsa {
   }
 }
 
-sealed trait PrefetcherType
+sealed trait PrefetcherType {
+
+  /** Whether the prefetcher requires the PC to be passed to notifyLoadRequest and
+    * notifyLoadResponse; when false, the PC signal will be set to null
+    */
+  val requiresPc: Boolean
+}
 object PrefetcherType {
-  case object None extends PrefetcherType
-  case object SequentialInstructionPrefetcher extends PrefetcherType
+  case object None extends PrefetcherType {
+    override val requiresPc = false
+  }
+  case object SequentialInstructionPrefetcher extends PrefetcherType {
+    override val requiresPc = false
+  }
 }
 
 case class PrefetcherConfig(prefetcherType: PrefetcherType) {
+  def requiresPc: Boolean = prefetcherType.requiresPc
+
   def create(implicit config: Config): Option[Plugin[Pipeline] with PrefetchService] = {
     prefetcherType match {
       case PrefetcherType.None => None
@@ -44,8 +56,19 @@ case class CacheConfig(
     ways: Int,
     prefetcher: PrefetcherConfig = PrefetcherConfig(PrefetcherType.None),
     maxPrefetches: Int = 1,
-    delay: Int = 1
+    delay: Int = 0
 )
+
+case class MemBusConfig(
+    addressWidth: Int,
+    idWidth: Int,
+    dataWidth: Int,
+    readWrite: Boolean = true,
+    includePcWire: Boolean = false
+) {
+  def byte2WordAddress(ba: UInt): UInt = ba(dataWidth - 1 downto log2Up(dataWidth / 8))
+  def word2ByteAddress(wa: UInt): UInt = wa << log2Up(dataWidth / 8)
+}
 
 sealed abstract class Config(
     val isa: BaseIsa,
@@ -58,21 +81,37 @@ sealed abstract class Config(
     val stlSpec: Boolean,
     val debug: Boolean
 ) {
-  val ibusConfig = MemBusConfig(
+  val internalIBusConfig = MemBusConfig(
+    addressWidth = isa.xlen,
+    idWidth = 2,
+    dataWidth = memBusWidth,
+    readWrite = false,
+    includePcWire = iCaches.exists(_.prefetcher.requiresPc)
+  )
+
+  val externalIBusConfig = MemBusConfig(
     addressWidth = isa.xlen,
     idWidth = 2,
     dataWidth = memBusWidth,
     readWrite = false
   )
 
-  val readDbusConfig = MemBusConfig(
+  val internalReadDBusConfig = MemBusConfig(
     addressWidth = isa.xlen,
     idWidth = idWidth,
     dataWidth = memBusWidth,
-    readWrite = false
+    readWrite = false,
+    includePcWire = dCaches.exists(_.prefetcher.requiresPc)
   )
 
-  val dbusConfig = MemBusConfig(
+  val internalDBusConfig = MemBusConfig(
+    addressWidth = isa.xlen,
+    idWidth = idWidth,
+    dataWidth = memBusWidth,
+    includePcWire = dCaches.exists(_.prefetcher.requiresPc)
+  )
+
+  val externalDBusConfig = MemBusConfig(
     addressWidth = isa.xlen,
     idWidth = idWidth,
     dataWidth = memBusWidth

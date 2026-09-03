@@ -3,6 +3,7 @@ package riscv.plugins.memory
 import riscv._
 import spinal.core._
 import spinal.lib._
+import spinal.core.sim._
 
 import scala.collection.mutable
 
@@ -23,10 +24,14 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
     super.finish()
 
     pipeline plug new Area {
-      unifiedInternalDBus = Stream(MemBus(config.dbusConfig))
+      unifiedInternalDBus =
+        Stream(MemBus(config.internalDBusConfig)).simPublic.setName("unifiedInternalDBus")
 
       unifiedInternalDBus.cmd.valid := False
       unifiedInternalDBus.cmd.address.assignDontCare()
+      if (config.internalDBusConfig.includePcWire) {
+        unifiedInternalDBus.cmd.pc.assignDontCare()
+      }
       unifiedInternalDBus.cmd.id.assignDontCare()
       unifiedInternalDBus.cmd.write := False
       unifiedInternalDBus.cmd.wdata.assignDontCare()
@@ -35,7 +40,7 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
       unifiedInternalDBus.rsp.ready := False
 
       private case class IdMeta() extends Bundle {
-        val stageIndex = UInt(config.dbusConfig.idWidth bits)
+        val stageIndex = UInt(config.internalDBusConfig.idWidth bits)
         val cmdSent = Bool()
         val rspReceived = Bool()
         val invalidated = Bool()
@@ -48,13 +53,31 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
       private val sameCycleReturn = Bool()
       sameCycleReturn := False
 
-      private val movingToCmdBuffer = Flow(UInt(config.dbusConfig.idWidth bits))
+      private val movingToCmdBuffer = Flow(UInt(config.internalDBusConfig.idWidth bits))
       movingToCmdBuffer.setIdle()
 
-      private val idBufferSize = UInt(config.dbusConfig.idWidth bits).maxValue.intValue()
+      private val idBufferSize = UInt(config.internalDBusConfig.idWidth bits).maxValue.intValue()
 
-      private val nextId = Counter(0, idBufferSize)
       private val busId2StageIndex = Vec.fill(idBufferSize + 1)(RegInit(IdMeta().getZero))
+
+      // calculate the nextId
+      val nextId: UInt = RegInit(UInt(config.internalDBusConfig.idWidth bits).getZero)
+      val calculateNextId: Bool = Bool()
+      calculateNextId := False
+      val hasFreeSlot: Bool = Bool()
+      hasFreeSlot := False
+      val availableId: UInt = U(0, config.internalDBusConfig.idWidth bits)
+      for (i <- idBufferSize downto 0) {
+        when(!busId2StageIndex(i).cmdSent && !(nextId === i && calculateNextId)) {
+          availableId := i
+          hasFreeSlot := True
+        }
+      }
+      when(calculateNextId || busId2StageIndex(nextId).cmdSent) {
+        when(hasFreeSlot) {
+          nextId := availableId
+        }
+      }
 
       for (i <- 0 until idBufferSize + 1) {
         when(activeFlush) {
@@ -68,12 +91,12 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
 
       // this makes sure that once we assert a command, it stays on the bus until it's acknowledged
       // even if the pipeline is flushed or a command with a lower index comes in
-      private val cmdBuffer = Reg(Flow(MemBusCmd(config.dbusConfig)))
-      private val currentlySendingIndex = Reg(Flow(UInt(config.dbusConfig.idWidth bits)))
+      private val cmdBuffer = Reg(Flow(MemBusCmd(config.internalDBusConfig)))
+      private val currentlySendingIndex = Reg(Flow(UInt(config.internalDBusConfig.idWidth bits)))
 
       private val fullDBusCmds = internalReadDBuses.zipWithIndex.map {
         case (internalReadDBus, index) =>
-          val fullReadDBusCmd = Stream(MemBusCmd(config.dbusConfig))
+          val fullReadDBusCmd = Stream(MemBusCmd(config.internalDBusConfig))
           fullReadDBusCmd.valid := internalReadDBus.cmd.valid
           fullReadDBusCmd.id := internalReadDBus.cmd.id
           internalReadDBus.cmd.ready := False
@@ -81,6 +104,9 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
           fullReadDBusCmd.wmask.assignDontCare()
           fullReadDBusCmd.wdata.assignDontCare()
           fullReadDBusCmd.address := internalReadDBus.cmd.address
+          if (config.internalDBusConfig.includePcWire) {
+            fullReadDBusCmd.pc := internalReadDBus.cmd.pc
+          }
 
           val busValid = Bool()
           busValid := False
@@ -148,10 +174,10 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
           currentlySendingIndex.setIdle()
           cmdBuffer.setIdle()
           when(!cmdBuffer.write) {
-            nextId.increment()
             busId2StageIndex(nextId).stageIndex := currentlySendingIndex.payload
             when(!sameCycleReturn) {
               busId2StageIndex(nextId).cmdSent := True
+              calculateNextId := True
             }
             busId2StageIndex(nextId).rspReceived := False
             currentlyInserting.valid := True
@@ -165,6 +191,9 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
           context.elsewhen(cmd.valid && ((!busId2StageIndex(nextId).cmdSent) || cmd.write)) {
             unifiedInternalDBus.cmd.valid := True
             unifiedInternalDBus.cmd.address := cmd.address
+            if (config.internalDBusConfig.includePcWire) {
+              unifiedInternalDBus.cmd.pc := cmd.pc
+            }
             unifiedInternalDBus.cmd.id := nextId
             unifiedInternalDBus.cmd.write := cmd.write
             unifiedInternalDBus.cmd.wdata := cmd.wdata
@@ -176,10 +205,10 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
               currentlySendingIndex.setIdle()
               cmdBuffer.setIdle()
               when(!cmd.write) {
-                nextId.increment()
                 busId2StageIndex(nextId).stageIndex := U(index).resized
                 when(!sameCycleReturn) {
                   busId2StageIndex(nextId).cmdSent := True
+                  calculateNextId := True
                 }
                 busId2StageIndex(nextId).rspReceived := False
                 currentlyInserting.valid := True
@@ -205,13 +234,13 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
 
     internalReadDBuses = readStages.map(readStage => {
       val readArea = readStage plug new Area {
-        val dbus = master(new MemBus(config.readDbusConfig))
+        val dbus = master(new MemBus(config.internalReadDBusConfig))
       }
       readArea.dbus
     })
 
     writeStage plug new Area {
-      internalWriteDBus = master(new MemBus(config.dbusConfig))
+      internalWriteDBus = master(new MemBus(config.internalDBusConfig))
     }
 
     pipeline plug {

@@ -26,7 +26,8 @@ class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] with FetchService {
 
       when(arbitration.isRunning) {
         val fetchAddress = addressTranslator.translate(fetchStage, pc)
-        val (valid, rdata) = ibusCtrl.read(fetchAddress)
+        val (valid, rdata) =
+          ibusCtrl.read(fetchAddress, if (ibus.config.includePcWire) pc else null)
 
         when(valid) {
           arbitration.isReady := True
