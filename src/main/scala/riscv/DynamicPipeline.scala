@@ -62,6 +62,7 @@ trait DynamicPipeline extends Pipeline {
       service[BranchTargetPredictorService].predictedPc(stage)
       service[JumpService].jumpRequested(stage)
       service[FenceService].isFence(stage)
+      serviceOption[RegisterFenceService] foreach { fence => fence.isRegisterFence(stage) }
 
       if (config.stlSpec) {
         assert(

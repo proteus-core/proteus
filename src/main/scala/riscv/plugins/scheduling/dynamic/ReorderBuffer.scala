@@ -335,8 +335,8 @@ class ReorderBuffer(
 
   private def bookkeeping(rs1Id: Flow[UInt], rs2Id: Flow[UInt]): EntryMetadata = {
     val meta = EntryMetadata(indexBits)
-    meta.rs1Data.payload.assignDontCare()
-    meta.rs2Data.payload.assignDontCare()
+    meta.rs1Data.payload := meta.rs1Data.payload.getZero
+    meta.rs2Data.payload := meta.rs2Data.payload.getZero
 
     meta.rs1Data.valid := rs1Id.valid
     meta.rs2Data.valid := rs2Id.valid

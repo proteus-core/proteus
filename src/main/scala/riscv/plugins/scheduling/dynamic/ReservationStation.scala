@@ -23,31 +23,51 @@ case class RegisterSource(indexBits: BitCount) extends Bundle {
   }
 }
 
-case class InstructionDependencies(indexBits: BitCount, speculationTracking: Boolean)
-    extends Bundle {
+case class InstructionDependencies(
+    indexBits: BitCount,
+    cfSpeculationTracking: Boolean,
+    dataSpeculationTracking: Boolean,
+    rfence: Boolean
+) extends Bundle {
   val rs1: RegisterSource = RegisterSource(indexBits)
   val rs2: RegisterSource = RegisterSource(indexBits)
 
-  val priorBranchNext: Flow[UInt] = if (speculationTracking) Flow(UInt(indexBits)) else null
+  val priorBranchNext: Flow[UInt] = if (cfSpeculationTracking) Flow(UInt(indexBits)) else null
   val priorBranch: Flow[UInt] =
-    if (speculationTracking) RegNext(priorBranchNext).init(priorBranchNext.getZero) else null
+    if (cfSpeculationTracking) RegNext(priorBranchNext).init(priorBranchNext.getZero) else null
 
-  val loadSpeculationNext: Bool = if (speculationTracking) Bool() else null
+  val loadSpeculationNext: Bool = if (dataSpeculationTracking) Bool() else null
   val loadSpeculation: Bool =
-    if (speculationTracking) RegNext(loadSpeculationNext).init(False) else null
+    if (dataSpeculationTracking) RegNext(loadSpeculationNext).init(False) else null
+
+  val simplifiedRegisterFence = rfence && !cfSpeculationTracking
+  val optimizedRegisterFence = rfence && cfSpeculationTracking
+
+  val registerFenceNext = if (rfence) Bool() else null
+  val registerFence =
+    if (rfence) RegNext(registerFenceNext).init(False)
+    else null
 
   def build(): Unit = {
     rs1.build()
     rs2.build()
-    if (speculationTracking) {
+    if (cfSpeculationTracking) {
       priorBranchNext := priorBranch
+    }
+    if (dataSpeculationTracking) {
       loadSpeculationNext := loadSpeculation
+    }
+    if (rfence) {
+      registerFenceNext := registerFence
     }
   }
 
   def reset(): Unit = {
     rs1.reset()
     rs2.reset()
+    if (rfence) {
+      registerFenceNext := False
+    }
   }
 }
 
@@ -63,9 +83,15 @@ class ReservationStation(
     with Resettable {
   setPartialName(s"RS_${exeStage.stageName}")
 
-  private val speculationTracking = pipeline.hasService[DataSpeculationService]
+  private val cfSpeculationTracking = pipeline.hasService[ControlSpeculationService]
+  private val dataSpeculationTracking = pipeline.hasService[DataSpeculationService]
 
-  private val meta = InstructionDependencies(rob.indexBits, speculationTracking)
+  private val meta = InstructionDependencies(
+    rob.indexBits,
+    cfSpeculationTracking,
+    dataSpeculationTracking,
+    pipeline.hasService[RegisterFenceService]
+  )
 
   private val robEntryIndex = Reg(UInt(rob.indexBits)).init(0)
 
@@ -101,6 +127,9 @@ class ReservationStation(
   val activeFlush: Bool = Bool()
   val softFlush: Bool = Bool()
 
+  val speculationResolved: Bool = Bool()
+  speculationResolved := False
+
   def reset(): Unit = {
     isAvailable := !activeFlush
     stateNext := State.IDLE
@@ -111,8 +140,9 @@ class ReservationStation(
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
     val currentRs1Prior, currentRs2Prior = Flow(UInt(rob.indexBits))
-    val currentLoadSpeculation = if (speculationTracking) Bool() else null
-    val branchWaiting: Flow[UInt] = if (speculationTracking) Flow(UInt(rob.indexBits)) else null
+    val currentRegisterFence = Bool()
+    val currentLoadSpeculation = if (dataSpeculationTracking) Bool() else null
+    val branchWaiting: Flow[UInt] = if (cfSpeculationTracking) Flow(UInt(rob.indexBits)) else null
 
     val rs1Tainted = Bool()
     val rs2Tainted = Bool()
@@ -130,9 +160,16 @@ class ReservationStation(
     when(state === State.WAITING_FOR_ARGS) {
       currentRs1Prior := meta.rs1.priorInstruction
       currentRs2Prior := meta.rs2.priorInstruction
-      if (speculationTracking) {
+      if (cfSpeculationTracking) {
         branchWaiting := meta.priorBranch
+      }
+      if (dataSpeculationTracking) {
         currentLoadSpeculation := meta.loadSpeculation
+      }
+      if (meta.rfence) {
+        currentRegisterFence := meta.registerFence
+      } else {
+        currentRegisterFence := False
       }
       if (pipeline.hasService[PipelineTaintService]) {
         rs1Tainted := meta.rs1.tainted
@@ -141,9 +178,16 @@ class ReservationStation(
     } otherwise {
       currentRs1Prior := meta.rs1.priorInstructionNext
       currentRs2Prior := meta.rs2.priorInstructionNext
-      if (speculationTracking) {
+      if (cfSpeculationTracking) {
         branchWaiting := meta.priorBranchNext
+      }
+      if (dataSpeculationTracking) {
         currentLoadSpeculation := meta.loadSpeculationNext
+      }
+      if (meta.rfence) {
+        currentRegisterFence := meta.registerFenceNext
+      } else {
+        currentRegisterFence := False
       }
       if (pipeline.hasService[PipelineTaintService]) {
         rs1Tainted := meta.rs1.taintedNext
@@ -159,6 +203,14 @@ class ReservationStation(
           meta.priorBranch.push(pending.payload)
         } elsewhen (!spec.isSpeculativeCF(cdbMessage.metadata)) {
           meta.priorBranch.setIdle()
+          if (meta.optimizedRegisterFence) {
+            when(!currentRs1Prior.valid && !currentRs2Prior.valid) {
+              when(state === State.WAITING_FOR_ARGS) {
+                state := State.EXECUTING
+              }
+              speculationResolved := True
+            }
+          }
         }
       }
     }
@@ -168,8 +220,8 @@ class ReservationStation(
       r1w := currentRs1Prior.valid
       val r2w = Bool()
       r2w := currentRs2Prior.valid
-      val lsw = if (speculationTracking) Bool() else null
-      if (speculationTracking) {
+      val lsw = if (dataSpeculationTracking) Bool() else null
+      if (dataSpeculationTracking) {
         lsw := currentLoadSpeculation
       }
       val tnt1 = Bool()
@@ -179,7 +231,16 @@ class ReservationStation(
 
       when(currentRs1Prior.valid && cdbMessage.robIndex === currentRs1Prior.payload) {
         meta.rs1.priorInstruction.valid := False
-        r1w := False
+        when(currentRegisterFence) {
+          pipeline.serviceOption[DataSpeculationService] foreach { spec =>
+            // only start executing fence if the update was non-speculative
+            when(spec.isSsbSpeculative(cdbMessage.metadata)) {
+              r1w := False
+            }
+          }
+        } otherwise {
+          r1w := False
+        }
         pipeline.serviceOption[DataSpeculationService] foreach { spec =>
           when(spec.isSsbSpeculative(cdbMessage.metadata)) {
             meta.loadSpeculation := True
@@ -212,8 +273,19 @@ class ReservationStation(
       val baseCondition = !r1w && !r2w && !softFlush
       val startExecution = Bool()
 
+      val registerFenceWaiting = Bool()
+      if (meta.optimizedRegisterFence) {
+        registerFenceWaiting := (branchWaiting.valid || lsw) && currentRegisterFence
+      } else if (meta.simplifiedRegisterFence) {
+        registerFenceWaiting := currentRegisterFence
+      } else {
+        registerFenceWaiting := False
+      }
+
       if (pipeline.hasService[ProSpeCTService]) {
         startExecution := baseCondition && !(branchWaiting.valid && (tnt1 || tnt2)) // TODO: what about load speculation?
+      } else if (pipeline.hasService[RegisterFenceService]) {
+        startExecution := baseCondition && !registerFenceWaiting
       } else {
         startExecution := baseCondition
       }
@@ -268,6 +340,16 @@ class ReservationStation(
     // execution was invalidated while running
     when(activeFlush) {
       reset()
+    }
+
+    // for any fence, execution can continue when it's the last entry in the ROB
+    if (meta.rfence) {
+      when(
+        state === State.WAITING_FOR_ARGS && meta.registerFence && robEntryIndex === rob.oldestIndex
+      ) {
+        meta.registerFenceNext := False
+        state := State.EXECUTING
+      }
     }
 
     /** This is predictive store forwarding (PSF): for appropriate load instructions (indicated by a
@@ -438,6 +520,15 @@ class ReservationStation(
 
     meta.reset()
 
+    pipeline.serviceOption[RegisterFenceService].foreach { rf =>
+      when(rf.isRegisterFence(issueStage) && robEntryIndex =/= rob.oldestIndex) {
+        meta.registerFenceNext := True
+        if (meta.simplifiedRegisterFence) {
+          stateNext := State.WAITING_FOR_ARGS
+        }
+      }
+    }
+
     /** We only want to perform PSF on word-width load instructions (for now)
       */
     if (config.stlSpec) {
@@ -454,8 +545,9 @@ class ReservationStation(
       }
     }
 
-    if (speculationTracking) {
-      val dependentJump = Flow(UInt(rob.indexBits))
+    val dependentJump =
+      if (cfSpeculationTracking) Flow(UInt(rob.indexBits)) else null
+    if (cfSpeculationTracking) {
       dependentJump := rob.lastSpeculativeCFInstruction
       meta.priorBranchNext := dependentJump
     }
@@ -482,10 +574,20 @@ class ReservationStation(
             metaRs.taintedNext := tracking.registerTaint(issueStage.output(regId))
           }
         }
-        when(
-          rsData.payload.updatingInstructionFound && !rsData.payload.updatingInstructionFinished
-        ) {
-          stateNext := State.WAITING_FOR_ARGS
+
+        if (meta.optimizedRegisterFence) {
+          when(
+            (rsData.payload.updatingInstructionFound && !rsData.payload.updatingInstructionFinished) ||
+              (dependentJump.valid && meta.registerFenceNext && !speculationResolved)
+          ) {
+            stateNext := State.WAITING_FOR_ARGS
+          }
+        } else {
+          when(
+            rsData.payload.updatingInstructionFound && !rsData.payload.updatingInstructionFinished
+          ) {
+            stateNext := State.WAITING_FOR_ARGS
+          }
         }
       }
     }
@@ -493,8 +595,17 @@ class ReservationStation(
     dependencySetup(meta.rs1, entryMeta.rs1Data, pipeline.data.RS1_DATA, pipeline.data.RS1)
     dependencySetup(meta.rs2, entryMeta.rs2Data, pipeline.data.RS2_DATA, pipeline.data.RS2)
 
-    if (speculationTracking) {
+    if (dataSpeculationTracking) {
       meta.loadSpeculationNext := entryMeta.rs1Data.updatingInstructionLoadSpeculation || entryMeta.rs2Data.updatingInstructionLoadSpeculation
+      // TODO: maybe the following is useless (would need to specifically identify PSF predictions, but it's tricky, would need to track
+      // them separately)
+      if (pipeline.hasService[RegisterFenceService]) {
+        when(
+          meta.registerFenceNext && entryMeta.rs1Data.updatingInstructionLoadSpeculation && !entryMeta.rs1Data.updatingInstructionFinished
+        ) {
+          meta.rs1.priorInstructionNext.push(entryMeta.rs1Data.payload.updatingInstructionIndex)
+        }
+      }
     }
   }
 

@@ -532,6 +532,10 @@ trait Resettable {
   def pipelineReset(): Unit
 }
 
+trait RegisterFenceService {
+  def isRegisterFence(stage: Stage): Bool
+}
+
 trait DataSpeculationService {
   def addIsSsbSpeculative(bundle: DynBundle[PipelineData[Data]]): Unit
   def isSsbSpeculative(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
