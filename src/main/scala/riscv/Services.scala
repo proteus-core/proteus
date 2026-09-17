@@ -566,3 +566,9 @@ trait ProSpeCTService {}
 trait FenceService {
   def isFence(stage: Stage): Bool
 }
+
+trait PMPService {
+  def isAllowedToRead(addr: UInt): Bool
+  def isAllowedToWrite(addr: UInt): Bool
+  def isAllowedToExecute(addr: UInt): Bool
+}

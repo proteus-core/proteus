@@ -96,7 +96,8 @@ object createStaticPipeline {
           new Interrupts(pipeline.writeback),
           new MulDiv(Set(pipeline.execute)),
           new Fence(Set(pipeline.execute)),
-          new Marker
+          new Marker,
+          new PMP
         ) ++ extraPlugins
     )
 
@@ -262,7 +263,8 @@ object createDynamicPipeline {
         new scheduling.static.Scheduler(canStallExternally = true),
         new scheduling.static.PcManager(0x80000000L),
         pipeline.backbone,
-        new memory.Fetcher(pipeline.fetch)
+        new memory.Fetcher(pipeline.fetch),
+        new PMP
       )
     )
 
