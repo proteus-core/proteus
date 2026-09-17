@@ -209,7 +209,14 @@ class ReservationStation(
         regs.setReg(pipeline.data.RS2_DATA, cdbMessage.writeValue)
       }
 
-      val startExecution = !r1w && !r2w && !softFlush
+      val baseCondition = !r1w && !r2w && !softFlush
+      val startExecution = Bool()
+
+      if (pipeline.hasService[ProSpeCTService]) {
+        startExecution := baseCondition && !(branchWaiting.valid && (tnt1 || tnt2)) // TODO: what about load speculation?
+      } else {
+        startExecution := baseCondition
+      }
 
       when(startExecution) {
         // This is the only place where state is written directly (instead of
@@ -316,7 +323,8 @@ class ReservationStation(
       }
 
       pipeline.serviceOption[PipelineTaintService] foreach { tracking =>
-        val outputTainted = meta.rs1.tainted || meta.rs2.tainted
+        val outputTainted = meta.rs1.tainted || meta.rs2.tainted || tracking.tainted(exeStage)
+
         tracking.tainted(cdbStream.payload.metadata) := outputTainted
         when(outputTainted) {
           tracking.tainted(dispatchStream.payload.registerMap) := True
@@ -409,6 +417,11 @@ class ReservationStation(
       ) {
         reset()
         softFlush := True
+      }
+    } otherwise {
+      // fail-safe in case of overtainting: start execution when there is nothing to wait for
+      when(robEntryIndex === rob.oldestIndex && state === State.WAITING_FOR_ARGS) {
+        stateNext := State.EXECUTING
       }
     }
   }
