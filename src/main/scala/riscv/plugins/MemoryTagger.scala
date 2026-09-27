@@ -8,7 +8,7 @@ class MemoryTagger(implicit config: Config)
     with MemoryTaggerService {
 
   object Data {
-    object RAW_BUS_TAG extends PipelineData(UInt(config.xlen / config.tagGranularity bits))
+    object RAW_BUS_TAG extends PipelineData(UInt(config.isa.xlen / config.tagGranularity bits))
   }
 
   override def busTag: PipelineData[UInt] = Data.RAW_BUS_TAG
@@ -19,7 +19,7 @@ class MemoryTagger(implicit config: Config)
     pipeline.service[DecoderService].configure { dConfig =>
       dConfig.addDefault(
         Map(
-          Data.RAW_BUS_TAG -> U(0, config.xlen / config.tagGranularity bits)
+          Data.RAW_BUS_TAG -> U(0, config.isa.xlen / config.tagGranularity bits)
         )
       )
     }
@@ -33,7 +33,7 @@ class MemoryTagger(implicit config: Config)
         val accessWidth = lsu.width(stage)
         val address = lsu.address(stage)
 
-        val fullTag = UInt(config.xlen / config.tagGranularity bits)
+        val fullTag = UInt(config.isa.xlen / config.tagGranularity bits)
         fullTag := stage.output(Data.RAW_BUS_TAG)
 
         val resultTag = Bool()
@@ -42,13 +42,13 @@ class MemoryTagger(implicit config: Config)
         when(accessWidth === LsuAccessWidth.H || accessWidth === LsuAccessWidth.B) {
           config.tagGranularity match {
             case 64 =>
-            case 32 => resultTag := fullTag(if (config.xlen == 64) address(2).asUInt else U(0))
+            case 32 => resultTag := fullTag(if (config.isa.xlen == 64) address(2).asUInt else U(0))
             case 16 =>
               resultTag := fullTag(
-                if (config.xlen == 64) address(2 downto 1) else address(1).asUInt
+                if (config.isa.xlen == 64) address(2 downto 1) else address(1).asUInt
               )
             case 8 =>
-              val tagOffset = if (config.xlen == 64) address(2 downto 0) else address(1 downto 0)
+              val tagOffset = if (config.isa.xlen == 64) address(2 downto 0) else address(1 downto 0)
               when(accessWidth === LsuAccessWidth.B) {
                 resultTag := fullTag(tagOffset)
               } otherwise {
@@ -57,7 +57,7 @@ class MemoryTagger(implicit config: Config)
           }
         }
 
-        if (config.xlen == 64) {
+        if (config.isa.xlen == 64) {
           when(accessWidth === LsuAccessWidth.W) {
             config.tagGranularity match {
               case 64 =>

@@ -13,13 +13,13 @@ class SecretRegionTracking(implicit config: Config)
   private val CSR_PSP2HIGH = 0x70a
 
   private class csrLow(implicit config: Config) extends Csr {
-    val addr = Reg(UInt(config.xlen bits)).init(0)
+    val addr = Reg(UInt(config.isa.xlen bits)).init(0)
     override def read(): UInt = addr
     override def write(addr: UInt): Unit = this.addr := addr
   }
 
   private class csrHigh(implicit config: Config) extends Csr {
-    val addr = Reg(UInt(config.xlen bits)).init(0)
+    val addr = Reg(UInt(config.isa.xlen bits)).init(0)
     override def read(): UInt = addr
     override def write(addr: UInt): Unit = this.addr := addr
   }
