@@ -48,7 +48,8 @@ class MemoryTagger(implicit config: Config)
                 if (config.isa.xlen == 64) address(2 downto 1) else address(1).asUInt
               )
             case 8 =>
-              val tagOffset = if (config.isa.xlen == 64) address(2 downto 0) else address(1 downto 0)
+              val tagOffset =
+                if (config.isa.xlen == 64) address(2 downto 0) else address(1 downto 0)
               when(accessWidth === LsuAccessWidth.B) {
                 resultTag := fullTag(tagOffset)
               } otherwise {

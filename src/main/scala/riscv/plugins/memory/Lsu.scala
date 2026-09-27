@@ -3,8 +3,11 @@ package riscv.plugins.memory
 import riscv._
 import spinal.core._
 
-class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], override val storeStage: Stage)
-    extends Plugin[Pipeline]
+class Lsu(
+    addressStages: Set[Stage],
+    override val loadStages: Seq[Stage],
+    override val storeStage: Stage
+) extends Plugin[Pipeline]
     with LsuService {
   private var addressTranslator = new LsuAddressTranslator {
     override def translate(
