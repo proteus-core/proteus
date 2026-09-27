@@ -21,10 +21,9 @@ class SoC(
     createPipeline: Config => Pipeline,
     extraMemBusDelay: Int = 0,
     applyDelayToIBus: Boolean = false
-) extends Component {
+)(implicit config: Config)
+    extends Component {
   setDefinitionName("Core")
-
-  implicit val config = new Config(BaseIsa.RV32I)
 
   val io = new Bundle {
     // Peripherals
@@ -34,10 +33,17 @@ class SoC(
 
     val axi = ramType match {
       case RamType.ExternalAxi4(size) =>
-        val axiConfig = Axi4SharedOnChipRam.getAxiConfig(
+        val axiConfig = Axi4Config(
+          addressWidth = log2Up(size),
           dataWidth = config.memBusWidth,
-          byteCount = size,
-          idWidth = 4
+          idWidth = 4,
+          rUserWidth = config.tagBusWidth,
+          wUserWidth = config.tagBusWidth,
+          useLock = false,
+          useRegion = false,
+          useCache = false,
+          useProt = false,
+          useQos = false
         )
 
         master(Axi4Shared(axiConfig))

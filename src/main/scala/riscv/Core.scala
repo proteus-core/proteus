@@ -1,6 +1,7 @@
 package riscv
 
 import riscv.plugins._
+import riscv.plugins.prospect.ProSpeCT
 import riscv.soc._
 import spinal.core._
 import spinal.core.sim._
@@ -58,7 +59,7 @@ object createStaticPipeline {
         new PcManager(0x80000000L),
         new BranchTargetPredictor(pipeline.fetch, pipeline.execute, 8, conf.xlen),
         prefetcher,
-        new Cache(sets = 2, ways = 2, backbone.filterIBus, Some(prefetcher), maxPrefetches = 2),
+        new Cache(sets = 2, ways = 2, backbone.filterIBus, Some(prefetcher)),
         new Cache(sets = 8, ways = 2, backbone.filterDBus, cacheable = (_ >= 0x80000000L)),
         new CsrFile(pipeline.writeback, pipeline.writeback), // TODO: ugly
         new Timers,
@@ -85,7 +86,7 @@ object SoC {
       ramType: RamType,
       extraDbusReadDelay: Int = 0,
       applyDelayToIBus: Boolean = false
-  ): SoC = {
+  )(implicit config: Config): SoC = {
     new SoC(ramType, config => createStaticPipeline()(config), extraDbusReadDelay, applyDelayToIBus)
   }
 
@@ -93,19 +94,21 @@ object SoC {
       ramType: RamType,
       extraMemBusDelay: Int = 0,
       applyDelayToIBus: Boolean = false
-  ): SoC = {
+  )(implicit config: Config): SoC = {
     new SoC(ramType, config => createDynamicPipeline()(config), extraMemBusDelay, applyDelayToIBus)
   }
 }
 
 object Core {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I)
     SpinalVerilog(SoC.static(RamType.OnChipRam(1 GiB, args.headOption)))
   }
 }
 
 object CoreSim {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I)
     SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(1 GiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
@@ -148,6 +151,7 @@ object CoreFormal {
 
 object CoreTestSim {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I)
     var mainResult = 0
 
     SimConfig.withWave.compile(SoC.static(RamType.OnChipRam(1 GiB, Some(args(0))))).doSim { dut =>
@@ -177,8 +181,16 @@ object CoreTestSim {
   }
 }
 
-object CoreExtMem {
+object CoreExtMem32 {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I)
+    SpinalVerilog(SoC.static(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
+  }
+}
+
+object CoreExtMem64 {
+  def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV64I)
     SpinalVerilog(SoC.static(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
   }
 }
@@ -196,10 +208,10 @@ object createDynamicPipeline {
 
       val dynamicPipeline: DynamicPipeline = this
 
-      override val issuePipeline = new StaticPipeline {
-        val fetch = new Stage("IF").setName("fetch")
-        val decode = new Stage("ID").setName("decode")
+      val fetch = new Stage("IF").setName("fetch")
+      val decode = new Stage("ID").setName("decode")
 
+      override val issuePipeline = new StaticPipeline {
         override val stages = Seq(fetch, decode)
         override val config = dynamicPipeline.config
         override val data = dynamicPipeline.data
@@ -224,22 +236,24 @@ object createDynamicPipeline {
         new scheduling.static.Scheduler(canStallExternally = true),
         new scheduling.static.PcManager(0x80000000L),
         pipeline.backbone,
-        new memory.Fetcher(pipeline.issuePipeline.fetch)
+        new memory.Fetcher(pipeline.fetch)
       )
     )
 
     val prefetcher = new memory.SequentialInstructionPrefetcher()
 
+    val optionalPlugins = if (conf.memoryTagger) Seq(new MemoryTagger()) else Seq()
+
     pipeline.addPlugins(
       Seq(
-        new Decoder(pipeline.issuePipeline.decode), // TODO: ugly alert!!
+        new Decoder(pipeline.decode), // TODO: ugly alert!!
         new scheduling.dynamic.Scheduler,
         new scheduling.dynamic.PcManager,
         new RegisterFileAccessor(
           // FIXME this works since there is no delay between ID and dispatch. It would probably be
           // safer to create an explicit dispatch stage in the dynamic pipeline and read the registers
           // there. It could still be zero-delay of course.
-          readStage = pipeline.issuePipeline.decode,
+          readStage = pipeline.decode,
           writeStage = pipeline.retirementStage
         ),
         new memory.Lsu(
@@ -248,24 +262,18 @@ object createDynamicPipeline {
           pipeline.retirementStage
         ),
         new BranchTargetPredictor(
-          pipeline.issuePipeline.fetch,
+          pipeline.fetch,
           pipeline.retirementStage,
           8,
           conf.xlen
         ),
         prefetcher,
-        new Cache(
-          sets = 2,
-          ways = 2,
-          pipeline.backbone.filterIBus,
-          Some(prefetcher),
-          maxPrefetches = 2
-        ),
+        new Cache(sets = 2, ways = 2, pipeline.backbone.filterIBus, Some(prefetcher)),
         new Cache(
           sets = 8,
           ways = 2,
           busFilter = pipeline.backbone.filterDBus,
-          cacheable = (_ >= 0x80000000L)
+          cacheable = (_ >= 0x80000000L),
         ),
         new IntAlu(pipeline.intAlus.toSet),
         new Shifter(pipeline.intAlus.toSet),
@@ -279,8 +287,11 @@ object createDynamicPipeline {
         new Timers,
         new Fence(pipeline.rsStages.toSet),
         new Marker,
-        new SpeculationTracking
-      ) ++ extraPlugins
+        new ControlSpeculationTracking,
+        new DataSpeculationTracking,
+        new PipelineTaintTracking,
+        new ProSpeCT,
+      ) ++ extraPlugins ++ optionalPlugins
     )
 
     if (build) {
@@ -293,12 +304,14 @@ object createDynamicPipeline {
 
 object CoreDynamic {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I)
     SpinalVerilog(SoC.dynamic(RamType.OnChipRam(1 GiB, args.headOption)))
   }
 }
 
 object CoreDynamicSim {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I)
     SimConfig.withWave.compile(SoC.dynamic(RamType.OnChipRam(1 GiB, Some(args(0))))).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
@@ -329,8 +342,16 @@ object CoreDynamicSim {
   }
 }
 
-object CoreDynamicExtMem {
+object CoreDynamicExtMem32 {
   def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV32I, memoryTagger = true)
+    SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
+  }
+}
+
+object CoreDynamicExtMem64 {
+  def main(args: Array[String]) {
+    implicit val config = new Config(BaseIsa.RV64I)
     SpinalVerilog(SoC.dynamic(RamType.ExternalAxi4(1 GiB), 32, applyDelayToIBus = false))
   }
 }

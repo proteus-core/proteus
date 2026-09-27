@@ -139,7 +139,7 @@ object LsuOperationType extends SpinalEnum {
 }
 
 object LsuAccessWidth extends SpinalEnum {
-  val B, H, W = newElement() // TODO: this could mess with memory disambiguation predictors
+  val B, H, W, D = newElement() // TODO: this could mess with memory disambiguation predictors
 }
 
 trait LsuAddressTranslator {
@@ -159,6 +159,9 @@ trait LsuAddressTranslator {
 }
 
 trait LsuService {
+  def loadStages: Seq[Stage]
+  def storeStage: Stage
+
   def setAddressTranslator(translator: LsuAddressTranslator): Unit
 
   /** Add a custom store instruction.
@@ -210,29 +213,13 @@ trait LsuService {
 
   def operationOutput(stage: Stage): SpinalEnumCraft[LsuOperationType.type]
 
-  def stlSpeculation(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
-
-  def stlSpeculation(stage: Stage): Bool
-
-  def addStlSpeculation(bundle: DynBundle[PipelineData[Data]]): Unit
-
-  def psfAddress(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): UInt
-
-  def addPsfAddress(bundle: DynBundle[PipelineData[Data]]): Unit
-
   def address(stage: Stage): UInt
-
-  def psfMisspeculation(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
-
-  def addPsfMisspeculation(bundle: DynBundle[PipelineData[Data]]): Unit
 
   def width(
       bundle: Bundle with DynBundleAccess[PipelineData[Data]]
   ): SpinalEnumCraft[LsuAccessWidth.type]
 
   def widthOut(stage: Stage): SpinalEnumCraft[LsuAccessWidth.type]
-
-  def psfMisspeculationRegister: PipelineData[Data]
 }
 
 trait ScheduleService {
@@ -346,21 +333,22 @@ trait PrefetchService {
     */
   def notifyLoadRequest(address: UInt): Unit
 
-  /** Inform the prefetcher of a load response returning from memory
+  /** Inform the prefetcher of a load response returning from main memory
     */
-  def notifyLoadResponseFromMemory(address: UInt, data: UInt): Unit
+  def notifyLoadResponseFromMemory(address: UInt, data: UInt, tag: UInt): Unit
 
-  /** Inform the prefetcher of a prefetch response returning from memory
+  /** Inform the prefetcher of a prefetch response returning from main memory, associated with the
+    * given id
     */
-  def notifyPrefetchResponseFromMemory(address: UInt, data: UInt): Unit
+  def notifyPrefetchResponseFromMemory(address: UInt, data: UInt, id: UInt, tag: UInt): Unit
 
   /** Check if the prefetcher has a prefetch target ready
     */
   def hasPrefetchTarget: Bool
 
-  /** Get the next prefetch target from the prefetcher
+  /** Get the next prefetch target from the prefetcher, which will be associated with the given id
     */
-  def getNextPrefetchTarget: UInt
+  def getNextPrefetchTarget(id: UInt): UInt
 }
 
 trait TrapService {
@@ -490,7 +478,14 @@ trait Resettable {
   def pipelineReset(): Unit
 }
 
-trait SpeculationService {
+trait DataSpeculationService {
+  def addIsSsbSpeculative(bundle: DynBundle[PipelineData[Data]]): Unit
+  def isSsbSpeculative(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+  def addIsPsfSpeculative(bundle: DynBundle[PipelineData[Data]]): Unit
+  def isPsfSpeculative(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+}
+
+trait ControlSpeculationService {
   def isSpeculativeCFOutput(stage: Stage): Bool
   def isSpeculativeCFInput(stage: Stage): Bool
   def isSpeculativeCF(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
@@ -498,12 +493,24 @@ trait SpeculationService {
   def addSpeculationDependency(bundle: DynBundle[PipelineData[Data]]): Unit
   def speculationDependency(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Flow[UInt]
   def speculativeCFMap(): Map[PipelineData[_ <: Data], Bool]
-  def addIsSpeculativeMD(bundle: DynBundle[PipelineData[Data]]): Unit
-  def isSpeculativeMD(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
-  def isSpeculativeMDInput(stage: Stage): Bool
-  def isSpeculativeMDOutput(stage: Stage): Bool
 }
+
+trait PipelineTaintService {
+  def tainted(stage: Stage): Bool
+  def taintedPipelineReg(reg: PipelineData[Data]): Boolean
+  def tainted(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+  def addTaintToBundle(bundle: DynBundle[PipelineData[Data]]): Unit
+  def registerTaint(regId: UInt): Bool
+}
+
+trait ProSpeCTService {}
 
 trait FenceService {
   def isFence(stage: Stage): Bool
 }
+
+trait MemoryTaggerService {
+  def busTag: PipelineData[UInt]
+}
+
+trait SecretRegionService {}

@@ -9,6 +9,7 @@ import scala.collection.mutable
 class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with Resettable {
 
   private var activeFlush: Bool = null
+  private val memoryTagging = config.memoryTagger
 
   override def build(): Unit = {
     pipeline plug new Area {
@@ -32,6 +33,7 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
       unifiedInternalDBus.cmd.write := False
       unifiedInternalDBus.cmd.wdata.assignDontCare()
       unifiedInternalDBus.cmd.wmask.assignDontCare()
+      if (memoryTagging) unifiedInternalDBus.cmd.wuser.assignDontCare()
 
       unifiedInternalDBus.rsp.ready := False
 
@@ -81,6 +83,7 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
           fullReadDBusCmd.write := False
           fullReadDBusCmd.wmask.assignDontCare()
           fullReadDBusCmd.wdata.assignDontCare()
+          if (memoryTagging) fullReadDBusCmd.wuser.assignDontCare()
           fullReadDBusCmd.address := internalReadDBus.cmd.address
 
           val busValid = Bool()
@@ -170,6 +173,7 @@ class DynamicMemoryBackbone(implicit config: Config) extends MemoryBackbone with
             unifiedInternalDBus.cmd.write := cmd.write
             unifiedInternalDBus.cmd.wdata := cmd.wdata
             unifiedInternalDBus.cmd.wmask := cmd.wmask
+            if (memoryTagging) unifiedInternalDBus.cmd.wuser := cmd.wuser
             when(!cmd.write) {
               busId2StageIndex(nextId).invalidated := activeFlush
             }

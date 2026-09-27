@@ -1,5 +1,9 @@
 image: ubuntu:noble
 
+default:
+  tags:
+    - high-cpu
+
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
 
@@ -15,6 +19,8 @@ before_script:
   # Install SBT
   - apt-get update -yqq
   - apt-get install sbt -yqq
+  # Clone ecosystem for functional tests
+  - git clone --depth 1 --recurse-submodules --single-branch https://github.com/proteus-core/ecosystem.git
 
 scalafmt:
   script:
@@ -23,6 +29,12 @@ scalafmt:
 test:
   script:
     # Execute base RV32IM tests on the static pipeline
-    - make RISCV_PREFIX=riscv64-unknown-elf -C tests
+    - make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem PIPELINE=Static ISA=RV32I -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
     # Execute base RV32IM tests on the dynamic pipeline
-    - make RISCV_PREFIX=riscv64-unknown-elf CORE=riscv.CoreDynamicExtMem -C tests
+    - make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem PIPELINE=Dynamic ISA=RV32I -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 -C ecosystem/functional-tests
+    # Clean up 32-bit tests
+    - rm -rf ecosystem/functional-tests/build
+    # Execute base RV64IM tests on the static pipeline
+    - make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem PIPELINE=Static ISA=RV64I -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 64BIT=1 -C ecosystem/functional-tests
+    # Execute base RV64IM tests on the dynamic pipeline
+    - make BASE_DIR="$(pwd)" CORE=riscv.CoreExtMem PIPELINE=Dynamic ISA=RV64I -C ecosystem/simulation && make RISCV_PREFIX=riscv64-unknown-elf SIM_DIR="$(pwd)/ecosystem/simulation" BUILD_CORE=0 64BIT=1 -C ecosystem/functional-tests

@@ -25,6 +25,7 @@ case class RsData(indexBits: BitCount)(implicit config: Config) extends Bundle {
   val updatingInstructionIndex = UInt(indexBits)
   val updatingInstructionValue = UInt(config.xlen bits)
   val updatingInstructionLoadSpeculation = Bool()
+  val tainted = Bool() // TODO: both for this and the above, remove when unused
 }
 
 case class EntryMetadata(indexBits: BitCount)(implicit config: Config) extends Bundle {
@@ -92,6 +93,8 @@ class ReorderBuffer(
   val pushedEntry = RobEntry(retirementRegisters)
   pushedEntry := RobEntry(retirementRegisters).getZero
 
+  val lsuService = pipeline.service[LsuService]
+
   /*
    * data structures related to speculative store bypass (SSB)
    */
@@ -102,6 +105,7 @@ class ReorderBuffer(
   private val currentlyInsertingStore = Flow(UInt(config.xlen bits))
   currentlyInsertingStore.setIdle()
 
+  // TODO: these predictors should only be created if config.stlSpec is set!
   val ssbPredictorNumEntries = 12
   private val ssbPredictorEntries =
     Vec.fill(ssbPredictorNumEntries)(RegInit(UInt(config.xlen bits).getZero))
@@ -195,8 +199,9 @@ class ReorderBuffer(
             entry.invalidated := True
           } otherwise {
             // if there are still valid control-flow speculation instructions, set the youngest one as the last
-            pipeline.serviceOption[SpeculationService] foreach { spec =>
-              when(spec.isSpeculativeCF(entry.registerMap)) {
+            pipeline.serviceOption[ControlSpeculationService] foreach { spec =>
+              when(spec.isSpeculativeCF(entry.registerMap) && absolute =/= lastCorrectId) {
+                // TODO: is it possible that an instruction will still be CF-speculative but causes a soft reset through other speculation? then we need to remove the condition above and figure it out differently
                 lastSpeculativeCFInstruction.push(absolute)
               }
             }
@@ -275,30 +280,32 @@ class ReorderBuffer(
       .output(pipeline.data.PC)
     pushedEntry.registerMap.element(
       pipeline.data.NEXT_PC.asInstanceOf[PipelineData[Data]]
-    ) := issueStage
-      .output(pipeline.data.NEXT_PC)
+    ) := issueStage.output(pipeline.data.NEXT_PC)
     pushedEntry.registerMap.element(pipeline.data.RD.asInstanceOf[PipelineData[Data]]) := issueStage
       .output(pipeline.data.RD)
     pushedEntry.registerMap.element(
       pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]
     ) := issueStage.output(pipeline.data.RD_TYPE)
-    pipeline.service[LsuService].operationOfBundle(pushedEntry.registerMap) := pipeline
-      .service[LsuService]
-      .operationOutput(issueStage)
-    pipeline.service[LsuService].addressValidOfBundle(pushedEntry.registerMap) := False
+    lsuService.operationOfBundle(pushedEntry.registerMap) := lsuService.operationOutput(issueStage)
+    lsuService.addressValidOfBundle(pushedEntry.registerMap) := False
 
     when(pipeline.service[FenceService].isFence(issueStage)) {
       fenceDetected := True
     }
 
-    pipeline.service[LsuService].stlSpeculation(pushedEntry.registerMap) := False
+    pipeline.serviceOption[DataSpeculationService] foreach { spec =>
+      spec.isSsbSpeculative(pushedEntry.registerMap) := False
+    }
 
-    pipeline.serviceOption[SpeculationService] foreach { spec =>
+    pipeline.serviceOption[ControlSpeculationService] foreach { spec =>
       when(spec.isSpeculativeCFOutput(issueStage)) {
         lastSpeculativeCFInstruction.push(newestIndex)
       }
       spec.isSpeculativeCF(pushedEntry.registerMap) := spec.isSpeculativeCFOutput(issueStage)
-      spec.isSpeculativeMD(pushedEntry.registerMap) := False
+    }
+
+    pipeline.serviceOption[PipelineTaintService] foreach { tracking =>
+      tracking.tainted(pushedEntry.registerMap) := False
     }
 
     val rs1 = Flow(UInt(5 bits))
@@ -312,6 +319,9 @@ class ReorderBuffer(
 
     val meta = bookkeeping(rs1, rs2)
 
+    /** For PSF and SSB, we store a table of instruction addresses that triggered mispredictions in
+      * the past to avoid predictions on them again (a very basic form of selective PSF/SSB).
+      */
     if (config.stlSpec) {
       meta.preventPsf := findPsfPredictorEntry(issueStage.output(pipeline.data.PC))
       pushedEntry.preventSsb := findSsbPredictorEntry(issueStage.output(pipeline.data.PC))
@@ -343,13 +353,18 @@ class ReorderBuffer(
           ) === RegisterType.GPR
       ) {
         rsMeta.updatingInstructionFound := True
-        rsMeta.updatingInstructionFinished := (entry.cdbUpdated || entry.rdbUpdated)
+        rsMeta.updatingInstructionFinished := entry.registerMap.elementAs[Bool](
+          pipeline.data.RD_DATA_VALID.asInstanceOf[PipelineData[Data]]
+        )
         rsMeta.updatingInstructionIndex := index
         rsMeta.updatingInstructionValue := entry.registerMap.elementAs[UInt](
           pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]
         )
-        pipeline.serviceOption[SpeculationService] foreach { spec =>
-          rsMeta.updatingInstructionLoadSpeculation := spec.isSpeculativeMD(entry.registerMap)
+        pipeline.serviceOption[DataSpeculationService] foreach { spec =>
+          rsMeta.updatingInstructionLoadSpeculation := spec.isSsbSpeculative(entry.registerMap)
+        }
+        pipeline.serviceOption[PipelineTaintService] foreach { tracking =>
+          rsMeta.tainted := tracking.tainted(entry.registerMap)
         }
       }
     }
@@ -369,9 +384,8 @@ class ReorderBuffer(
 
   override def onCdbMessage(cdbMessage: CdbMessage): Unit = {
     // TODO: the PSF update logic is probably way too complicated...
-    val lsu = pipeline.service[LsuService]
-    if (config.addressBasedPsf) {
-      when(lsu.psfMisspeculation(cdbMessage.metadata)) {
+    if (config.stlSpec && config.addressBasedPsf) {
+      when(pipeline.service[DataSpeculationService].isPsfSpeculative(cdbMessage.metadata)) {
         robEntries(cdbMessage.robIndex).cdbUpdated := robEntries(
           cdbMessage.robIndex
         ).rdbUpdated || (currentRdbUpdate.valid && currentRdbUpdate.payload === cdbMessage.robIndex)
@@ -398,22 +412,18 @@ class ReorderBuffer(
         robEntries(cdbMessage.robIndex).cdbUpdated := True
         robEntries(cdbMessage.robIndex).registerMap
           .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
+        robEntries(cdbMessage.robIndex).registerMap
+          .element(pipeline.data.RD_DATA_VALID.asInstanceOf[PipelineData[Data]]) := True
       }
     } else {
       robEntries(cdbMessage.robIndex).cdbUpdated := True
       robEntries(cdbMessage.robIndex).registerMap
         .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]) := cdbMessage.writeValue
+      robEntries(cdbMessage.robIndex).registerMap
+        .element(pipeline.data.RD_DATA_VALID.asInstanceOf[PipelineData[Data]]) := True
     }
 
-    lsu.psfAddress(robEntries(cdbMessage.robIndex).registerMap) := lsu.psfAddress(
-      cdbMessage.metadata
-    )
-
-    pipeline.serviceOption[SpeculationService] foreach { spec =>
-      // mark PSF speculation
-      spec.isSpeculativeMD(robEntries(cdbMessage.robIndex).registerMap) := spec.isSpeculativeMD(
-        cdbMessage.metadata
-      )
+    pipeline.serviceOption[ControlSpeculationService] foreach { spec =>
       spec.isSpeculativeCF(robEntries(cdbMessage.robIndex).registerMap) := spec.isSpeculativeCF(
         cdbMessage.metadata
       )
@@ -426,6 +436,19 @@ class ReorderBuffer(
       ) {
         lastSpeculativeCFInstruction := spec.speculationDependency(cdbMessage.metadata).resized
       }
+    }
+
+    pipeline.serviceOption[DataSpeculationService] foreach { spec =>
+      // mark PSF speculation
+      spec.isSsbSpeculative(robEntries(cdbMessage.robIndex).registerMap) := spec.isSsbSpeculative(
+        cdbMessage.metadata
+      )
+    }
+
+    pipeline.serviceOption[PipelineTaintService] foreach { tracking =>
+      tracking.tainted(robEntries(cdbMessage.robIndex).registerMap) := tracking.tainted(
+        cdbMessage.metadata
+      )
     }
   }
 
@@ -449,7 +472,6 @@ class ReorderBuffer(
       val index = UInt(indexBits)
       index := nth
 
-      val lsuService = pipeline.service[LsuService]
       val entryIsStore = lsuService.operationOfBundle(entry.registerMap) === LsuOperationType.STORE
       val entryAddressValid = lsuService.addressValidOfBundle(entry.registerMap)
       val entryAddress = lsuService.addressOfBundle(entry.registerMap)
@@ -483,7 +505,6 @@ class ReorderBuffer(
     val found = Bool()
     found := False
 
-    val lsuService = pipeline.service[LsuService]
     val wordAddress = byte2WordAddress(storeAddress)
 
     for (nth <- 0 until capacity) {
@@ -498,10 +519,12 @@ class ReorderBuffer(
       val addressesMatch = entryWordAddress === wordAddress
       val loadValue: UInt =
         entry.registerMap.elementAs[UInt](pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
-      val valueValid = entry.cdbUpdated
+      val valueValid = entry.registerMap.elementAs[Bool](
+        pipeline.data.RD_DATA_VALID.asInstanceOf[PipelineData[Data]]
+      )
       val isYounger = relativeIndexForAbsolute(index) > relativeIndexForAbsolute(storeIndex)
 
-      val speculative = pipeline.service[LsuService].stlSpeculation(entry.registerMap)
+      val speculative = pipeline.service[DataSpeculationService].isSsbSpeculative(entry.registerMap)
 
       val entriesMatch: Bool = if (config.addressBasedSsb) {
         isValidAbsoluteIndex(
@@ -523,7 +546,6 @@ class ReorderBuffer(
   def onRdbMessage(rdbMessage: RdbMessage): Unit = {
     val btb = pipeline.service[BranchTargetPredictorService]
     val jmp = pipeline.service[JumpService]
-    val lsu = pipeline.service[LsuService]
 
     currentRdbUpdate.push(rdbMessage.robIndex)
     robEntries(rdbMessage.robIndex).registerMap := rdbMessage.registerMap
@@ -568,14 +590,14 @@ class ReorderBuffer(
 
     if (config.stlSpec) {
       when(
-        lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.STORE
+        lsuService.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.STORE
       ) {
         val storeValue = rdbMessage.registerMap.elementAs[UInt](
           pipeline.data.RS2_DATA.asInstanceOf[PipelineData[Data]]
         )
-        val storeAddress = lsu.addressOfBundle(rdbMessage.registerMap)
+        val storeAddress = lsuService.addressOfBundle(rdbMessage.registerMap)
         currentlyInsertingStore.push(storeAddress)
-        when(lsu.width(rdbMessage.registerMap) === LsuAccessWidth.W) {
+        when(lsuService.width(rdbMessage.registerMap) === LsuAccessWidth.W) {
           // for now, we only predict word memory operation
           previousStoreBuffer := storeValue
           if (config.addressBasedPsf) {
@@ -608,7 +630,19 @@ class ReorderBuffer(
       }
 
       if (config.addressBasedPsf) {
-        when(lsu.psfMisspeculation(rdbMessage.registerMap)) {
+        when(
+          pipeline
+            .service[DataSpeculationService]
+            .isPsfSpeculative(rdbMessage.registerMap) || (robEntries(
+            rdbMessage.robIndex
+          ).registerMap
+            .elementAs[Bool](
+              pipeline.data.RD_DATA_VALID.asInstanceOf[PipelineData[Data]]
+            ) && rdbMessage.registerMap.element(
+            pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]
+          ) =/= robEntries(rdbMessage.robIndex).registerMap
+            .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]))
+        ) {
           psfMispredictions := psfMispredictions + 1
           addPsfPredictorEntry(
             robEntries(rdbMessage.robIndex).registerMap
@@ -625,7 +659,7 @@ class ReorderBuffer(
           }
         }
         when(
-          lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.LOAD
+          lsuService.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.LOAD
         ) {
           when(
             (currentCdbUpdate.valid && currentCdbUpdate.payload === rdbMessage.robIndex) || jmp
@@ -636,25 +670,19 @@ class ReorderBuffer(
             psfPredictions := psfPredictions + 1
           }
         }
-      }
-
-      if (!config.addressBasedPsf) {
+      } else {
         // detect wrongly forwarded value-based PSF
         when(
-          lsu.operationOfBundle(rdbMessage.registerMap) === LsuOperationType.LOAD && robEntries(
+          lsuService.operationOfBundle(
+            rdbMessage.registerMap
+          ) === LsuOperationType.LOAD && robEntries(
             rdbMessage.robIndex
           ).cdbUpdated
         ) {
-          val psfMismatch: Bool = if (config.addressBasedPsf) {
-            lsu.psfAddress(robEntries(rdbMessage.robIndex).registerMap) =/= lsu.addressOfBundle(
-              rdbMessage.registerMap
-            )
-          } else {
-            rdbMessage.registerMap.element(
-              pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]
-            ) =/= robEntries(rdbMessage.robIndex).registerMap
-              .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
-          }
+          val psfMismatch: Bool = rdbMessage.registerMap.element(
+            pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]]
+          ) =/= robEntries(rdbMessage.robIndex).registerMap
+            .element(pipeline.data.RD_DATA.asInstanceOf[PipelineData[Data]])
 
           when(psfMismatch) {
             psfMispredictions := psfMispredictions + 1
@@ -704,8 +732,6 @@ class ReorderBuffer(
       ret.input(register) := oldestEntry.registerMap.element(register)
     }
 
-    val lsuService = pipeline.service[LsuService]
-
     // FIXME this doesn't seem the correct place to do this...
     ret.connectOutputDefaults()
     ret.connectLastValues()
@@ -718,6 +744,21 @@ class ReorderBuffer(
       when(ret.arbitration.isDone) {
         willRetire := True
         isFullNext := False
+
+        pipeline.serviceOption[PipelineTaintService] foreach { tracking =>
+          val regId = oldestEntry.registerMap.elementAs[UInt](
+            pipeline.data.RD.asInstanceOf[PipelineData[Data]]
+          )
+          val tainted = tracking.tainted(oldestEntry.registerMap)
+          when(
+            regId =/= 0
+              && oldestEntry.registerMap.element(
+                pipeline.data.RD_TYPE.asInstanceOf[PipelineData[Data]]
+              ) === RegisterType.GPR
+          ) {
+            tracking.registerTaint(regId) := tainted
+          }
+        }
 
         when(
           softResetTrigger.valid && oldestIndex === softResetTrigger.payload && !hardResetThisCycle

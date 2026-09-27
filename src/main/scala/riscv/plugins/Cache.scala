@@ -10,7 +10,10 @@ class Cache(
     busFilter: ((Stage, MemBus, MemBus) => Unit) => Unit,
     prefetcher: Option[PrefetchService] = None,
     maxPrefetches: Int = 1,
-    cacheable: (UInt => Bool) = (_ => True)
+    cacheable: (UInt => Bool) = (_ => True),
+    enableMemoryTags: Boolean = true,
+    enableSilentStoreElimination: Boolean = false,
+    enableSilentStoreDefence: Boolean = false
 )(implicit config: Config)
     extends Plugin[Pipeline] {
   private val byteIndexBits = log2Up(config.xlen / 8)
@@ -22,6 +25,7 @@ class Cache(
     val value: UInt = UInt(config.memBusWidth bits)
     val age: UInt = UInt(log2Up(ways) bits)
     val valid: Bool = Bool()
+    val tags: UInt = if (config.memoryTagger) UInt(config.tagBusWidth bits) else null
   }
 
   private def getSetIndex(address: UInt): UInt = {
@@ -38,6 +42,7 @@ class Cache(
   }
 
   private def connect(_s: Stage, internal: MemBus, external: MemBus): Unit = {
+    val memoryTagger = pipeline.hasService[MemoryTaggerService]
     val cacheArea = pipeline plug new Area {
       private val idWidth = internal.config.idWidth
       private val maxId = UInt(idWidth bits).maxValue.intValue()
@@ -46,25 +51,13 @@ class Cache(
 
       private val cacheHits = RegInit(UInt(config.xlen bits).getZero)
       private val cacheMisses = RegInit(UInt(config.xlen bits).getZero)
-      private val forwardedLoads = RegInit(UInt(config.xlen bits).getZero)
+      // number of cache misses that are not full misses because the load was already pending at the time of the miss
+      private val forwardedCacheMisses = RegInit(UInt(config.xlen bits).getZero)
 
       private val externalId = RegInit(UInt(external.config.idWidth bits).getZero)
 
       private val storeInCycle = Bool()
       storeInCycle := False
-
-      private val outstandingPrefetches = RegInit(UInt(log2Up(maxPrefetches + 1) bits).getZero)
-      private val incrementOutstandingPrefetches = Bool()
-      private val decrementOutstandingPrefetches = Bool()
-      incrementOutstandingPrefetches := False
-      decrementOutstandingPrefetches := False
-
-      // this logic is to avoid problems when incrementing and decrementing in the same cycle
-      when(incrementOutstandingPrefetches && !decrementOutstandingPrefetches) {
-        outstandingPrefetches := outstandingPrefetches + 1
-      } elsewhen (!incrementOutstandingPrefetches && decrementOutstandingPrefetches) {
-        outstandingPrefetches := outstandingPrefetches - 1
-      }
 
       private def oldestWay(set: UInt): UInt = {
         val result = UInt(log2Up(ways) bits)
@@ -118,17 +111,20 @@ class Cache(
         val address: UInt = UInt(config.xlen bits)
         val storeInvalidated: Bool = Bool()
         val pending: Bool = Bool()
-        val isPrefetch: Bool = Bool()
         val internalIds: Bits = Bits(1 << internal.config.idWidth bits)
       }
 
       private val outstandingLoads = Vec.fill(maxId + 1)(RegInit(OutstandingTracker().getZero))
+
+      private val outstandingPrefetches = UInt((idWidth + 1) bits)
+      outstandingPrefetches := outstandingLoads.sCount(e => e.pending && e.internalIds === 0)
 
       private def forwardRspToInternal(): Unit = {
         sendingRsp := True
         internal.rsp.valid := True
 
         internal.rsp.rdata := external.rsp.rdata
+        if (memoryTagger && enableMemoryTags) internal.rsp.ruser := external.rsp.ruser
         // the index of 1's in internalIds indicate to which internal ids the response should be forwarded
         val internalId = OHToUInt(OHMasking.first(outstandingLoads(external.rsp.id).internalIds))
         internal.rsp.id := internalId
@@ -157,6 +153,7 @@ class Cache(
           cache(setIndex)(way).tag := tag
           cache(setIndex)(way).value := external.rsp.rdata
           cache(setIndex)(way).age := U(0).resized
+          if (memoryTagger && enableMemoryTags) cache(setIndex)(way).tags := external.rsp.ruser
           increaseAgesUpTo(setIndex, ways - 1)
         }
         external.rsp.ready := True
@@ -168,14 +165,12 @@ class Cache(
 
         when(!alreadySendingRsp) {
           prefetcher foreach { pref =>
-            when(outstandingLoads(external.rsp.id).isPrefetch) {
+            when(outstandingLoads(external.rsp.id).internalIds === 0) {
               // inform prefetcher of prefetch response from memory
-              pref.notifyPrefetchResponseFromMemory(address, external.rsp.rdata)
-              // subscract 1 from outstandingPrefetches
-              decrementOutstandingPrefetches := True
+              pref.notifyPrefetchResponseFromMemory(address, external.rsp.rdata, external.rsp.ruser, external.rsp.id)
             } otherwise {
               // inform prefetcher of load response from memory
-              pref.notifyLoadResponseFromMemory(address, external.rsp.rdata)
+              pref.notifyLoadResponseFromMemory(address, external.rsp.rdata, external.rsp.ruser)
             }
           }
         }
@@ -205,10 +200,12 @@ class Cache(
           internal.cmd.ready := True
           rspBuffer.id := internal.cmd.id
           rspBuffer.rdata := cacheLine.value
+          if (memoryTagger && enableMemoryTags) rspBuffer.ruser := cacheLine.tags
           when(!sendingRsp) {
             internal.rsp.valid := True
             internal.rsp.id := internal.cmd.id
             internal.rsp.rdata := cacheLine.value
+            if (memoryTagger && enableMemoryTags) internal.rsp.ruser := cacheLine.tags
             when(!internal.rsp.ready) {
               returningCache := True
             }
@@ -243,11 +240,11 @@ class Cache(
             external.cmd.write := internal.cmd.write
             external.cmd.wdata := internal.cmd.wdata
             external.cmd.wmask := internal.cmd.wmask
+            if (memoryTagger && enableMemoryTags) external.cmd.wuser := internal.cmd.wuser
 
             when(!internal.cmd.write) {
               outstandingLoads(externalId).address := internal.cmd.address
               outstandingLoads(externalId).pending := True
-              outstandingLoads(externalId).isPrefetch := False
               outstandingLoads(externalId).internalIds := B(0).resized
               outstandingLoads(externalId).internalIds(internal.cmd.id) := True
               externalId := externalId + 1
@@ -255,7 +252,6 @@ class Cache(
           } else {
             outstandingLoads(externalId).address := internal.cmd.address
             outstandingLoads(externalId).pending := True
-            outstandingLoads(externalId).isPrefetch := False
             outstandingLoads(externalId).internalIds := B(0).resized
             outstandingLoads(externalId).internalIds(internal.cmd.id) := True
             externalId := externalId + 1
@@ -295,7 +291,7 @@ class Cache(
             // at this point the cache is ready to send a prefetch command to the memory
             // getNextPrefetchTarget should not be called before the cache is ready to send the command
             // otherwise the prefetch may get lost
-            val prefetchAddress = pref.getNextPrefetchTarget
+            val prefetchAddress = pref.getNextPrefetchTarget(externalId)
 
             when(cacheable(prefetchAddress)) {
               val targetWay = wayForAddress(prefetchAddress)
@@ -316,9 +312,6 @@ class Cache(
                 }
               }
               when(!targetWay.valid && !alreadyPending) {
-                // add 1 to outstandingPrefetches
-                incrementOutstandingPrefetches := True
-
                 externalId := externalId + 1
 
                 external.cmd.valid := True
@@ -329,7 +322,6 @@ class Cache(
                 outstandingLoads(externalId).address := prefetchAddress
                 outstandingLoads(externalId).pending := True
                 outstandingLoads(externalId).internalIds := B(0).resized
-                outstandingLoads(externalId).isPrefetch := True
 
                 when(!external.cmd.ready) {
                   sendingBufferedCmd := True
@@ -373,7 +365,7 @@ class Cache(
               ) {
                 load.internalIds(internal.cmd.id) := True
                 cacheMisses := cacheMisses + 1
-                forwardedLoads := forwardedLoads + 1
+                forwardedCacheMisses := forwardedCacheMisses + 1
                 internal.cmd.ready := True
               }
             }
@@ -400,11 +392,31 @@ class Cache(
 
         if (internal.config.readWrite) {
           when(internal.cmd.write) {
+            val performWrite = Bool()
+            performWrite := True
+
             storeInCycle := True
             // write command: invalidates line and forwards to external bus
             for (i <- 0 until ways) {
               when(cache(indexBits)(i).tag === tagBits) {
-                cache(indexBits)(i).valid := False
+                val bitMask = Utils.byteMaskToBitMask(internal.cmd.wmask).asUInt
+                val isSilent =
+                  if (enableSilentStoreElimination)
+                    ((internal.cmd.wdata & bitMask) === (cache(indexBits)(i).value & bitMask)) && cache(indexBits)(i).valid
+                  else False
+                val isTainted = Bool()
+                if (config.memoryTagger && enableMemoryTags && enableSilentStoreDefence) {
+                  val userMask = internal.cmd.wmask.subdivideIn(config.tagGranularity / 8 bits).map(_.orR).asBits
+                  val tag = cache(indexBits)(i).tags.asBits & userMask
+                  isTainted := internal.cmd.wuser.orR || tag.orR
+                } else {
+                  isTainted := False
+                }
+                performWrite := !isSilent || isTainted
+
+                when(performWrite) {
+                  cache(indexBits)(i).valid := False
+                }
                 cache(indexBits)(i).age := ways - 1
                 decreaseAgesUntil(indexBits, cache(indexBits)(i).age)
               }
@@ -420,7 +432,11 @@ class Cache(
               }
             }
 
-            initiateCmdForwarding()
+            when(performWrite) {
+              initiateCmdForwarding()
+            } otherwise {
+              internal.cmd.ready := True
+            }
             // if currently forwarding a cmd, we do not ack it, it will stay on the bus for the next cycle
           } otherwise {
             getResult(internal.cmd.address)

@@ -22,11 +22,15 @@ object BaseIsa {
   }
 }
 
-class Config(val baseIsa: BaseIsa, val debug: Boolean = true, val stlSpec: Boolean = true) {
+class Config(val baseIsa: BaseIsa, val debug: Boolean = true, val stlSpec: Boolean = true, val memoryTagger: Boolean = false) {
   def xlen = baseIsa.xlen
   def numRegs = baseIsa.numRegs
 
   def memBusWidth: Int = 128
+
+  def tagGranularity: Int = 8
+
+  def tagBusWidth: Int = if (memoryTagger) memBusWidth / tagGranularity else 0
 
   def robEntries: Int = 32
 
@@ -44,17 +48,21 @@ class Config(val baseIsa: BaseIsa, val debug: Boolean = true, val stlSpec: Boole
     addressWidth = baseIsa.xlen,
     idWidth = 2,
     dataWidth = memBusWidth,
-    readWrite = false
+    readWrite = false,
+    tagBusWidth = tagBusWidth
   )
   def readDbusConfig = MemBusConfig(
     addressWidth = baseIsa.xlen,
     idWidth = log2Up(parallelLoads + 1),
     dataWidth = memBusWidth,
-    readWrite = false
+    readWrite = false,
+    tagBusWidth = tagBusWidth
+
   )
   def dbusConfig = MemBusConfig(
     addressWidth = baseIsa.xlen,
     idWidth = log2Up(parallelLoads + 1),
-    dataWidth = memBusWidth
+    dataWidth = memBusWidth,
+    tagBusWidth = tagBusWidth
   )
 }

@@ -54,6 +54,16 @@ object Utils {
       }
     }
   }
+
+  def byteMaskToBitMask(byteMask: Bits): Bits = {
+    val width = byteMask.getWidth
+    val bitMask = Bits(width * 8 bits)
+
+    for (i <- 0 until width) {
+      bitMask(i * 8, 8 bits) := B(8 bits, default -> byteMask(i))
+    }
+    bitMask
+  }
 }
 
 trait DynBundleAccess[KeyType] {

@@ -77,7 +77,7 @@ class Stage(val stageName: String) extends Component {
           output.setName(s"out_${reg.name}")
 
           val default = reg.dataType()
-          default.setName(s"_out_default_${reg.name}")
+          default.setName(s"out_default_${reg.name}")
           default.assignDontCare()
           default.allowOverride
           outputsDefaults(regAsData) = default

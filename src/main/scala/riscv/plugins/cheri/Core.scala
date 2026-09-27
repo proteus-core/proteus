@@ -74,6 +74,7 @@ object createCheriPipeline {
 
 object SoC {
   def static(ramType: RamType): SoC = {
+    implicit val config = new Config(BaseIsa.RV32I)
     new SoC(ramType, config => createCheriPipeline(ramType.size)(config))
   }
 }

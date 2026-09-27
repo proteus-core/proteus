@@ -7,15 +7,15 @@ import spinal.core.internals.Literal
 
 import scala.collection.mutable
 
-case class ImmediateDecoder(ir: Bits) {
+case class ImmediateDecoder(ir: Bits)(implicit config: Config) {
   private def signExtend(data: Bits): UInt = {
-    Utils.signExtend(data, 32).asUInt
+    Utils.signExtend(data, config.xlen).asUInt
   }
 
   def i = signExtend(ir(31 downto 20))
   def s = signExtend(ir(31 downto 25) ## ir(11 downto 7))
   def b = signExtend(ir(31) ## ir(7) ## ir(30 downto 25) ## ir(11 downto 8) ## False)
-  def u = (ir(31 downto 12) << 12).asUInt
+  def u = signExtend(ir(31 downto 12) << 12)
   def j = signExtend(
     ir(31) ## ir(19 downto 12) ## ir(20) ## ir(30 downto 25) ## ir(24 downto 21) ## False
   )
@@ -159,7 +159,14 @@ class Decoder(decodeStage: Stage) extends Plugin[Pipeline] with DecoderService {
         }
         default {
           pipeline.serviceOption[TrapService] foreach { trapHandler =>
-            trapHandler.trap(decodeStage, TrapCause.IllegalInstruction(ir))
+            if (config.xlen == 64) {
+              trapHandler.trap(
+                decodeStage,
+                TrapCause.IllegalInstruction(ir.resize(config.xlen bits))
+              )
+            } else {
+              trapHandler.trap(decodeStage, TrapCause.IllegalInstruction(ir))
+            }
           }
         }
       }

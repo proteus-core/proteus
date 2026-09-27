@@ -60,12 +60,19 @@ class LoadManager(
         // TODO: this is very ugly
         lsu.addressOfBundle(targetRobEntry.registerMap) := address
         lsu.addressValidOfBundle(targetRobEntry.registerMap) := True
+
+        /** This is speculative store bypass (SSB): When the ROB contains a store instruction with
+          * an unknown address, we speculate that it will not overlap with the address of the
+          * current load, so we issue this load but mark it as SSB speculative for validation later
+          * once the store address is available.
+          *
+          * To avoid the speculation remaining undetected if the load takes longer than the address
+          * resolution of the store, we immediately set the speculation bit in the ROB.
+          */
         when(unknownStore) {
-          lsu.stlSpeculation(storedMessage.registerMap) := True
-          lsu.stlSpeculation(targetRobEntry.registerMap) := True
-          pipeline.serviceOption[SpeculationService] foreach { spec =>
-            spec.isSpeculativeMD(storedMessage.registerMap) := True
-            spec.isSpeculativeMD(targetRobEntry.registerMap) := True
+          pipeline.serviceOption[DataSpeculationService] foreach { spec =>
+            spec.isSsbSpeculative(storedMessage.registerMap) := True
+            spec.isSsbSpeculative(targetRobEntry.registerMap) := True
           }
         }
       }
@@ -110,7 +117,10 @@ class LoadManager(
       }
     }
 
-    lsu.psfMisspeculation(resultCdbMessage.metadata) := False
+    pipeline.serviceOption[DataSpeculationService] foreach { spec =>
+      spec.isPsfSpeculative(resultCdbMessage.metadata) := False
+    }
+
     cdbStream.valid := False
     cdbStream.payload := resultCdbMessage
 
@@ -120,8 +130,6 @@ class LoadManager(
 
     rdbStream.valid := False
     rdbStream.payload := outputCache
-
-    val address = lsu.addressOfBundle(storedMessage.registerMap)
 
     when(state === State.EXECUTING && loadStage.arbitration.isDone && !activeFlush) {
       when(discardResult) {
@@ -140,13 +148,15 @@ class LoadManager(
         cdbStream.valid := True
         cdbStream.payload.writeValue := loadStage.output(pipeline.data.RD_DATA)
         cdbStream.payload.robIndex := storedMessage.robIndex
-        // for loads that did not have a PSF prediction, set the correct address to prevent a pipeline flush
-        lsu.psfAddress(cdbStream.payload.metadata) := address
 
-        pipeline.serviceOption[SpeculationService] foreach { spec =>
-          spec.isSpeculativeMD(cdbStream.metadata) := spec.isSpeculativeMD(
+        pipeline.serviceOption[DataSpeculationService] foreach { spec =>
+          spec.isSsbSpeculative(cdbStream.metadata) := spec.isSsbSpeculative(
             storedMessage.registerMap
           )
+        }
+
+        pipeline.serviceOption[PipelineTaintService] foreach { tracking =>
+          tracking.tainted(cdbStream.metadata) := tracking.tainted(loadStage)
         }
 
         resultCdbMessage := cdbStream.payload
