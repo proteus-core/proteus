@@ -7,8 +7,8 @@ import spinal.lib._
 case class RegisterFileReadIo()(implicit config: Config) extends Bundle with IMasterSlave {
   val rs1 = UInt(5 bits)
   val rs2 = UInt(5 bits)
-  val rs1Data = UInt(config.xlen bits)
-  val rs2Data = UInt(config.xlen bits)
+  val rs1Data = UInt(config.isa.xlen bits)
+  val rs2Data = UInt(config.isa.xlen bits)
 
   override def asMaster(): Unit = {
     in(rs1, rs2)
@@ -18,7 +18,7 @@ case class RegisterFileReadIo()(implicit config: Config) extends Bundle with IMa
 
 case class RegisterFileWriteIo()(implicit config: Config) extends Bundle with IMasterSlave {
   val rd = UInt(5 bits)
-  val data = UInt(config.xlen bits)
+  val data = UInt(config.isa.xlen bits)
   val write = Bool()
 
   override def asMaster(): Unit = {
@@ -65,12 +65,12 @@ class RegisterFile()(implicit config: Config) extends Component {
 
   val readIo = master(RegisterFileReadIo())
   val writeIo = master(RegisterFileWriteIo())
-  val regs = Mem(UInt(config.xlen bits), config.numRegs)
+  val regs = Mem(UInt(config.isa.xlen bits), config.isa.numRegs)
 
   // Add a wire for each register with a readable name. This is to easily
   // view register values in a wave dump.
-  for (i <- 0 until config.numRegs) {
-    val regWire = UInt(config.xlen bits)
+  for (i <- 0 until config.isa.numRegs) {
+    val regWire = UInt(config.isa.xlen bits)
     val regName = registerNames(i)
     regWire.setName(s"x${i}_${regName}")
     regWire := regs.readAsync(U(i).resized, writeFirst)
@@ -81,7 +81,7 @@ class RegisterFile()(implicit config: Config) extends Component {
   // slows-down riscv-formal runs significantly for some reason...
   def readReg(addr: UInt) = {
     addr.mux(
-      0 -> U(0, config.xlen bits),
+      0 -> U(0, config.isa.xlen bits),
       default -> regs.readAsync(addr, writeFirst)
     )
   }

@@ -30,12 +30,17 @@ The following table describes the released versions and extensions forking them.
 
 | Version                                                                  | Extension(s)                                                                                                                                                                                                                                                               |
 |:-------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [`25.08`](https://github.com/proteus-core/proteus/releases/tag/v25.08)   |                                                                                                                                                                                                                                                                            |
+| [`25.08`](https://github.com/proteus-core/proteus/releases/tag/v25.08)   | [dfence: Fine-Grained Speculation Barriers for Efficient and Effective Hardware-Software Protection in the Spectre Era](https://doi.org/10.5281/zenodo.20770661) (only for `25.08-O`)                                                                                      |
 | [`25.04`](https://github.com/proteus-core/proteus/releases/tag/v25.04)   |                                                                                                                                                                                                                                                                            |
 | [`24.01`](https://github.com/proteus-core/proteus/releases/tag/v24.01)   | [Libra: Architectural Support For Principled, Secure And Efficient Balanced Execution On High-End Processors](https://github.com/proteus-core/libra) (only for `24.01-O`)                                                                                                  |
 | [`23.03`](https://github.com/proteus-core/proteus/releases/tag/v23.03)   | [Architectural Mimicry: Innovative Instructions to Efficiently Address Control-Flow Leakage in Data-Oblivious Programs](https://github.com/proteus-core/ami) (both `23.03-I` and `23.03-O`)                                                                                |
 | [`23.02`](https://github.com/proteus-core/proteus/releases/tag/v23.02)   | [ProSpeCT: Provably Secure Speculation for the Constant-Time Policy](https://github.com/proteus-core/prospect) (only for `23.02-O`), [CHERI-Crypt: Transparent Memory Encryption on Capability Architectures](https://github.com/cap-tee/cheri-crypt) (only for `23.02-I`) |
 | [`21.08-I`](https://github.com/proteus-core/proteus/releases/tag/v21.08) | Hardware capabilities (CHERI): `src/main/scala/riscv/plugins/cheri`, providing the basis for the following publication: [CHERI-TrEE: Flexible enclaves on capability machines](https://github.com/proteus-core/cheritree).                                                 |
+
+Proteus has also been used in the following publications:
+
+- [Masking Out of Order: Side-Channel Leaks from Software-Masked Cryptography on Out-of-Order Processors](https://eprint.iacr.org/2026/123.pdf)
+- [SPARC: Automated Root-Cause Analysis of Pre-Silicon Power Side-Channel Leakage in the Processor Design Flow](https://arxiv.org/pdf/2607.23218)
 
 ## Working with Proteus
 

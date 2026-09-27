@@ -14,7 +14,7 @@ class MemoryTagger(implicit config: Config)
   override def busTag: PipelineData[UInt] = Data.RAW_BUS_TAG
 
   override def setup(): Unit = {
-    assert (pipeline.hasService[PipelineTaintService], "Taint tracking required for memory tagger")
+    assert(pipeline.hasService[PipelineTaintService], "Taint tracking required for memory tagger")
 
     pipeline.service[DecoderService].configure { dConfig =>
       dConfig.addDefault(
@@ -43,7 +43,10 @@ class MemoryTagger(implicit config: Config)
           config.tagGranularity match {
             case 64 =>
             case 32 => resultTag := fullTag(if (config.xlen == 64) address(2).asUInt else U(0))
-            case 16 => resultTag := fullTag(if (config.xlen == 64) address(2 downto 1) else address(1).asUInt)
+            case 16 =>
+              resultTag := fullTag(
+                if (config.xlen == 64) address(2 downto 1) else address(1).asUInt
+              )
             case 8 =>
               val tagOffset = if (config.xlen == 64) address(2 downto 0) else address(1 downto 0)
               when(accessWidth === LsuAccessWidth.B) {

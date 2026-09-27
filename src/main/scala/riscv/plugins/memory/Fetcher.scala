@@ -26,14 +26,15 @@ class Fetcher(fetchStage: Stage) extends Plugin[Pipeline] with FetchService {
 
       when(arbitration.isRunning) {
         val fetchAddress = addressTranslator.translate(fetchStage, pc)
-        val (valid, rdata, _) = ibusCtrl.read(fetchAddress)
+        val (valid, rdata, _) =
+          ibusCtrl.read(fetchAddress, if (ibus.config.includePcWire) pc else null)
 
         when(valid) {
           arbitration.isReady := True
 
           output(pipeline.data.NEXT_PC) := nextPc
           // TODO: do we have to do this more often? kinda annoying
-          if (config.xlen == 64) {
+          if (config.isa.xlen == 64) {
             when(pc(2)) {
               output(pipeline.data.IR) := rdata(63 downto 32)
             } otherwise {

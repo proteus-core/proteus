@@ -80,7 +80,7 @@ class PccManager(branchStage: Stage)(implicit context: Context)
   def jump(stage: Stage, pcc: Capability, capIdx: CapIdx): Unit = {
     setTargetPcc(stage, pcc, capIdx)
 
-    val pc = UInt(config.xlen bits)
+    val pc = UInt(config.isa.xlen bits)
     pc := pcc.offset
     pc.lsb := False
     pipeline.service[JumpService].jump(stage, pc)
@@ -181,19 +181,27 @@ class PccManager(branchStage: Stage)(implicit context: Context)
       }
     }
 
-    pipeline.service[ScrService] registerScr (ScrIndex.MTCC, 0x305, new Area with Scr {
-      override val needAsr: Boolean = true
-      private val mtcc = Reg(PackedCapability()).init(PackedCapability.Root)
-      override def read(): Capability = mtcc
-      override def write(value: Capability): Unit = mtcc.assignFrom(value)
-    })
+    pipeline.service[ScrService] registerScr (
+      ScrIndex.MTCC,
+      0x305,
+      new Area with Scr {
+        override val needAsr: Boolean = true
+        private val mtcc = Reg(PackedCapability()).init(PackedCapability.Root)
+        override def read(): Capability = mtcc
+        override def write(value: Capability): Unit = mtcc.assignFrom(value)
+      }
+    )
 
-    pipeline.service[ScrService] registerScr (ScrIndex.MEPCC, 0x341, new Area with Scr {
-      override val needAsr: Boolean = true
-      private val mepcc = Reg(PackedCapability()).init(PackedCapability.Root)
-      override def read(): Capability = mepcc
-      override def write(value: Capability): Unit = mepcc.assignFrom(value)
-    })
+    pipeline.service[ScrService] registerScr (
+      ScrIndex.MEPCC,
+      0x341,
+      new Area with Scr {
+        override val needAsr: Boolean = true
+        private val mepcc = Reg(PackedCapability()).init(PackedCapability.Root)
+        override def read(): Capability = mepcc
+        override def write(value: Capability): Unit = mepcc.assignFrom(value)
+      }
+    )
   }
 
   override def build(): Unit = {
@@ -220,7 +228,7 @@ class PccManager(branchStage: Stage)(implicit context: Context)
     if (config.debug) {
       // Add a debug pipeline register for the absolute PC. Since PC is relative to PCC, it's
       // difficult to interpret the waveform when PCC.base != 0. ABS_PC to the rescue!
-      object ABS_PC extends PipelineData(UInt(config.xlen bits))
+      object ABS_PC extends PipelineData(UInt(config.isa.xlen bits))
 
       pipeline.fetchStage plug {
         pipeline.fetchStage.output(ABS_PC) := getPcc(pipeline.fetchStage).address

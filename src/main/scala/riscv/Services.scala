@@ -331,16 +331,17 @@ trait PrefetchService {
 
   /** Inform the prefetcher of a load request
     */
-  def notifyLoadRequest(address: UInt): Unit
+  def notifyLoadRequest(address: UInt, pc: UInt): Unit
 
-  /** Inform the prefetcher of a load response returning from main memory
+  /** Inform the prefetcher of a load response returning from the cache (cacheHit is true) or from a
+    * lower level in the memory hierarchy (cacheHit is false)
     */
-  def notifyLoadResponseFromMemory(address: UInt, data: UInt, tag: UInt): Unit
+  def notifyLoadResponse(address: UInt, pc: UInt, data: UInt, cacheHit: Boolean, tag: UInt): Unit
 
-  /** Inform the prefetcher of a prefetch response returning from main memory, associated with the
-    * given id
+  /** Inform the prefetcher of a cache fill from a prefetch request returning from a lower level in
+    * the memory hierarchy, associated with the given id
     */
-  def notifyPrefetchResponseFromMemory(address: UInt, data: UInt, id: UInt, tag: UInt): Unit
+  def notifyPrefetchResponse(address: UInt, data: UInt, id: UInt, tag: UInt): Unit
 
   /** Check if the prefetcher has a prefetch target ready
     */
@@ -379,7 +380,7 @@ trait Csr extends Area {
 }
 
 class CsrIo(implicit config: Config) extends Bundle with IMasterSlave {
-  val rdata, wdata = UInt(config.xlen bits)
+  val rdata, wdata = UInt(config.isa.xlen bits)
   val write = Bool()
 
   def read(): UInt = rdata
@@ -409,6 +410,62 @@ trait CsrService {
   def getCsr(id: Int): CsrIo
   def csrWriteInCycle(): Bool
   def isCsrInstruction(bundle: Bundle with DynBundleAccess[PipelineData[Data]]): Bool
+}
+
+trait RngBuffer extends Area {
+  def read(): UInt
+  def isValid(): Bool
+  def request(): Unit
+  def flush(): Unit
+  def isFull(): Bool
+  def connect(inputStream: Stream[Bits]): Unit
+}
+
+class RngIo(implicit config: Config) extends Bundle with IMasterSlave {
+  val rdata = UInt(config.isa.xlen bits)
+  val rdata_valid, rdata_request = Bool()
+
+  private def request(): Unit = {
+    rdata_request := True
+  }
+  private def read(): UInt = rdata
+  private def isValid(): Bool = rdata_valid
+
+  /** Get a value from this RNG queue.
+    *
+    * @return
+    *   valid: Whether the returned data is valid.
+    * @return
+    *   value: The random seed.
+    */
+  def get(): (Bool, UInt) = {
+    val valid = False
+    val value = U(0, config.isa.xlen bits)
+
+    request()
+
+    when(isValid()) {
+      valid := True
+      value := read()
+    }
+
+    (valid, value)
+  }
+
+  override def asMaster(): Unit = {
+    out(rdata, rdata_valid)
+    in(rdata_request)
+  }
+
+  override def asSlave(): Unit = {
+    super.asSlave()
+    rdata_request := False
+  }
+}
+
+trait RngService {
+  def registerRngBuffer[T <: RngBuffer](rngbuffer: => T): Int
+  def getRngBuffer(id: Int): RngIo
 }
 
 class IrqIo extends Bundle with IMasterSlave {
@@ -476,6 +533,10 @@ trait FormalService {
 
 trait Resettable {
   def pipelineReset(): Unit
+}
+
+trait RegisterFenceService {
+  def isRegisterFence(stage: Stage): Bool
 }
 
 trait DataSpeculationService {

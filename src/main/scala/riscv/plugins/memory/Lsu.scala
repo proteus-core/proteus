@@ -3,7 +3,7 @@ package riscv.plugins.memory
 import riscv._
 import spinal.core._
 
-class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], override val storeStage: Stage)
+class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
     extends Plugin[Pipeline]
     with LsuService {
   private var addressTranslator = new LsuAddressTranslator {
@@ -26,7 +26,7 @@ class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], overri
     object LSU_ACCESS_WIDTH extends PipelineData(LsuAccessWidth())
     object LSU_IS_UNSIGNED extends PipelineData(Bool())
     object LSU_IS_EXTERNAL_OP extends PipelineData(Bool())
-    object LSU_TARGET_ADDRESS extends PipelineData(UInt(config.xlen bits)) // TODO: Flow?
+    object LSU_TARGET_ADDRESS extends PipelineData(UInt(config.isa.xlen bits)) // TODO: Flow?
     object LSU_TARGET_VALID extends PipelineData(Bool())
   }
 
@@ -128,7 +128,7 @@ class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], overri
   override def setup(): Unit = {
     for (addressStage <- addressStages) {
       addressStage plug new Area {
-        val externalAddress = UInt(config.xlen bits).assignDontCare()
+        val externalAddress = UInt(config.isa.xlen bits).assignDontCare()
         Lsu.this.externalAddress = externalAddress
       }
     }
@@ -152,7 +152,7 @@ class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], overri
       Opcodes64.SD
     )
 
-    val allOpcodes: Seq[MaskedLiteral] = if (config.xlen == 64) {
+    val allOpcodes: Seq[MaskedLiteral] = if (config.isa.xlen == 64) {
       allOpcodes64 ++ allOpcodes32
     } else {
       allOpcodes32
@@ -198,7 +198,7 @@ class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], overri
       addLoad(Opcodes.LHU, LsuAccessWidth.H, True)
       addLoad(Opcodes.LBU, LsuAccessWidth.B, True)
 
-      if (config.xlen == 64) {
+      if (config.isa.xlen == 64) {
         addLoad(Opcodes64.LD, LsuAccessWidth.D, False)
         addLoad(Opcodes64.LWU, LsuAccessWidth.W, True)
       }
@@ -221,7 +221,7 @@ class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], overri
       addStore(Opcodes.SH, LsuAccessWidth.H)
       addStore(Opcodes.SB, LsuAccessWidth.B)
 
-      if (config.xlen == 64) {
+      if (config.isa.xlen == 64) {
         addStore(Opcodes64.SD, LsuAccessWidth.D)
       }
     }
@@ -264,13 +264,13 @@ class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], overri
       val misaligned = Bool()
       val baseMask = Bits(config.memBusWidth / 8 bits)
 
-      if (config.xlen != 64) {
+      if (config.isa.xlen != 64) {
         // prevent latch because of missing double access width
         misaligned := False
         baseMask := B(0).resized
       }
 
-      if (config.xlen == 32) {
+      if (config.isa.xlen == 32) {
         switch(accessWidth) {
           is(LsuAccessWidth.B) {
             misaligned := False
@@ -372,13 +372,16 @@ class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], overri
             val busAddress = address & U(0xfffffffcL)
             val valid = Bool()
             valid := False
-            val fullValue = UInt(config.xlen bits).getZero
+            val fullValue = UInt(config.isa.xlen bits).getZero
             busReady := dbusCtrl.isReady
             when(busReady) {
               loadActive := True
             }
             when(busReady || loadActive) {
-              val tpl = dbusCtrl.read(busAddress)
+              val tpl = dbusCtrl.read(
+                busAddress,
+                if (loadDBuses(stageIndex).config.includePcWire) value(pipeline.data.PC) else null
+              )
               valid := tpl._1
               fullValue := tpl._2
               val taggingService = pipeline.serviceOption[MemoryTaggerService]
@@ -390,16 +393,16 @@ class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], overri
               loadActive := False
             }
             arbitration.isReady := valid
-            val result = UInt(config.xlen bits)
+            val result = UInt(config.isa.xlen bits)
             result := fullValue
 
             // TODO: this whole switch could be generated from a template
             switch(value(Data.LSU_ACCESS_WIDTH)) {
               is(LsuAccessWidth.H) {
                 // TODO: do we have to do this more often? kinda annoying
-                val offset_len = if (config.xlen == 64) 6 else 5
+                val offset_len = if (config.isa.xlen == 64) 6 else 5
                 val offset = UInt(offset_len bits)
-                if (config.xlen == 64) {
+                if (config.isa.xlen == 64) {
                   offset := (address(2) ## address(1) ## B"0000").asUInt
                 } else {
                   offset := (address(1) ## B"0000").asUInt
@@ -407,16 +410,16 @@ class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], overri
                 val hValue = fullValue(offset, 16 bits)
 
                 when(value(Data.LSU_IS_UNSIGNED)) {
-                  result := Utils.zeroExtend(hValue, config.xlen)
+                  result := Utils.zeroExtend(hValue, config.isa.xlen)
                 } otherwise {
-                  result := Utils.signExtend(hValue, config.xlen)
+                  result := Utils.signExtend(hValue, config.isa.xlen)
                 }
               }
               is(LsuAccessWidth.B) {
                 // TODO: do we have to do this more often? kinda annoying
-                val offset_len = if (config.xlen == 64) 6 else 5
+                val offset_len = if (config.isa.xlen == 64) 6 else 5
                 val offset = UInt(offset_len bits)
-                if (config.xlen == 64) {
+                if (config.isa.xlen == 64) {
                   offset := (address(2 downto 0) ## B"000").asUInt
                 } else {
                   offset := (address(1 downto 0) ## B"000").asUInt
@@ -424,14 +427,14 @@ class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], overri
                 val bValue = fullValue(offset, 8 bits)
 
                 when(value(Data.LSU_IS_UNSIGNED)) {
-                  result := Utils.zeroExtend(bValue, config.xlen)
+                  result := Utils.zeroExtend(bValue, config.isa.xlen)
                 } otherwise {
-                  result := Utils.signExtend(bValue, config.xlen)
+                  result := Utils.signExtend(bValue, config.isa.xlen)
                 }
               }
             }
 
-            if (config.xlen == 64) {
+            if (config.isa.xlen == 64) {
               when(value(Data.LSU_ACCESS_WIDTH) === LsuAccessWidth.W) {
                 // TODO: do we have to do this more often? kinda annoying
                 val offset = UInt(6 bits)
@@ -439,16 +442,16 @@ class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], overri
                 val wValue = fullValue(offset, 32 bits)
 
                 when(value(Data.LSU_IS_UNSIGNED)) {
-                  result := Utils.zeroExtend(wValue, config.xlen)
+                  result := Utils.zeroExtend(wValue, config.isa.xlen)
                 } otherwise {
-                  result := Utils.signExtend(wValue, config.xlen)
+                  result := Utils.signExtend(wValue, config.isa.xlen)
                 }
               }
             }
 
             output(pipeline.data.RD_DATA) := result
             output(pipeline.data.RD_DATA_VALID) := True
-            formal.lsuOnLoad(loadStage, address, baseMask.resize(config.xlen / 8 bits), result)
+            formal.lsuOnLoad(loadStage, address, baseMask.resize(config.isa.xlen / 8 bits), result)
           }
         } otherwise {
           loadActive := False
@@ -493,7 +496,7 @@ class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], overri
         when(isActive) {
           val wValue = value(pipeline.data.RS2_DATA)
           arbitration.rs2Needed := True
-          val data = UInt(config.xlen bits)
+          val data = UInt(config.isa.xlen bits)
           data := wValue
 
           switch(value(Data.LSU_ACCESS_WIDTH)) {
@@ -528,18 +531,31 @@ class Lsu(addressStages: Set[Stage], override val loadStages: Seq[Stage], overri
 
           // Position the data within the cache line
           val cacheLine = data << (busAddress(addressOffset downto 0) << 3)
+
           val accepted = Bool()
           if (config.memoryTagger) {
             pipeline.serviceOption[PipelineTaintService] foreach { tracking =>
               val tag = tracking.tainted(storeStage)
-              accepted := dbusCtrl.write(busAddress, cacheLine.resized, mask, tag)
+              accepted := dbusCtrl.write(
+                busAddress,
+                if (storeDBus.config.includePcWire) value(pipeline.data.PC) else null,
+                cacheLine.resized,
+                mask,
+                tag
+              )
             }
           } else {
-            accepted := dbusCtrl.write(busAddress, cacheLine.resized, mask)
+            accepted := dbusCtrl.write(
+              busAddress,
+              if (storeDBus.config.includePcWire) value(pipeline.data.PC) else null,
+              cacheLine.resized,
+              mask
+            )
           }
+
           arbitration.isReady := accepted
 
-          formal.lsuOnStore(storeStage, address, baseMask.resize(config.xlen / 8 bits), wValue)
+          formal.lsuOnStore(storeStage, address, baseMask.resize(config.isa.xlen / 8 bits), wValue)
         }
       }
     }

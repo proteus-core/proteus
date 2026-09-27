@@ -18,7 +18,7 @@ class Ccsr extends Plugin[Pipeline] {
         val capIdx = Reg(UInt(6 bits)).init(0)
 
         override def read(): UInt = {
-          (capIdx ## cause ## B"000" ## B"11").asUInt.resize(config.xlen bits)
+          (capIdx ## cause ## B"000" ## B"11").asUInt.resize(config.isa.xlen bits)
         }
 
         override def write(value: UInt): Unit = {

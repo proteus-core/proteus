@@ -5,24 +5,15 @@ import spinal.lib._
 import spinal.lib.bus.amba3.apb._
 import spinal.lib.bus.amba4.axi._
 
-case class MemBusConfig(
-    addressWidth: Int,
-    idWidth: Int,
-    dataWidth: Int,
-    readWrite: Boolean = true,
-    tagBusWidth: Int
-) {
-  def byte2WordAddress(ba: UInt): UInt = ba(dataWidth - 1 downto log2Up(dataWidth / 8))
-  def word2ByteAddress(wa: UInt): UInt = wa << log2Up(dataWidth / 8)
-}
-
 case class MemBusCmd(config: MemBusConfig) extends Bundle {
   val address = UInt(config.addressWidth bits)
+  val pc = if (config.includePcWire) UInt(config.addressWidth bits) else null
   val id = UInt(config.idWidth bits)
   val write = if (config.readWrite) Bool() else null
   val wdata = if (config.readWrite) UInt(config.dataWidth bits) else null
   val wmask = if (config.readWrite) Bits(config.dataWidth / 8 bits) else null
-  val wuser = if (config.readWrite && config.tagBusWidth > 0) UInt(config.tagBusWidth bits) else null
+  val wuser =
+    if (config.readWrite && config.tagBusWidth > 0) UInt(config.tagBusWidth bits) else null
 }
 
 case class MemBusRsp(config: MemBusConfig) extends Bundle {
@@ -185,6 +176,9 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
   bus.cmd.valid := currentCmd.valid
   bus.cmd.id := currentCmd.cmd.id
   bus.cmd.address := currentCmd.cmd.address
+  if (bus.config.includePcWire) {
+    bus.cmd.pc := currentCmd.cmd.pc
+  }
 
   if (bus.config.readWrite) {
     bus.cmd.write := currentCmd.cmd.write
@@ -207,6 +201,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
 
   private def issueCommand(
       address: UInt,
+      pc: UInt,
       write: Boolean = false,
       wdata: UInt = null,
       wmask: Bits = null,
@@ -225,6 +220,10 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     currentCmd.cmd.address := address
     bus.cmd.valid := True
     bus.cmd.address := address
+    if (bus.config.includePcWire) {
+      currentCmd.cmd.pc := pc
+      bus.cmd.pc := pc
+    }
 
     if (bus.config.readWrite) {
       if (write) {
@@ -249,15 +248,15 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     currentCmd.ready := False
   }
 
-  def read(address: UInt): (Bool, UInt, UInt) = {
+  def read(address: UInt, pc: UInt): (Bool, UInt, UInt) = {
     val valid = False
-    val rdata = U(0, config.xlen bits)
-    val ruser = U(0, config.xlen / config.tagGranularity bits)
+    val rdata = U(0, config.isa.xlen bits)
+    val ruser = U(0, config.isa.xlen / config.tagGranularity bits)
     val dropRsp = False
     val issuedThisCycle = False
 
     when(!currentCmd.isIssued) {
-      issueCommand(address)
+      issueCommand(address, pc)
       issuedThisCycle := True
     } elsewhen ((currentCmd.cmd.address >> log2Up(config.memBusWidth / 8))
       =/= (address >> log2Up(config.memBusWidth / 8))) {
@@ -271,16 +270,18 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
       when(issuedThisCycle || (!dropRsp && !currentCmd.isWrite)) {
         valid := True
         val addressOffset: Int = log2Up(config.memBusWidth / 8) - 1
-        val byteOffset: Int = log2Up(config.xlen / 8)
+        val byteOffset: Int = log2Up(config.isa.xlen / 8)
         val offset: UInt = address(addressOffset downto byteOffset)
-        val shifted: Int = log2Up(config.xlen)
+        val shifted: Int = log2Up(config.isa.xlen)
         val startingBit: UInt = offset << shifted
-        rdata := (bus.rsp.rdata >> startingBit) (config.xlen - 1 downto 0)
+        rdata := (bus.rsp.rdata >> startingBit)(config.isa.xlen - 1 downto 0)
 
         if (config.tagBusWidth > 0) {
           val tagByteOffset: Int = log2Up(config.tagGranularity / 8)
           val tagOffset: UInt = address(addressOffset downto tagByteOffset)
-          ruser := (bus.rsp.ruser >> tagOffset)(config.xlen / config.tagGranularity - 1 downto 0)
+          ruser := (bus.rsp.ruser >> tagOffset)(
+            config.isa.xlen / config.tagGranularity - 1 downto 0
+          )
         }
       }
     }
@@ -288,7 +289,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     (valid, rdata, ruser)
   }
 
-  def write(address: UInt, wdata: UInt, wmask: Bits, tag: Bool = False): Bool = {
+  def write(address: UInt, pc: UInt, wdata: UInt, wmask: Bits, tag: Bool = False): Bool = {
     assert(bus.config.readWrite)
 
     val accepted = False
@@ -297,7 +298,7 @@ class MemBusControl(bus: MemBus)(implicit config: Config) extends Area {
     val wuser = if (config.tagBusWidth > 0) U(config.tagBusWidth bits, default -> tag) else null
 
     when(!currentCmd.isIssued) {
-      issueCommand(address, write = true, wdata, wmask, wuser)
+      issueCommand(address, pc, write = true, wdata, wmask, wuser)
       issuedThisCycle := True
     } elsewhen (currentCmd.cmd.address =/= address) {
       dropRsp := True

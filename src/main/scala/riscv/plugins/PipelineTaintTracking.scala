@@ -28,7 +28,7 @@ class PipelineTaintTracking(implicit config: Config)
     tainted(pipeline.retirementStage)
 
     pipeline plug new Area {
-      val regArray = Vec.fill(config.numRegs)(RegInit(False))
+      val regArray = Vec.fill(config.isa.numRegs)(RegInit(False))
       registerTaints = regArray
     }
   }

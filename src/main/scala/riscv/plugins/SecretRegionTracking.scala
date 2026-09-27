@@ -49,7 +49,10 @@ class SecretRegionTracking(implicit config: Config)
   }
 
   override def setup(): Unit = {
-    assert(pipeline.hasService[PipelineTaintService], "Taint tracking required for secret region tracking")
+    assert(
+      pipeline.hasService[PipelineTaintService],
+      "Taint tracking required for secret region tracking"
+    )
 
     pipeline plug new Area {
       val csrService = pipeline.service[CsrService]
@@ -62,11 +65,11 @@ class SecretRegionTracking(implicit config: Config)
     val lsu = pipeline.service[LsuService]
     lsu.setAddressTranslator(new LsuAddressTranslator {
       override def translate(
-                              stage: Stage,
-                              address: UInt,
-                              operation: SpinalEnumCraft[LsuOperationType.type],
-                              width: SpinalEnumCraft[LsuAccessWidth.type]
-                            ): UInt = {
+          stage: Stage,
+          address: UInt,
+          operation: SpinalEnumCraft[LsuOperationType.type],
+          width: SpinalEnumCraft[LsuAccessWidth.type]
+      ): UInt = {
         pipeline
           .service[PipelineTaintService]
           .tainted(stage) := operation === LsuOperationType.LOAD && isSecret(address)

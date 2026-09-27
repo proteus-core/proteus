@@ -77,7 +77,7 @@ case class ObjectType(implicit context: Context) extends Bundle {
   val value = UInt(context.otypeLen bits)
 
   def extendedValue: UInt = {
-    val xlen = context.config.xlen
+    val xlen = context.config.isa.xlen
     isSealed ? value.resize(xlen bits) | UInt(xlen bits).setAll()
   }
 
@@ -144,7 +144,7 @@ trait Capability {
 }
 
 class PackedCapabilityFields(hasOffset: Boolean = true)(implicit context: Context) extends Bundle {
-  private val xlen = context.config.xlen
+  private val xlen = context.config.isa.xlen
   val base = UInt(xlen bits)
   val length = UInt(xlen bits)
   val offset = if (hasOffset) UInt(xlen bits) else null
@@ -218,7 +218,7 @@ case class MemPermissions() extends Bundle with Permissions {
 }
 
 case class MemCapability()(implicit context: Context) extends Bundle with Capability {
-  private val xlen = context.config.xlen
+  private val xlen = context.config.isa.xlen
 
   val cursor = UInt(xlen bits)
   override val base = UInt(xlen bits)

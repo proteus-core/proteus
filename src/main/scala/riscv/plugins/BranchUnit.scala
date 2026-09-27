@@ -106,7 +106,7 @@ class BranchUnit(branchStages: Set[Stage]) extends Plugin[Pipeline] {
 
         val misaligned = target(1 downto 0).orR
 
-        val src1, src2 = UInt(config.xlen bits)
+        val src1, src2 = UInt(config.isa.xlen bits)
         src1 := value(pipeline.data.RS1_DATA)
         src2 := value(pipeline.data.RS2_DATA)
 
