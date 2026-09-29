@@ -68,10 +68,12 @@ class ReorderBuffer(
   private val flushCounter = Reg(UInt(config.isa.xlen bits)).init(0)
   private val softFlushCounter = Reg(UInt(config.isa.xlen bits)).init(0)
 
-  private val fenceDetectedNext = Bool()
-  private val fenceDetected = RegNext(fenceDetectedNext).init(False)
+  private val fenceDetectedNext = if (pipeline.hasService[FenceService]) Bool() else null
+  private val fenceDetected =
+    if (pipeline.hasService[FenceService]) RegNext(fenceDetectedNext).init(False) else null
 
-  val isAvailable = (!isFull || willRetire) && !fenceDetectedNext
+  val isAvailable = (!isFull || willRetire) &&
+    (if (pipeline.hasService[FenceService]) !fenceDetectedNext else True)
 
   val lastSpeculativeCFInstruction = Reg(Flow(UInt(indexBits)))
 
@@ -164,7 +166,9 @@ class ReorderBuffer(
     newestIndex.clear()
     isFull := False
     lastSpeculativeCFInstruction.setIdle()
-    fenceDetected := False
+    if (pipeline.hasService[FenceService]) {
+      fenceDetected := False
+    }
     softResetTrigger.setIdle()
     for (nth <- 0 until capacity) {
       robEntries(nth).invalidated := False
@@ -176,7 +180,9 @@ class ReorderBuffer(
     // prevent flushes caused by transient instructions
     when(!robEntries(lastCorrectId).invalidated && !hardResetThisCycle && !softResetTrigger.valid) {
       // this is fine, because fences are always the last instruction in the ROB (cannot insert anything else while it's present)
-      fenceDetected := False
+      if (pipeline.hasService[FenceService]) {
+        fenceDetected := False
+      }
 
       softResetThisCycle := True
       softResetTrigger.push(lastCorrectId)
@@ -289,8 +295,10 @@ class ReorderBuffer(
     lsuService.operationOfBundle(pushedEntry.registerMap) := lsuService.operationOutput(issueStage)
     lsuService.addressValidOfBundle(pushedEntry.registerMap) := False
 
-    when(pipeline.service[FenceService].isFence(issueStage)) {
-      fenceDetected := True
+    pipeline.serviceOption[FenceService] foreach { fenceService =>
+      when(fenceService.isFence(issueStage)) {
+        fenceDetected := True
+      }
     }
 
     pipeline.serviceOption[DataSpeculationService] foreach { spec =>
@@ -714,7 +722,9 @@ class ReorderBuffer(
 
   def build(): Unit = {
     isFullNext := isFull
-    fenceDetectedNext := fenceDetected
+    if (pipeline.hasService[FenceService]) {
+      fenceDetectedNext := fenceDetected
+    }
     val oldestEntry = robEntries(oldestIndex.value)
     val updatedOldestIndex = UInt(indexBits)
     updatedOldestIndex := oldestIndex.value
@@ -724,8 +734,10 @@ class ReorderBuffer(
     ret.arbitration.isValid := False
     ret.arbitration.isStalled := False
 
-    when(pipeline.service[FenceService].isFence(ret)) {
-      fenceDetectedNext := False
+    pipeline.serviceOption[FenceService] foreach { fenceService =>
+      when(fenceService.isFence(ret)) {
+        fenceDetectedNext := False
+      }
     }
 
     for (register <- retirementRegisters.keys) {

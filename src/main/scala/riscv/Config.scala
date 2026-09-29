@@ -29,24 +29,68 @@ sealed trait PrefetcherType {
     * notifyLoadResponse; when false, the PC signal will be set to null
     */
   val requiresPc: Boolean
+
+  def create(implicit config: Config): Option[Plugin[Pipeline] with PrefetchService]
 }
 object PrefetcherType {
   case object None extends PrefetcherType {
     override val requiresPc = false
+    override def create(implicit config: Config): Option[Plugin[Pipeline] with PrefetchService] = {
+      scala.None
+    }
   }
   case object SequentialInstructionPrefetcher extends PrefetcherType {
     override val requiresPc = false
+    override def create(implicit config: Config): Option[Plugin[Pipeline] with PrefetchService] = {
+      Some(new memory.SequentialInstructionPrefetcher)
+    }
   }
 }
 
-case class PrefetcherConfig(prefetcherType: PrefetcherType) {
-  def requiresPc: Boolean = prefetcherType.requiresPc
-
-  def create(implicit config: Config): Option[Plugin[Pipeline] with PrefetchService] = {
-    prefetcherType match {
-      case PrefetcherType.None => None
-      case PrefetcherType.SequentialInstructionPrefetcher =>
-        Some(new memory.SequentialInstructionPrefetcher)
+sealed trait PluginType {
+  def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline]
+}
+object PluginType {
+  case object Fence extends PluginType {
+    override def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline] = {
+      new Fence(fenceStages)
+    }
+  }
+  case object Marker extends PluginType {
+    override def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline] = {
+      new Marker
+    }
+  }
+  case object RiscvFormal extends PluginType {
+    override def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline] = {
+      new RiscvFormal
+    }
+  }
+  case object DataSpeculationTracking extends PluginType {
+    override def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline] = {
+      new DataSpeculationTracking
+    }
+  }
+  case object ControlSpeculationTracking extends PluginType {
+    override def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline] = {
+      config match {
+        case dynamicPipelineConfig: DynamicPipelineConfig =>
+          new ControlSpeculationTracking()(dynamicPipelineConfig).asInstanceOf[Plugin[Pipeline]]
+        case other =>
+          throw new IllegalArgumentException(
+            "ControlSpeculationTracking requires a DynamicPipelineConfig"
+          )
+      }
+    }
+  }
+  case object PipelineTaintTracking extends PluginType {
+    override def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline] = {
+      new PipelineTaintTracking().asInstanceOf[Plugin[Pipeline]]
+    }
+  }
+  case object RegisterFence extends PluginType {
+    override def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline] = {
+      new RegisterFence().asInstanceOf[Plugin[Pipeline]]
     }
   }
 }
@@ -54,7 +98,7 @@ case class PrefetcherConfig(prefetcherType: PrefetcherType) {
 case class CacheConfig(
     sets: Int,
     ways: Int,
-    prefetcher: PrefetcherConfig = PrefetcherConfig(PrefetcherType.None),
+    prefetcher: PrefetcherType = PrefetcherType.None,
     maxPrefetches: Int = 1,
     delay: Int = 0
 )
@@ -79,6 +123,7 @@ sealed abstract class Config(
     val iCaches: Seq[CacheConfig],
     val dCaches: Seq[CacheConfig],
     val stlSpec: Boolean,
+    val extraPlugins: Seq[PluginType],
     val debug: Boolean
 ) {
   val internalIBusConfig = MemBusConfig(
@@ -127,6 +172,7 @@ sealed abstract class Config(
        |  iCaches=$iCaches,
        |  dCaches=$dCaches,
        |  stlSpec=$stlSpec,
+       |  extraPlugins=$extraPlugins,
        |  debug=$debug
        |)""".stripMargin
 }
@@ -141,10 +187,11 @@ class StaticPipelineConfig(
       CacheConfig(
         sets = 2,
         ways = 2,
-        prefetcher = PrefetcherConfig(PrefetcherType.SequentialInstructionPrefetcher)
+        prefetcher = PrefetcherType.SequentialInstructionPrefetcher
       )
     ),
     dCaches: Seq[CacheConfig] = Seq(CacheConfig(sets = 8, ways = 2)),
+    extraPlugins: Seq[PluginType] = Seq(PluginType.Fence, PluginType.Marker),
     debug: Boolean = true
 ) extends Config(
       isa = isa,
@@ -155,6 +202,7 @@ class StaticPipelineConfig(
       iCaches = iCaches,
       dCaches = dCaches,
       stlSpec = false,
+      extraPlugins = extraPlugins,
       debug = debug
     )
 
@@ -167,7 +215,7 @@ class DynamicPipelineConfig(
       CacheConfig(
         sets = 2,
         ways = 2,
-        prefetcher = PrefetcherConfig(PrefetcherType.SequentialInstructionPrefetcher)
+        prefetcher = PrefetcherType.SequentialInstructionPrefetcher
       )
     ),
     dCaches: Seq[CacheConfig] = Seq(CacheConfig(sets = 8, ways = 2)),
@@ -178,6 +226,13 @@ class DynamicPipelineConfig(
     val addressBasedPsf: Boolean = true,
     val addressBasedSsb: Boolean = true,
     stlSpec: Boolean = true,
+    extraPlugins: Seq[PluginType] = Seq(
+      PluginType.Fence,
+      PluginType.Marker,
+      PluginType.DataSpeculationTracking,
+      PluginType.ControlSpeculationTracking,
+      PluginType.PipelineTaintTracking
+    ),
     debug: Boolean = true
 ) extends Config(
       isa = isa,
@@ -188,6 +243,7 @@ class DynamicPipelineConfig(
       iCaches = iCaches,
       dCaches = dCaches,
       stlSpec = stlSpec,
+      extraPlugins = extraPlugins,
       debug = debug
     ) {
   override def toString: String =
@@ -232,20 +288,15 @@ object Config {
     def parsePrefetcher(
         jsonObject: ujson.Value,
         key: String,
-        default: PrefetcherConfig
-    ): PrefetcherConfig = {
-      jsonObject.obj.get(key) match {
-        case Some(prefetcher) =>
-          PrefetcherConfig(prefetcher.obj.get("prefetcherType").map(_.str) match {
-            case Some(prefetcherType) =>
-              prefetcherType match {
-                case "None" => PrefetcherType.None
-                case "SequentialInstructionPrefetcher" =>
-                  PrefetcherType.SequentialInstructionPrefetcher
-                case other => throw new IllegalArgumentException(s"Unknown prefetcher: $other")
-              }
-            case None => default.prefetcherType
-          })
+        default: PrefetcherType
+    ): PrefetcherType = {
+      jsonObject.obj.get(key).map(_.str) match {
+        case Some(prefetcherType) =>
+          prefetcherType match {
+            case "None" => PrefetcherType.None
+            case "SequentialInstructionPrefetcher" => PrefetcherType.SequentialInstructionPrefetcher
+            case other => throw new IllegalArgumentException(s"Unknown prefetcher: $other")
+          }
         case None => default
       }
     }
@@ -271,6 +322,29 @@ object Config {
       )
     }
 
+    def parseExtraPlugins(
+        jsonObject: ujson.Value,
+        key: String,
+        default: Seq[PluginType]
+    ): Seq[PluginType] = {
+      jsonObject.obj.get(key).map(_.arr) match {
+        case Some(plugins) =>
+          plugins.map { plugin =>
+            plugin.str match {
+              case "Fence" => PluginType.Fence
+              case "Marker" => PluginType.Marker
+              case "RiscvFormal" => PluginType.RiscvFormal
+              case "DataSpeculationTracking" => PluginType.DataSpeculationTracking
+              case "ControlSpeculationTracking" => PluginType.ControlSpeculationTracking
+              case "PipelineTaintTracking" => PluginType.PipelineTaintTracking
+              case "RegisterFence" => PluginType.RegisterFence
+              case other => throw new IllegalArgumentException(s"Unknown plugin: $other")
+            }
+          }
+        case None => default
+      }
+    }
+
     jsonObject("pipeline").str match {
       case "Static" => {
         val default: StaticPipelineConfig = new StaticPipelineConfig()
@@ -283,6 +357,7 @@ object Config {
           applyDelayToIBus = parseBool(jsonObject, "applyDelayToIBus", default.applyDelayToIBus),
           iCaches = parseCaches(jsonObject, "iCaches", default.iCaches.head),
           dCaches = parseCaches(jsonObject, "dCaches", default.dCaches.head),
+          extraPlugins = parseExtraPlugins(jsonObject, "extraPlugins", default.extraPlugins),
           debug = parseBool(jsonObject, "debug", default.debug)
         )
       }
@@ -303,6 +378,7 @@ object Config {
           addressBasedPsf = parseBool(jsonObject, "addressBasedPsf", default.addressBasedPsf),
           addressBasedSsb = parseBool(jsonObject, "addressBasedSsb", default.addressBasedSsb),
           stlSpec = parseBool(jsonObject, "stlSpec", default.stlSpec),
+          extraPlugins = parseExtraPlugins(jsonObject, "extraPlugins", default.extraPlugins),
           debug = parseBool(jsonObject, "debug", default.debug)
         )
       }

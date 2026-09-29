@@ -6,11 +6,9 @@ import spinal.core._
 import spinal.core.sim._
 
 object createStaticPipeline {
-  def apply(
-      disablePipelining: Boolean = false,
-      extraPlugins: Seq[Plugin[StaticPipeline]] = Seq(),
-      build: Boolean = true
-  )(implicit conf: StaticPipelineConfig): StaticPipeline = {
+  def apply(disablePipelining: Boolean = false, build: Boolean = true)(implicit
+      conf: StaticPipelineConfig
+  ): StaticPipeline = {
     import riscv.plugins.scheduling.static._
 
     val pipeline = new Component with StaticPipeline {
@@ -94,10 +92,9 @@ object createStaticPipeline {
           new TrapHandler(pipeline.writeback),
           new TrapStageInvalidator,
           new Interrupts(pipeline.writeback),
-          new MulDiv(Set(pipeline.execute)),
-          new Fence(Set(pipeline.execute)),
-          new Marker
-        ) ++ extraPlugins
+          new MulDiv(Set(pipeline.execute))
+        ) ++
+        conf.extraPlugins.map(extraPlugin => extraPlugin.create(Set(pipeline.execute)))
     )
 
     if (build) {
@@ -112,12 +109,11 @@ object SoC {
   def static(
       ramType: RamType,
       extraDbusReadDelay: Int = 0,
-      applyDelayToIBus: Boolean = false,
-      extraPlugins: Seq[Plugin[StaticPipeline]] = Seq()
+      applyDelayToIBus: Boolean = false
   )(implicit config: StaticPipelineConfig): SoC[StaticPipelineConfig] = {
     new SoC(
       ramType,
-      config => createStaticPipeline(extraPlugins = extraPlugins)(config),
+      config => createStaticPipeline()(config),
       extraDbusReadDelay,
       applyDelayToIBus
     )
@@ -126,12 +122,11 @@ object SoC {
   def dynamic(
       ramType: RamType,
       extraDbusReadDelay: Int = 0,
-      applyDelayToIBus: Boolean = false,
-      extraPlugins: Seq[Plugin[DynamicPipeline]] = Seq()
+      applyDelayToIBus: Boolean = false
   )(implicit config: DynamicPipelineConfig): SoC[DynamicPipelineConfig] = {
     new SoC(
       ramType,
-      config => createDynamicPipeline(extraPlugins = extraPlugins)(config),
+      config => createDynamicPipeline()(config),
       extraDbusReadDelay,
       applyDelayToIBus
     )
@@ -178,8 +173,9 @@ object CoreSim {
 class CoreFormal extends Component {
   setDefinitionName("Core")
 
-  implicit val config = new StaticPipelineConfig(BaseIsa.RV32I)
-  val pipeline = createStaticPipeline(extraPlugins = Seq(new RiscvFormal))
+  val extraPlugins = new StaticPipelineConfig().extraPlugins ++ Seq(PluginType.RiscvFormal)
+  implicit val config = new StaticPipelineConfig(BaseIsa.RV32I, extraPlugins = extraPlugins)
+  val pipeline = createStaticPipeline()
 }
 
 object CoreFormal {
@@ -221,7 +217,7 @@ object CoreTestSim {
 }
 
 object createDynamicPipeline {
-  def apply(extraPlugins: Seq[Plugin[DynamicPipeline]] = Seq(), build: Boolean = true)(implicit
+  def apply(build: Boolean = true)(implicit
       conf: DynamicPipelineConfig
   ): DynamicPipeline = {
     val pipeline = new Component with DynamicPipeline {
@@ -331,13 +327,9 @@ object createDynamicPipeline {
           new TrapHandler(pipeline.retirementStage),
           new MachineMode(pipeline.intAlus.last),
           new Interrupts(pipeline.retirementStage),
-          new Timers,
-          new Fence(pipeline.rsStages.toSet),
-          new Marker,
-          new DataSpeculationTracking,
-          new ControlSpeculationTracking,
-          new PipelineTaintTracking
-        ) ++ extraPlugins
+          new Timers
+        ) ++
+        conf.extraPlugins.map(extraPlugin => extraPlugin.create(pipeline.rsStages.toSet))
     )
 
     if (build) {
@@ -391,8 +383,9 @@ object CoreDynamicSim {
 class CoreDynamicFormal extends Component {
   setDefinitionName("Core")
 
-  implicit val config = new DynamicPipelineConfig(BaseIsa.RV32I)
-  val pipeline = createDynamicPipeline(extraPlugins = Seq(new RiscvFormal))
+  val extraPlugins = new DynamicPipelineConfig().extraPlugins ++ Seq(PluginType.RiscvFormal)
+  implicit val config = new DynamicPipelineConfig(BaseIsa.RV32I, extraPlugins = extraPlugins)
+  val pipeline = createDynamicPipeline()
 }
 
 object CoreDynamicFormal {
@@ -446,7 +439,7 @@ object CoreExtMem {
 
     config match {
       case config: StaticPipelineConfig =>
-        println("Parsed config as:\n" + config.toString)
+        println("Proteus configuration:\n" + config.toString)
         SpinalVerilog(
           SoC.static(
             RamType.ExternalAxi4(1 GiB),
@@ -455,7 +448,7 @@ object CoreExtMem {
           )(config)
         )
       case config: DynamicPipelineConfig =>
-        println("Parsed config as:\n" + config.toString)
+        println("Proteus configuration:\n" + config.toString)
         SpinalVerilog(
           SoC.dynamic(
             RamType.ExternalAxi4(1 GiB),
