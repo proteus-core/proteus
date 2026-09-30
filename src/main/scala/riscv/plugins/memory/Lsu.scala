@@ -488,7 +488,30 @@ class Lsu(addressStages: Set[Stage], loadStages: Seq[Stage], storeStage: Stage)
         }
       }
 
-      when(arbitration.isValid && !misaligned) {
+      val declassification = False
+      val exception_thrown =
+        if (pipeline.hasService[DeclassificationCheckerService]) Reg(Bool()).init(False) else null
+
+      if (pipeline.hasService[DeclassificationCheckerService]) {
+        when(
+          pipeline.service[PipelineTaintService].tainted(storeStage) && !pipeline
+            .service[MemoryPartitioningService]
+            .isInPartition(isStage = true, address = address)
+        ) {
+          declassification := True
+        }
+
+        when(isActive && declassification && !misaligned && !exception_thrown) {
+          if (pipeline.hasService[TrapService]) {
+            trap(TrapCause.StoreAddressMisaligned(address), storeStage)
+            when(arbitration.isDone) {
+              exception_thrown := True
+            }
+          }
+        }
+      }
+
+      when(arbitration.isValid && !misaligned && !declassification) {
         when(isActive) {
           val wValue = value(pipeline.data.RS2_DATA)
           arbitration.rs2Needed := True

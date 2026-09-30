@@ -42,7 +42,116 @@ object PrefetcherType {
   case object SequentialInstructionPrefetcher extends PrefetcherType {
     override val requiresPc = false
     override def create(implicit config: Config): Option[Plugin[Pipeline] with PrefetchService] = {
-      Some(new memory.SequentialInstructionPrefetcher)
+      Some(new memory.prefetcher.SequentialInstructionPrefetcher)
+    }
+  }
+  case object BaseDmp extends PrefetcherType {
+    override val requiresPc = false
+    override def create(implicit config: Config): Option[Plugin[Pipeline] with PrefetchService] = {
+      Some(
+        new memory.prefetcher.PointerChasingDmp(
+          pointerHeuristic = (address, value) =>
+            address.takeHigh(config.isa.xlen / 4) === value.takeHigh(config.isa.xlen / 4),
+          maxRecursionDepth = 0,
+          nextLinePrefetches = 0,
+          prefetchQueueSize = 4
+        )
+      )
+    }
+  }
+  case object BaseRecursiveDmp extends PrefetcherType {
+    override val requiresPc = false
+    override def create(implicit config: Config): Option[Plugin[Pipeline] with PrefetchService] = {
+      Some(
+        new memory.prefetcher.PointerChasingDmp(
+          pointerHeuristic = (address, value) =>
+            address.takeHigh(config.isa.xlen / 4) === value.takeHigh(config.isa.xlen / 4),
+          maxRecursionDepth = 1,
+          nextLinePrefetches = 0,
+          prefetchQueueSize = 4
+        )
+      )
+    }
+  }
+  case object InfiniteRecursiveDmp extends PrefetcherType {
+    override val requiresPc = false
+    override def create(implicit config: Config): Option[Plugin[Pipeline] with PrefetchService] = {
+      Some(
+        new memory.prefetcher.PointerChasingDmp(
+          pointerHeuristic = (address, value) =>
+            address.takeHigh(config.isa.xlen / 4) === value.takeHigh(config.isa.xlen / 4),
+          maxRecursionDepth = -1,
+          nextLinePrefetches = 0,
+          prefetchQueueSize = 4
+        )
+      )
+    }
+  }
+  case object AppleDmp extends PrefetcherType {
+    override val requiresPc = false
+    override def create(implicit config: Config): Option[Plugin[Pipeline] with PrefetchService] = {
+      Some(
+        new memory.prefetcher.PointerChasingDmp(
+          pointerHeuristic = (address, value) =>
+            address.takeHigh(config.isa.xlen / 2) === value.takeHigh(config.isa.xlen / 2),
+          maxRecursionDepth = 0,
+          nextLinePrefetches = 1,
+          prefetchQueueSize = 4
+        )
+      )
+    }
+  }
+  case object IntelDmp extends PrefetcherType {
+    override val requiresPc = true
+    override def create(implicit config: Config): Option[Plugin[Pipeline] with PrefetchService] = {
+      Some(
+        new memory.prefetcher.ArrayOfPointersDmp(
+          loadHistorySize = 8,
+          prefetchQueueSize = 4,
+          activationConfidence = 3,
+          maxConfidence = 7,
+          prefetchDistance = 16,
+          alignmentBits = config.isa.xlen - 18,
+          pcCompareBits = 10,
+          strideDetectionLeniency = 1,
+          pointerHeuristic = (_, _) => True
+        )
+      )
+    }
+  }
+  case object Cdp extends PrefetcherType {
+    override val requiresPc = false
+    override def create(implicit config: Config): Option[Plugin[Pipeline] with PrefetchService] = {
+      Some(
+        new memory.prefetcher.PointerChasingDmp(
+          pointerHeuristic = (address, value) => address.takeHigh(8) === value.takeHigh(8),
+          maxRecursionDepth = 3,
+          nextLinePrefetches = 3,
+          prefetchQueueSize = 4
+        )
+      )
+    }
+  }
+  case object Imp extends PrefetcherType {
+    override val requiresPc = true
+    override def create(implicit config: Config): Option[Plugin[Pipeline] with PrefetchService] = {
+      Some(
+        new memory.prefetcher.IndirectArrayPatternDmp(
+          prefetchTableSize = 16,
+          indirectPatternDetectorTableSize = 4,
+          pcCompareBits = config.isa.xlen,
+          shiftValues = Seq(2, 3, 4, -3),
+          baseAddressArrayLength = 4,
+          prefetchQueueSize = 4,
+          strideActivationHitCount = 3,
+          indirectActivationHitCount = 2,
+          maxHitCount = 7,
+          maxPrefetchDistance = 16,
+          strideDetectionLeniency = 1,
+          indirectVerificationLeniency = 4,
+          pointerHeuristic = (_, _) => True
+        )
+      )
     }
   }
 }
@@ -88,9 +197,34 @@ object PluginType {
       new PipelineTaintTracking().asInstanceOf[Plugin[Pipeline]]
     }
   }
+  case object MemoryPartitioning extends PluginType {
+    override def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline] = {
+      new MemoryPartitioning
+    }
+  }
+  case object ProSpeCT extends PluginType {
+    override def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline] = {
+      new ProSpeCT().asInstanceOf[Plugin[Pipeline]]
+    }
+  }
   case object RegisterFence extends PluginType {
     override def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline] = {
       new RegisterFence().asInstanceOf[Plugin[Pipeline]]
+    }
+  }
+  case object SecDmp extends PluginType {
+    override def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline] = {
+      new SecDmp
+    }
+  }
+  case object SelectivePrefetcherDisabling extends PluginType {
+    override def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline] = {
+      new SelectivePrefetcherDisabling
+    }
+  }
+  case object DeclassificationChecker extends PluginType {
+    override def create(fenceStages: Set[Stage])(implicit config: Config): Plugin[Pipeline] = {
+      new DeclassificationChecker().asInstanceOf[Plugin[Pipeline]]
     }
   }
 }
@@ -190,7 +324,13 @@ class StaticPipelineConfig(
         prefetcher = PrefetcherType.SequentialInstructionPrefetcher
       )
     ),
-    dCaches: Seq[CacheConfig] = Seq(CacheConfig(sets = 8, ways = 2)),
+    dCaches: Seq[CacheConfig] = Seq(
+      CacheConfig(
+        sets = 8,
+        ways = 2,
+        prefetcher = PrefetcherType.BaseDmp
+      )
+    ),
     extraPlugins: Seq[PluginType] = Seq(PluginType.Fence, PluginType.Marker),
     debug: Boolean = true
 ) extends Config(
@@ -218,7 +358,13 @@ class DynamicPipelineConfig(
         prefetcher = PrefetcherType.SequentialInstructionPrefetcher
       )
     ),
-    dCaches: Seq[CacheConfig] = Seq(CacheConfig(sets = 8, ways = 2)),
+    dCaches: Seq[CacheConfig] = Seq(
+      CacheConfig(
+        sets = 8,
+        ways = 2,
+        prefetcher = PrefetcherType.BaseDmp
+      )
+    ),
     val robEntries: Int = 32,
     val parallelAlus: Int = 8,
     val parallelMulDivs: Int = 2,
@@ -295,6 +441,13 @@ object Config {
           prefetcherType match {
             case "None" => PrefetcherType.None
             case "SequentialInstructionPrefetcher" => PrefetcherType.SequentialInstructionPrefetcher
+            case "BaseDmp" => PrefetcherType.BaseDmp
+            case "BaseRecursiveDmp" => PrefetcherType.BaseRecursiveDmp
+            case "InfiniteRecursiveDmp" => PrefetcherType.InfiniteRecursiveDmp
+            case "AppleDmp" => PrefetcherType.AppleDmp
+            case "IntelDmp" => PrefetcherType.IntelDmp
+            case "Cdp" => PrefetcherType.Cdp
+            case "Imp" => PrefetcherType.Imp
             case other => throw new IllegalArgumentException(s"Unknown prefetcher: $other")
           }
         case None => default
@@ -337,7 +490,12 @@ object Config {
               case "DataSpeculationTracking" => PluginType.DataSpeculationTracking
               case "ControlSpeculationTracking" => PluginType.ControlSpeculationTracking
               case "PipelineTaintTracking" => PluginType.PipelineTaintTracking
+              case "MemoryPartitioning" => PluginType.MemoryPartitioning
+              case "ProSpeCT" => PluginType.ProSpeCT
               case "RegisterFence" => PluginType.RegisterFence
+              case "SecDmp" => PluginType.SecDmp
+              case "SelectivePrefetcherDisabling" => PluginType.SelectivePrefetcherDisabling
+              case "DeclassificationChecker" => PluginType.DeclassificationChecker
               case other => throw new IllegalArgumentException(s"Unknown plugin: $other")
             }
           }

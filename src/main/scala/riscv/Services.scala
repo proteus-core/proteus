@@ -561,7 +561,50 @@ trait PipelineTaintService {
   def registerTaint(regId: UInt): Bool
 }
 
+trait MemoryPartitioningService {
+
+  /** Checks if the given address is part of the partition. The address's lowest `insignificantBits`
+    * bits are ignored, i.e. if the address lies outside the region only with these lowest bits, the
+    * function returns True. When calling this function from a specific pipeline stage, set
+    * `isStage` to true, otherwise to false
+    */
+  def isInPartition(isStage: Boolean, address: UInt, insignificantBits: Int = 0): Bool
+}
+
 trait ProSpeCTService {}
+
+trait SecDmpService {}
+
+object PrefetcherDisablingMode extends SpinalEnum {
+  val NONE = newElement()
+  val DMP = newElement()
+  val ALL = newElement()
+
+  /** Returns True when left > right
+    */
+  def greaterThan(
+      left: SpinalEnumCraft[PrefetcherDisablingMode.type],
+      right: SpinalEnumCraft[PrefetcherDisablingMode.type]
+  ): Bool = {
+    (left === ALL && right =/= ALL) || (left === DMP && right === NONE)
+  }
+}
+
+/** Disables DMPs when PrefetcherDisablingMode is DMP, disables all prefetchers when
+  * PrefetcherDisablingMode is ALL
+  */
+trait SelectivePrefetcherDisablingService {
+
+  /** Get the current prefetcher disabling mode. When calling this function from a specific pipeline
+    * stage, set `isStage` to true, otherwise to false
+    */
+  def getPrefetcherDisablingMode(isStage: Boolean): SpinalEnumCraft[PrefetcherDisablingMode.type]
+}
+
+/** Throws an exception when the program declassifies tainted data, i.e., writing tainted data to an
+  * address outside the CSR-marked memory region
+  */
+trait DeclassificationCheckerService {}
 
 trait FenceService {
   def isFence(stage: Stage): Bool

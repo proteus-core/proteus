@@ -125,6 +125,10 @@ class Cache(
         val pending: Bool = Bool()
         val internalForwarding: Vec[InternalForwardingEntry] =
           Vec.fill(1 << internal.config.idWidth)(InternalForwardingEntry())
+        val secret: Bool = if (pipeline.hasService[SecDmpService]) Bool() else null
+        val prefetcherDisablingMode: SpinalEnumCraft[PrefetcherDisablingMode.type] =
+          if (pipeline.hasService[SelectivePrefetcherDisablingService]) PrefetcherDisablingMode()
+          else null
       }
 
       private val outstandingLoads = Vec.fill(maxId + 1)(RegInit(OutstandingTracker().getZero))
@@ -177,21 +181,34 @@ class Cache(
           outstandingLoads(external.rsp.id).internalForwarding.sFindFirst(entry => entry.valid)
 
         prefetcher foreach { pref =>
-          when(!forwardResult) {
-            // inform prefetcher of prefetch response
-            pref.notifyPrefetchResponse(address, external.rsp.rdata, external.rsp.id)
-          } elsewhen (internalRspBuffer.ready) {
-            // inform prefetcher of load response
-            pref.notifyLoadResponse(
-              (address(
-                config.isa.xlen - 1 downto byteIndexBits + wordIndexBits
-              ) ## outstandingLoads(external.rsp.id)
-                .internalForwarding(entryIdx)
-                .addressOffset).asUInt,
-              outstandingLoads(external.rsp.id).internalForwarding(entryIdx).pc,
-              external.rsp.rdata,
-              cacheHit = false
-            )
+          // SecDMP: don't scan secret data
+          val secDmpCondition =
+            if (pipeline.hasService[SecDmpService]) !outstandingLoads(external.rsp.id).secret
+            else True
+          // Selective prefetcher disabling: enable DMPs only when prefetcher disabling mode is NONE
+          val selectivePrefetcherDisablingCondition =
+            if (pipeline.hasService[SelectivePrefetcherDisablingService])
+              outstandingLoads(
+                external.rsp.id
+              ).prefetcherDisablingMode === PrefetcherDisablingMode.NONE
+            else True
+          when(secDmpCondition && selectivePrefetcherDisablingCondition) {
+            when(!forwardResult) {
+              // inform prefetcher of prefetch response
+              pref.notifyPrefetchResponse(address, external.rsp.rdata, external.rsp.id)
+            } elsewhen (internalRspBuffer.ready) {
+              // inform prefetcher of load response
+              pref.notifyLoadResponse(
+                (address(
+                  config.isa.xlen - 1 downto byteIndexBits + wordIndexBits
+                ) ## outstandingLoads(external.rsp.id)
+                  .internalForwarding(entryIdx)
+                  .addressOffset).asUInt,
+                outstandingLoads(external.rsp.id).internalForwarding(entryIdx).pc,
+                external.rsp.rdata,
+                cacheHit = false
+              )
+            }
           }
         }
 
@@ -231,8 +248,29 @@ class Cache(
             } otherwise {
               cacheHits := cacheHits + 1
               prefetcher foreach { pref =>
-                // inform prefetcher of load response
-                pref.notifyLoadResponse(address, internal.cmd.pc, cacheLine.value, cacheHit = true)
+                // SecDMP: don't scan secret data
+                val secDmpCondition =
+                  if (pipeline.hasService[SecDmpService])
+                    !pipeline
+                      .service[MemoryPartitioningService]
+                      .isInPartition(isStage = false, address, byteIndexBits + wordIndexBits)
+                  else True
+                // Selective prefetcher disabling: enable DMPs only when prefetcher disabling mode is NONE
+                val selectivePrefetcherDisablingCondition =
+                  if (pipeline.hasService[SelectivePrefetcherDisablingService])
+                    pipeline
+                      .service[SelectivePrefetcherDisablingService]
+                      .getPrefetcherDisablingMode(isStage = false) === PrefetcherDisablingMode.NONE
+                  else True
+                when(secDmpCondition && selectivePrefetcherDisablingCondition) {
+                  // inform prefetcher of load response
+                  pref.notifyLoadResponse(
+                    address,
+                    internal.cmd.pc,
+                    cacheLine.value,
+                    cacheHit = true
+                  )
+                }
               }
             }
           } otherwise {
@@ -259,13 +297,33 @@ class Cache(
 
           cacheHits := cacheHits + 1
           prefetcher foreach { pref =>
-            // inform prefetcher of load response
-            pref.notifyLoadResponse(
-              returningCacheAddress,
-              returningCachePc,
-              rspBuffer.rdata,
-              cacheHit = true
-            )
+            // SecDMP: don't scan secret data
+            val secDmpCondition =
+              if (pipeline.hasService[SecDmpService])
+                !pipeline
+                  .service[MemoryPartitioningService]
+                  .isInPartition(
+                    isStage = false,
+                    returningCacheAddress,
+                    byteIndexBits + wordIndexBits
+                  )
+              else True
+            // Selective prefetcher disabling: enable DMPs only when prefetcher disabling mode is NONE
+            val selectivePrefetcherDisablingCondition =
+              if (pipeline.hasService[SelectivePrefetcherDisablingService])
+                pipeline
+                  .service[SelectivePrefetcherDisablingService]
+                  .getPrefetcherDisablingMode(isStage = false) === PrefetcherDisablingMode.NONE
+              else True
+            when(secDmpCondition && selectivePrefetcherDisablingCondition) {
+              // inform prefetcher of load response
+              pref.notifyLoadResponse(
+                returningCacheAddress,
+                returningCachePc,
+                rspBuffer.rdata,
+                cacheHit = true
+              )
+            }
           }
         }
       }
@@ -302,6 +360,20 @@ class Cache(
               if (internal.config.includePcWire) {
                 outstandingLoads(externalId).internalForwarding(0).pc := internal.cmd.pc
               }
+              if (pipeline.hasService[SecDmpService]) {
+                outstandingLoads(externalId).secret := pipeline
+                  .service[MemoryPartitioningService]
+                  .isInPartition(
+                    isStage = false,
+                    internal.cmd.address,
+                    byteIndexBits + wordIndexBits
+                  )
+              }
+              if (pipeline.hasService[SelectivePrefetcherDisablingService]) {
+                outstandingLoads(externalId).prefetcherDisablingMode := pipeline
+                  .service[SelectivePrefetcherDisablingService]
+                  .getPrefetcherDisablingMode(isStage = false)
+              }
               externalId := externalId + 1
             }
           } else {
@@ -316,6 +388,16 @@ class Cache(
               .address(byteIndexBits + wordIndexBits - 1 downto 0)
             if (internal.config.includePcWire) {
               outstandingLoads(externalId).internalForwarding(0).pc := internal.cmd.pc
+            }
+            if (pipeline.hasService[SecDmpService]) {
+              outstandingLoads(externalId).secret := pipeline
+                .service[MemoryPartitioningService]
+                .isInPartition(isStage = false, internal.cmd.address, byteIndexBits + wordIndexBits)
+            }
+            if (pipeline.hasService[SelectivePrefetcherDisablingService]) {
+              outstandingLoads(externalId).prefetcherDisablingMode := pipeline
+                .service[SelectivePrefetcherDisablingService]
+                .getPrefetcherDisablingMode(isStage = false)
             }
             externalId := externalId + 1
           }
@@ -391,6 +473,16 @@ class Cache(
                 outstandingLoads(externalId).internalForwarding := outstandingLoads(
                   externalId
                 ).internalForwarding.getZero
+                if (pipeline.hasService[SecDmpService]) {
+                  outstandingLoads(externalId).secret := pipeline
+                    .service[MemoryPartitioningService]
+                    .isInPartition(isStage = false, prefetchAddress, byteIndexBits + wordIndexBits)
+                }
+                if (pipeline.hasService[SelectivePrefetcherDisablingService]) {
+                  outstandingLoads(externalId).prefetcherDisablingMode := pipeline
+                    .service[SelectivePrefetcherDisablingService]
+                    .getPrefetcherDisablingMode(isStage = false)
+                }
 
                 when(!external.cmd.ready) {
                   sendingBufferedCmd := True
@@ -402,7 +494,15 @@ class Cache(
       }
 
       private def getResult(address: UInt): Unit = {
-        when(internal.cmd.ready) {
+        // Selective prefetcher disabling: disable classical prefetchers only when prefetcher disabling mode is ALL
+        val selectivePrefetcherDisablingCondition =
+          if (pipeline.hasService[SelectivePrefetcherDisablingService])
+            pipeline
+              .service[SelectivePrefetcherDisablingService]
+              .getPrefetcherDisablingMode(isStage = false) =/= PrefetcherDisablingMode.ALL
+          else True
+
+        when(selectivePrefetcherDisablingCondition && internal.cmd.ready) {
           // inform prefetcher of load request
           prefetcher foreach { pref =>
             pref.notifyLoadRequest(address, internal.cmd.pc)
@@ -444,6 +544,24 @@ class Cache(
                 )
                 if (internal.config.includePcWire) {
                   load.internalForwarding(entryIdx).pc := internal.cmd.pc
+                }
+                if (pipeline.hasService[SecDmpService]) {
+                  when(load.secret) {
+                    load.secret := pipeline
+                      .service[MemoryPartitioningService]
+                      .isInPartition(isStage = false, address, byteIndexBits + wordIndexBits)
+                  }
+                }
+                if (pipeline.hasService[SelectivePrefetcherDisablingService]) {
+                  val newPrefetcherDisablingMode = pipeline
+                    .service[SelectivePrefetcherDisablingService]
+                    .getPrefetcherDisablingMode(isStage = false)
+                  when(
+                    PrefetcherDisablingMode
+                      .greaterThan(load.prefetcherDisablingMode, newPrefetcherDisablingMode)
+                  ) {
+                    load.prefetcherDisablingMode := newPrefetcherDisablingMode
+                  }
                 }
                 cacheMisses := cacheMisses + 1
                 forwardedCacheMisses := forwardedCacheMisses + 1

@@ -1,4 +1,4 @@
-package riscv.plugins.memory
+package riscv.plugins.memory.prefetcher
 
 import riscv._
 import spinal.core._
