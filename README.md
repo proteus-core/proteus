@@ -16,17 +16,17 @@ For a quick introduction to Proteus, and to cite this work, please check [our ex
 
 Proteus is an easily configurable RISC-V CPU implemented in SpinalHDL.
 It uses a plugin system to make the processor easily configurable and extensible, making the development and testing of hardware features easier. It already comes with easily replaceable or modifiable components such as branch predictors.
-Proteus supports the RV32IM instruction set, which includes multi-cycle instructions (e.g., MUL or blocking memory accesses in IF/MEM) and the Machine-Level ISA (CSRs, traps).
+Proteus supports the unprivileged `rv[32/64]im_zicsr_zicond` instruction sets, currently in machine mode only.
 
 The processor is implemented on an SoC, which features integration with AXI4 and APB buses and simple peripherals (machine timer, UART, ...).
 
-Proteus can be configured either in a classic 5-staged static pipelined mode or as a superscalar out-of-order processor with a configurable number of reorder buffer entries and execution units.
-Both implementations pass the [riscv-tests](https://github.com/riscv/riscv-tests), and the correctness of the static pipeline has been verified using [riscv-formal](https://github.com/SymbioticEDA/riscv-formal).
+Proteus can be configured either in a classic 5-stage in-order pipelined mode or as an out-of-order processor with a configurable number of reorder buffer entries and execution units.
+Both implementations pass the [riscv-tests](https://github.com/riscv/riscv-tests), and the correctness of the in-order pipeline has been verified using [riscv-formal](https://github.com/SymbioticEDA/riscv-formal).
 
 ## Releases and extensions
 
-Proteus uses [calendar versioning](https://calver.org/) with a suffix of `-I` and `-O` to differentiate between the in-order and the out-of-order pipeline implementation.
-The following table describes the released versions and extensions forking them.
+Proteus uses [calendar versioning](https://calver.org/) with a suffix of `-I` and `-O` to differentiate between the in-order and the out-of-order pipeline implementations.
+The following table describes the released versions and extensions building on them.
 
 | Version                                                                  | Extension(s)                                                                                                                                                                                                                                                               |
 |:-------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -45,7 +45,7 @@ Proteus has also been used in the following publications:
 
 ## Working with Proteus
 
-Starting from release v25.09, Proteus should be used together with the central [ecosystem](https://github.com/proteus-core/ecosystem) repository, which contains all the software components necessary to use the core for research.
+Starting from release v25.08, Proteus should be used together with the central [ecosystem](https://github.com/proteus-core/ecosystem) repository, which contains all the software components necessary to use the core for research.
 You can find detailed installation instructions, scripts, and a Docker-based setup in that repository.
 
 ## Building software
@@ -57,9 +57,9 @@ Newlib is an implementation of `libc` for embedded devices. Our board support pa
 
 The default binary configuration used in Proteus has the following memory layout:
 
-- `0x80000000`: 10 MiB (configurable in `Core.scala`) of RAM initialized with the given memory file
-- `0x20000000`: `mtime` register
-- `0x20000008`: `mtimecmp` register
+- `0x80000000`: RAM initialized with the given memory file (size configurable in `Core.scala`)
+- `0x02000000`: `mtime` register
+- `0x02000008`: `mtimecmp` register
 - `0x10000000`: Custom character device
 
 The CPU starts executing at `0x80000000`.
