@@ -1,8 +1,7 @@
 name := "Proteus"
-version := "0.2"
 
 scalaVersion := "2.12.18"
-val spinalVersion = "1.13.0"
+val spinalVersion = "1.15.0"
 
 fork := true
 
