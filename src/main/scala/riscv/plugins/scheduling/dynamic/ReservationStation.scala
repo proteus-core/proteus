@@ -203,7 +203,7 @@ class ReservationStation(
           meta.priorBranch.push(pending.payload)
         } elsewhen (!spec.isSpeculativeCF(cdbMessage.metadata)) {
           meta.priorBranch.setIdle()
-          if (meta.optimizedRegisterFence) {
+          if (meta.optimizedRegisterFence || pipeline.hasService[ProSpeCTService]) {
             when(!currentRs1Prior.valid && !currentRs2Prior.valid) {
               when(state === State.WAITING_FOR_ARGS) {
                 state := State.EXECUTING
@@ -594,6 +594,15 @@ class ReservationStation(
 
     dependencySetup(meta.rs1, entryMeta.rs1Data, pipeline.data.RS1_DATA, pipeline.data.RS1)
     dependencySetup(meta.rs2, entryMeta.rs2Data, pipeline.data.RS2_DATA, pipeline.data.RS2)
+
+    // ProSpeCT: an instruction whose tainted operand is already available at dispatch must also
+    // wait behind an unresolved branch (otherwise it never reaches the check in onCdbMessage)
+    if (pipeline.hasService[ProSpeCTService]) {
+      val taintedAtDispatch = meta.rs1.taintedNext || meta.rs2.taintedNext
+      when(dependentJump.valid && taintedAtDispatch && !speculationResolved) {
+        stateNext := State.WAITING_FOR_ARGS
+      }
+    }
 
     if (dataSpeculationTracking) {
       meta.loadSpeculationNext := entryMeta.rs1Data.updatingInstructionLoadSpeculation || entryMeta.rs2Data.updatingInstructionLoadSpeculation
