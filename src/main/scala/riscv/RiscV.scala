@@ -214,3 +214,48 @@ object TrapCause {
   case class LoadPageFault(address: UInt) extends ExceptionCause(13, address)
   case class StorePageFault(address: UInt) extends ExceptionCause(15, address)
 }
+
+/** Instructions that cannot leak their operands through a side channel: simple integer ALU
+  * operations with operand-independent timing, no memory access and no effect on control flow.
+  * ProSpeCT may execute these speculatively on secret operands.
+  */
+object InstructionClass {
+  private val safeBase = {
+    import Opcodes._
+    Seq(
+      ADD,
+      SUB,
+      SLT,
+      SLTU,
+      XOR,
+      OR,
+      AND,
+      ADDI,
+      SLTI,
+      SLTIU,
+      XORI,
+      ORI,
+      ANDI,
+      SLL,
+      SRL,
+      SRA,
+      LUI,
+      AUIPC,
+      CZEROEQZ,
+      CZERONEZ
+    )
+  }
+
+  private val safe32 = {
+    import Opcodes._
+    Seq(SLLI, SRLI, SRAI)
+  }
+
+  private val safe64 = {
+    import Opcodes64._
+    Seq(SLLI, SRLI, SRAI, ADDW, SUBW, ADDIW, SLLW, SRLW, SRAW, SLLIW, SRLIW, SRAIW)
+  }
+
+  def safe(implicit config: Config): Seq[MaskedLiteral] =
+    safeBase ++ (if (config.isa.xlen == 64) safe64 else safe32)
+}

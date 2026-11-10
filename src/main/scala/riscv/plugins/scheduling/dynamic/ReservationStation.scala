@@ -1,6 +1,7 @@
 package riscv.plugins.scheduling.dynamic
 
 import riscv._
+import riscv.plugins.ProSpeCTData
 import spinal.core._
 import spinal.lib._
 
@@ -94,6 +95,10 @@ class ReservationStation(
   )
 
   private val robEntryIndex = Reg(UInt(rob.indexBits)).init(0)
+  // ProSpeCT: does the held instruction leak its operands? The Next wire lets the dispatch cycle see
+  // the incoming instruction's value (same pattern as meta.*Next)
+  private val instructionUnsafeNext = Bool()
+  private val instructionUnsafe = RegNext(instructionUnsafeNext).init(False)
 
   private object State extends SpinalEnum {
     val IDLE, WAITING_FOR_ARGS, EXECUTING, BROADCASTING_RESULT = newElement()
@@ -146,6 +151,7 @@ class ReservationStation(
 
     val rs1Tainted = Bool()
     val rs2Tainted = Bool()
+    val currentUnsafe = Bool()
     if (!pipeline.hasService[PipelineTaintService]) {
       rs1Tainted := False
       rs2Tainted := False
@@ -175,6 +181,7 @@ class ReservationStation(
         rs1Tainted := meta.rs1.tainted
         rs2Tainted := meta.rs2.tainted
       }
+      currentUnsafe := instructionUnsafe
     } otherwise {
       currentRs1Prior := meta.rs1.priorInstructionNext
       currentRs2Prior := meta.rs2.priorInstructionNext
@@ -193,6 +200,7 @@ class ReservationStation(
         rs1Tainted := meta.rs1.taintedNext
         rs2Tainted := meta.rs2.taintedNext
       }
+      currentUnsafe := instructionUnsafeNext
     }
 
     pipeline.serviceOption[ControlSpeculationService] foreach { spec =>
@@ -283,7 +291,8 @@ class ReservationStation(
       }
 
       if (pipeline.hasService[ProSpeCTService]) {
-        startExecution := baseCondition && !(branchWaiting.valid && (tnt1 || tnt2)) // TODO: what about load speculation?
+        // only unsafe instructions are blocked: safe ones cannot leak their tainted operands
+        startExecution := baseCondition && !(branchWaiting.valid && (tnt1 || tnt2) && currentUnsafe) // TODO: what about load speculation?
       } else if (pipeline.hasService[RegisterFenceService]) {
         startExecution := baseCondition && !registerFenceWaiting
       } else {
@@ -304,6 +313,7 @@ class ReservationStation(
 
   def build(): Unit = {
     meta.build()
+    instructionUnsafeNext := instructionUnsafe
 
     cdbWaitingNext := cdbWaiting
     dispatchWaitingNext := dispatchWaiting
@@ -514,6 +524,9 @@ class ReservationStation(
     val (robIndex, entryMeta) = rob.pushEntry()
 
     robEntryIndex := robIndex
+    if (pipeline.hasService[ProSpeCTService]) {
+      instructionUnsafeNext := issueStage.output(ProSpeCTData.UNSAFE)
+    }
 
     stateNext := State.EXECUTING
     regs.shift := True
