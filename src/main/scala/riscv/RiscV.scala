@@ -222,8 +222,28 @@ object TrapCause {
 object InstructionClass {
   private val safeBase = {
     import Opcodes._
-    Seq(ADD, SUB, SLT, SLTU, XOR, OR, AND, ADDI, SLTI, SLTIU, XORI, ORI, ANDI, SLL, SRL, SRA, LUI,
-      AUIPC, CZEROEQZ, CZERONEZ)
+    Seq(
+      ADD,
+      SUB,
+      SLT,
+      SLTU,
+      XOR,
+      OR,
+      AND,
+      ADDI,
+      SLTI,
+      SLTIU,
+      XORI,
+      ORI,
+      ANDI,
+      SLL,
+      SRL,
+      SRA,
+      LUI,
+      AUIPC,
+      CZEROEQZ,
+      CZERONEZ
+    )
   }
 
   private val safe32 = {
