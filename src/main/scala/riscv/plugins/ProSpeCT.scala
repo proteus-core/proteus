@@ -4,6 +4,11 @@ import riscv._
 import spinal.core._
 import spinal.lib._
 
+object ProSpeCTData {
+  // the instruction may leak its operands (not in InstructionClass.safe)
+  object UNSAFE extends PipelineData(Bool())
+}
+
 class ProSpeCT extends Plugin[DynamicPipeline] with ProSpeCTService {
   override def setup(): Unit = {
     assert(
@@ -22,6 +27,14 @@ class ProSpeCT extends Plugin[DynamicPipeline] with ProSpeCTService {
       pipeline.hasService[MemoryPartitioningService],
       "Memory partitioning required for ProSpeCT"
     )
+
+    // every instruction is unsafe unless whitelisted
+    pipeline.service[DecoderService].configure { decoderConfig =>
+      decoderConfig.addDefault(ProSpeCTData.UNSAFE, True)
+      for (op <- InstructionClass.safe(pipeline.config)) {
+        decoderConfig.addDecoding(op, Map(ProSpeCTData.UNSAFE -> False))
+      }
+    }
 
     pipeline
       .service[LsuService]
